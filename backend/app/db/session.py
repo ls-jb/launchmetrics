@@ -5,13 +5,24 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
+
+# Em produção (Vercel serverless) usamos NullPool: cada request abre e fecha
+# sua própria conexão. O pgbouncer do Supabase faz o pooling de verdade
+# (porta 6543, transaction mode). Pool local em serverless não compartilha
+# conexões entre invocations e só gera overhead.
+# Em dev local, mantemos o pool padrão do SQLAlchemy.
+_pool_kwargs = (
+    {"poolclass": NullPool}
+    if not settings.is_development
+    else {"pool_pre_ping": True}
+)
 
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.is_development,
-    pool_pre_ping=True,
     # asyncpg + pgbouncer (transaction mode) não convivem com prepared statements.
     # Desabilitar o cache evita erros "prepared statement does not exist" e
     # "another prepared statement with that name already exists".
@@ -19,6 +30,7 @@ engine = create_async_engine(
         "statement_cache_size": 0,
         "prepared_statement_cache_size": 0,
     },
+    **_pool_kwargs,
 )
 
 AsyncSessionLocal = async_sessionmaker(
