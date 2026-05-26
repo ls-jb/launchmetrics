@@ -1,0 +1,87 @@
+# ============================
+# Variáveis de ambiente
+# ============================
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
+
+# ============================
+# Python / Backend
+# ============================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+ENV/
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+.tox/
+
+# ============================
+# Node / Frontend
+# ============================
+node_modules/
+dist/
+build/
+.next/
+.cache/
+.parcel-cache/
+.turbo/
+.vite/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ============================
+# Editor / IDE
+# ============================
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# ============================
+# Claude Code (local settings)
+# ============================
+.claude/settings.local.json
+
+# ============================
+# Sistema operacional
+# ============================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============================
+# Logs
+# ============================
+*.log
+logs/
+
+# ============================
+# Outros
+# ============================
+*.sqlite
+*.sqlite3
+*.db
+.alembic.ini.local

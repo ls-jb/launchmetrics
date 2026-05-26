@@ -1,0 +1,17 @@
+# Dependências de PRODUÇÃO (Vercel serverless).
+# Para desenvolvimento local, instale também o requirements-dev.txt.
+
+# Framework
+fastapi>=0.115
+
+# Banco de dados
+sqlalchemy[asyncio]>=2.0.36
+asyncpg>=0.30
+
+# Validação e configuração
+pydantic>=2.11
+pydantic-settings>=2.7
+python-dotenv>=1.0
+
+# Autenticação
+PyJWT>=2.10

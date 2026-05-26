@@ -1,0 +1,16 @@
+# Dependências adicionais para desenvolvimento local.
+# Use: pip install -r requirements-dev.txt
+
+-r requirements.txt
+
+# Servidor local (Vercel usa runtime próprio em prod, não precisa)
+uvicorn[standard]>=0.32
+
+# Migrations (rodadas localmente, não em prod)
+alembic>=1.14
+
+# Form parsing (caso adicione endpoints com multipart no futuro)
+python-multipart>=0.0.20
+
+# HTTP client para testes manuais / scripts
+httpx>=0.28
