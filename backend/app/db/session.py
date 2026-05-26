@@ -23,15 +23,13 @@ _pool_kwargs = (
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.is_development,
-    # asyncpg + pgbouncer (transaction mode) não convivem com prepared statements.
-    # Desabilitar o cache evita erros "prepared statement does not exist" e
-    # "another prepared statement with that name already exists".
+    # psycopg3 + pgbouncer (transaction mode): desabilita prepared statements
+    # automaticamente quando detecta o pooler, mas garantimos com prepare_threshold=None.
     connect_args={
-        "statement_cache_size": 0,
-        "prepared_statement_cache_size": 0,
-        # Falha em 5s em vez de hangar 10s+. Em serverless preferimos erro
-        # rápido visível nos logs do que timeout do runtime.
-        "timeout": 5,
+        "prepare_threshold": None,
+        # Falha em 5s em vez de hangar. Em serverless preferimos erro
+        # rápido visível nos logs do que estourar o limite do runtime.
+        "connect_timeout": 5,
     },
     **_pool_kwargs,
 )

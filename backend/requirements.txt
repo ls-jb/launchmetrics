@@ -4,9 +4,10 @@
 # Framework
 fastapi>=0.115
 
-# Banco de dados
+# Banco de dados — psycopg3 (async). asyncpg hanga no handshake SSL com o
+# pooler do Supabase em ambiente serverless (Vercel/Lambda). psycopg é estável.
 sqlalchemy[asyncio]>=2.0.36
-asyncpg>=0.30
+psycopg[binary]>=3.2
 
 # Validação e configuração
 pydantic>=2.11
