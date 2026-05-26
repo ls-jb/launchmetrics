@@ -29,6 +29,9 @@ engine = create_async_engine(
     connect_args={
         "statement_cache_size": 0,
         "prepared_statement_cache_size": 0,
+        # Falha em 5s em vez de hangar 10s+. Em serverless preferimos erro
+        # rápido visível nos logs do que timeout do runtime.
+        "timeout": 5,
     },
     **_pool_kwargs,
 )
