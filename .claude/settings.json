@@ -8,7 +8,9 @@
       "Bash(./venv/Scripts/python.exe -c ' *)",
       "Bash(curl -s -H 'Authorization: Bearer __TRACKED_VAR__' --max-time 15 'https://lauchmetrics-ls.vercel.app/api/vendas/resumo?inicio=2026-01-01&fim=2026-12-31')",
       "Bash(curl -s -w '\\\\nHTTP %{http_code}\\\\n' --max-time 15 -X POST -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' --data '{\"produto\":\"Mentoria Premium\",\"valor\":1997,\"metodo_pagamento\":\"pix\",\"data_venda\":\"2026-05-27T14:00:00Z\",\"comprador_nome\":\"Teste Prod\",\"comprador_email\":\"prod@exemplo.com\"}' https://lauchmetrics-ls.vercel.app/api/vendas)",
-      "PowerShell(Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | ForEach-Object { try { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue } catch {} }; Start-Sleep -Seconds 1; Set-Location C:\\\\Users\\\\joao.boone\\\\Desktop\\\\DASHBOARD_CLAUDE\\\\backend; .\\\\venv\\\\Scripts\\\\python.exe run_dev.py)"
+      "PowerShell(Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | ForEach-Object { try { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue } catch {} }; Start-Sleep -Seconds 1; Set-Location C:\\\\Users\\\\joao.boone\\\\Desktop\\\\DASHBOARD_CLAUDE\\\\backend; .\\\\venv\\\\Scripts\\\\python.exe run_dev.py)",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" --max-time 15 -X POST -H \"Content-Type: application/json\" https://lauchmetrics-ls.vercel.app/api/webhooks/hotmart -d '{}')",
+      "Bash(curl -s -w \"\\\\nHTTP %{http_code}\\\\n\" --max-time 15 -X POST -H \"Content-Type: application/json\" https://lauchmetrics-ls.vercel.app/api/webhooks/guru -d '{}')"
     ],
     "additionalDirectories": [
       "c:\\c\\Users\\joao.boone\\Desktop\\DASHBOARD_CLAUDE\\frontend\\src\\lib"

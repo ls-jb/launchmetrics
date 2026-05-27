@@ -6,5 +6,6 @@ from app.models.canal import Canal
 from app.models.lancamento import Lancamento
 from app.models.lead import Lead
 from app.models.venda import Venda
+from app.models.webhook_log import WebhookLog
 
-__all__ = ["Canal", "Lancamento", "Lead", "Venda"]
+__all__ = ["Canal", "Lancamento", "Lead", "Venda", "WebhookLog"]
