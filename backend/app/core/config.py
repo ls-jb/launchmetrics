@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:5173"
     ENVIRONMENT: str = "development"
 
+    # Tokens secretos opcionais das plataformas de venda — se setados,
+    # os webhooks exigem o header correspondente. Se vazios, aceitam tudo
+    # (não recomendado em produção).
+    HOTMART_HOTTOK: str = ""
+    GURU_TOKEN: str = ""
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origem.strip() for origem in self.CORS_ORIGINS.split(",") if origem.strip()]
