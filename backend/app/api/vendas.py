@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -9,11 +9,25 @@ from app.schemas.venda import (
     PontoReceita,
     ProdutoRanking,
     ResumoVendas,
+    VendaManualCreate,
     VendaResponse,
 )
 from app.services import vendas_service
 
 router = APIRouter(prefix="/vendas", tags=["vendas"])
+
+
+@router.post("", response_model=VendaResponse, status_code=status.HTTP_201_CREATED)
+async def cadastrar_venda_manual(
+    dados: VendaManualCreate,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(verify_token),
+):
+    """
+    Cadastra manualmente uma venda (PIX direto, venda avulsa).
+    Plataforma fica como 'Manual' automaticamente.
+    """
+    return await vendas_service.criar_manual(db, dados)
 
 
 @router.get("", response_model=list[VendaResponse])

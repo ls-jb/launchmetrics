@@ -35,16 +35,47 @@ export interface PontoVelocidade {
   leads: number
 }
 
+export type Plataforma = 'Hotmart' | 'Guru' | 'PagMe' | 'PagTrust' | 'Manual'
+export type Oferta = 'Principal' | 'Order Bump' | 'Upsell' | 'Downsell'
+export type StatusVenda = 'aprovada' | 'pendente' | 'cancelada' | 'reembolsada'
+export type TipoVenda = 'unica' | 'recorrencia'
+export type MetodoPagamento =
+  | 'cartao'
+  | 'boleto'
+  | 'pix'
+  | 'transferencia'
+  | 'cartao_2x'
+  | 'outro'
+
 export interface Venda {
   id: string
-  plataforma: 'Hotmart' | 'PagMe' | 'PagTrust'
+  plataforma: Plataforma
+  external_id: string | null
   produto: string
-  oferta: 'Principal' | 'Order Bump' | 'Upsell' | 'Downsell'
+  oferta: Oferta | null
+  tipo: TipoVenda
+  recorrencia_seq: number | null
+  assinatura_id: string | null
+  metodo_pagamento: MetodoPagamento | null
   valor: number
-  status: 'aprovada' | 'pendente' | 'cancelada'
-  comprador_nome: string
-  comprador_email: string
+  status: StatusVenda
+  comprador_nome: string | null
+  comprador_email: string | null
   data_venda: string
+  criado_em: string
+}
+
+export interface VendaManualCreatePayload {
+  produto: string
+  valor: number
+  metodo_pagamento: MetodoPagamento
+  data_venda: string
+  comprador_nome?: string | null
+  comprador_email?: string | null
+  oferta?: Oferta | null
+  tipo?: TipoVenda
+  recorrencia_seq?: number | null
+  assinatura_id?: string | null
 }
 
 export interface ResumoVendas {

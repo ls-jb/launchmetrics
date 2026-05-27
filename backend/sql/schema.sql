@@ -77,29 +77,73 @@ create index if not exists ix_leads_criado_em on launchmetrics.leads (criado_em 
 create index if not exists ix_leads_email_por_lancamento on launchmetrics.leads (lancamento_id, email);
 
 -- ============================================================
--- VENDAS — Hotmart, PagMe, PagTrust unificadas
+-- VENDAS — Hotmart, Guru, PagMe, PagTrust e cadastro Manual (PIX direto etc.)
 -- ============================================================
+-- Cada linha representa UMA compra do cliente (não uma transação).
+-- Split de cartão (R$1k + R$2k) vem como uma linha com valor=R$3k.
+-- Recorrência mensal gera N linhas (uma por cobrança), mas no dashboard
+-- só conta a primeira (recorrencia_seq = 1).
 create table if not exists launchmetrics.vendas (
     id uuid primary key default gen_random_uuid(),
+
+    -- Origem
     plataforma text not null
-        check (plataforma in ('Hotmart', 'PagMe', 'PagTrust')),
+        check (plataforma in ('Hotmart', 'Guru', 'PagMe', 'PagTrust', 'Manual')),
+    external_id text, -- id único na plataforma; NULL para vendas Manual
+
+    -- O que foi vendido
     produto text not null,
-    oferta text not null
-        check (oferta in ('Principal', 'Order Bump', 'Upsell', 'Downsell')),
+    oferta text -- 'Principal' | 'Order Bump' | 'Upsell' | 'Downsell' (nullable para manual)
+        check (oferta is null or oferta in ('Principal', 'Order Bump', 'Upsell', 'Downsell')),
+
+    -- Como é a venda
+    tipo text not null default 'unica'
+        check (tipo in ('unica', 'recorrencia')),
+    recorrencia_seq integer, -- 1, 2, 3... NULL para venda única
+    assinatura_id text, -- id da assinatura na plataforma de origem
+    metodo_pagamento text
+        check (metodo_pagamento is null or metodo_pagamento in
+            ('cartao', 'boleto', 'pix', 'transferencia', 'cartao_2x', 'outro')),
+
+    -- Valores
     valor numeric(12, 2) not null,
     status text not null default 'aprovada'
         check (status in ('aprovada', 'pendente', 'cancelada', 'reembolsada')),
+
+    -- Comprador
     comprador_nome text,
     comprador_email text,
+
+    -- Datas
     data_venda timestamptz not null,
-    criado_em timestamptz not null default now()
+    criado_em timestamptz not null default now(),
+
+    -- Auditoria
+    payload_bruto jsonb,
+
+    -- Coerência: recorrencia_seq só faz sentido com tipo=recorrencia
+    constraint vendas_recorrencia_coerente check (
+        (tipo = 'unica' and recorrencia_seq is null) or
+        (tipo = 'recorrencia' and recorrencia_seq is not null and recorrencia_seq >= 1)
+    )
 );
+
+-- Deduplicação: mesma venda (plataforma, external_id) chega N vezes do webhook
+-- mas vira 1 linha só (UPSERT). Manual pode ter múltiplos external_id NULL.
+create unique index if not exists ux_vendas_plataforma_external_id
+    on launchmetrics.vendas (plataforma, external_id)
+    where external_id is not null;
 
 create index if not exists ix_vendas_data on launchmetrics.vendas (data_venda desc);
 create index if not exists ix_vendas_produto on launchmetrics.vendas (produto);
 create index if not exists ix_vendas_oferta on launchmetrics.vendas (oferta);
 create index if not exists ix_vendas_plataforma on launchmetrics.vendas (plataforma);
 create index if not exists ix_vendas_status on launchmetrics.vendas (status);
+create index if not exists ix_vendas_tipo on launchmetrics.vendas (tipo);
+create index if not exists ix_vendas_metodo on launchmetrics.vendas (metodo_pagamento);
+create index if not exists ix_vendas_assinatura_id
+    on launchmetrics.vendas (assinatura_id)
+    where assinatura_id is not null;
 
 -- ============================================================
 -- ROW LEVEL SECURITY — defesa em profundidade

@@ -1,8 +1,16 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+import asyncio
+import sys
 
-from app.api import lancamentos, vendas, webhooks
-from app.core.config import settings
+# psycopg async não convive com o ProactorEventLoop padrão do Windows.
+# Em produção (Linux) isso não aplica.
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+from fastapi import FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+
+from app.api import lancamentos, vendas, webhooks  # noqa: E402
+from app.core.config import settings  # noqa: E402
 
 app = FastAPI(
     title="LaunchMetrics API",

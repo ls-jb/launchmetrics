@@ -1,0 +1,34 @@
+# Configuração do Render — usado como plano B caso a Vercel não funcione
+# pro backend Python por causa do problema de SSL handshake com Supabase Pooler.
+#
+# Como subir:
+#   1. https://dashboard.render.com → New → Web Service
+#   2. Conecta o repo GitHub launchmetrics
+#   3. Root Directory: backend
+#   4. Render detecta este render.yaml e configura sozinho
+#   5. Configura as env vars (mesmas da Vercel)
+
+services:
+  - type: web
+    name: launchmetrics-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    region: virginia
+    buildCommand: pip install -r requirements.txt uvicorn gunicorn
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: ENVIRONMENT
+        value: production

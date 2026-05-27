@@ -4,6 +4,7 @@ import type {
   ProdutoRanking,
   ResumoVendas,
   Venda,
+  VendaManualCreatePayload,
 } from '@/types'
 
 export interface FiltroVendas {
@@ -23,6 +24,9 @@ function paramsDe(f: FiltroVendas): { params: Record<string, string> } {
 export const vendasService = {
   listar: (f: FiltroVendas) =>
     api.get<Venda[]>('/api/vendas', paramsDe(f)).then((r) => r.data),
+
+  criarManual: (dados: VendaManualCreatePayload) =>
+    api.post<Venda>('/api/vendas', dados).then((r) => r.data),
 
   resumo: (f: FiltroVendas) =>
     api.get<ResumoVendas>('/api/vendas/resumo', paramsDe(f)).then((r) => r.data),

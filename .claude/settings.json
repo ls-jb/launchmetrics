@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s --max-time 15 https://launchmetrics-two.vercel.app/assets/index-VM7iOz7s.js)",
+      "Bash(cd /c/Users/joao.boone/Desktop/DASHBOARD_CLAUDE && rm frontend/src/lib/mockData.ts && echo \"removido\")",
+      "PowerShell(Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | ForEach-Object { try { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue } catch {} }; Start-Sleep -Seconds 1; \"porta livre\")",
+      "PowerShell(Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue | ForEach-Object { try { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue } catch {} }; Start-Sleep -Seconds 1; \"ok\")"
+    ],
+    "additionalDirectories": [
+      "c:\\c\\Users\\joao.boone\\Desktop\\DASHBOARD_CLAUDE\\frontend\\src\\lib"
+    ]
+  }
+}
