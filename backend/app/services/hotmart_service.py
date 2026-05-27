@@ -31,13 +31,17 @@ STATUS_POR_EVENTO = {
     "PURCHASE_COMPLETE": "aprovada",
     "PURCHASE_BILLET_PRINTED": "pendente",
     "PURCHASE_DELAYED": "pendente",
-    "PURCHASE_OUT_OF_SHOPPING_CART": "pendente",
     "PURCHASE_CANCELED": "cancelada",
     "PURCHASE_EXPIRED": "cancelada",
     "PURCHASE_REFUNDED": "reembolsada",
     "PURCHASE_CHARGEBACK": "reembolsada",
     "PURCHASE_PROTEST": "reembolsada",
-    "SUBSCRIPTION_CANCELLATION": "cancelada",
+    # NOTAS — eventos que ignoramos de propósito:
+    # - PURCHASE_OUT_OF_SHOPPING_CART: abandono de carrinho, não é venda
+    # - SUBSCRIPTION_CANCELLATION: cancelamento de assinatura. Não vem com
+    #   purchase.transaction; pra refletir no dashboard precisaríamos buscar
+    #   vendas anteriores pela assinatura_id e marcar como canceladas. Fica
+    #   pra um próximo turno.
 }
 
 METODO_POR_PAYMENT_TYPE = {
@@ -66,9 +70,12 @@ async def processar(db: AsyncSession, payload: dict) -> None:
 
     data = payload.get("data") or {}
     purchase = data.get("purchase") or {}
-    external_id = purchase.get("transaction") or data.get("id") or payload.get("id")
+    external_id = purchase.get("transaction")
     if not external_id:
-        # sem id externo não dá pra deduplicar — abortar
+        # Sem purchase.transaction não é venda real (pode ser evento de
+        # carrinho abandonado, cancelamento de assinatura, etc.). NÃO usar
+        # payload.id como fallback — isso geraria vendas-fantasma com
+        # IDs de evento como external_id.
         return
 
     venda_existente = await _buscar_existente(db, str(external_id))
@@ -116,18 +123,25 @@ def _extrair_campos(data: dict, evento: str) -> dict:
 def _extrair_recorrencia(
     purchase: dict, subscription: dict
 ) -> tuple[str, int | None, str | None]:
-    """Decide entre venda única e recorrência."""
-    if not subscription:
+    """
+    Decide entre venda única e recorrência.
+    Hotmart manda 'subscription' em TODA venda de produto de assinatura
+    (inclusive a primeira). Pra distinguir o que é "venda nova" vs
+    "cobrança recorrente", usamos purchase.recurrence_number:
+    - ausente ou 1 → primeira cobrança = entra como tipo='recorrencia' seq=1
+    - 2+ → cobrança subsequente = entra como tipo='recorrencia' seq=N
+    Sem subscription → venda única padrão.
+    """
+    if not subscription or not isinstance(subscription, dict):
         return "unica", None, None
 
     subscriber = subscription.get("subscriber") or {}
     assinatura_id = (
         subscription.get("code")
         or subscriber.get("code")
-        or str(subscription.get("id") or "")
-        or None
+        or (str(subscription.get("id")) if subscription.get("id") is not None else None)
     )
-    # Hotmart manda recurrence_number a partir de 1 pra cada cobrança
+
     seq = purchase.get("recurrence_number")
     try:
         seq_int = int(seq) if seq is not None else 1
@@ -170,20 +184,23 @@ def _extrair_data(purchase: dict) -> datetime:
 
 def _extrair_oferta(purchase: dict) -> str | None:
     """
-    Hotmart tem 'offer.code'. Se não for um dos valores conhecidos
-    (Principal, Order Bump, Upsell, Downsell), retorna None pra evitar
-    quebrar o check constraint do banco.
+    Detecta o tipo de oferta. Hotmart indica:
+    - purchase.order_bump.is_order_bump = true → Order Bump
+    - purchase.is_funnel = true (com offer.code "up"/"down") → Upsell/Downsell
+    - Caso contrário, é a oferta principal do produto
     """
-    offer = purchase.get("offer") or {}
-    code = offer.get("code") or offer.get("name") or ""
-    code_lower = code.lower()
-    if "order" in code_lower or "bump" in code_lower:
+    order_bump = purchase.get("order_bump") or {}
+    if isinstance(order_bump, dict) and order_bump.get("is_order_bump"):
         return "Order Bump"
-    if "upsell" in code_lower:
+
+    offer = purchase.get("offer") or {}
+    code = (offer.get("code") or offer.get("name") or "").lower()
+
+    if "upsell" in code or code.startswith("up"):
         return "Upsell"
-    if "downsell" in code_lower:
+    if "downsell" in code or code.startswith("down"):
         return "Downsell"
-    if "principal" in code_lower or code:
+    if code:
         return "Principal"
     return None
 
