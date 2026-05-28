@@ -105,9 +105,15 @@ def _extrair_campos(data: dict, evento: str) -> dict:
     valor = _extrair_valor(purchase)
     data_venda = _extrair_data(purchase)
 
+    offer = purchase.get("offer") or {}
+    oferta_codigo = offer.get("code") if isinstance(offer, dict) else None
+    oferta_nome = offer.get("name") if isinstance(offer, dict) else None
+
     return {
         "produto": product.get("name") or "Produto Hotmart",
         "oferta": _extrair_oferta(purchase),
+        "oferta_nome": oferta_nome,
+        "oferta_codigo": oferta_codigo,
         "tipo": tipo,
         "recorrencia_seq": recorrencia_seq,
         "assinatura_id": assinatura_id,

@@ -1,5 +1,6 @@
 import { api } from './api'
 import type {
+  OfertaBreakdown,
   PontoReceita,
   ProdutoRanking,
   ResumoVendas,
@@ -43,4 +44,11 @@ export const vendasService = {
 
   produtos: () =>
     api.get<string[]>('/api/vendas/produtos').then((r) => r.data),
+
+  ofertasPorProduto: (produto: string, inicio: string, fim: string) =>
+    api
+      .get<OfertaBreakdown[]>('/api/vendas/ofertas', {
+        params: { produto, inicio, fim },
+      })
+      .then((r) => r.data),
 }

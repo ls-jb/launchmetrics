@@ -112,10 +112,13 @@ def _extrair_campos(payload: dict, data: dict, status: str) -> dict:
     produto, oferta = _extrair_produto_e_oferta(data)
     comprador_nome, comprador_email = _extrair_comprador(data)
     tipo, seq, assinatura_id = _extrair_recorrencia(data)
+    oferta_nome, oferta_codigo = _extrair_oferta_identidade(data)
 
     return {
         "produto": produto,
         "oferta": oferta,
+        "oferta_nome": oferta_nome,
+        "oferta_codigo": oferta_codigo,
         "tipo": tipo,
         "recorrencia_seq": seq,
         "assinatura_id": assinatura_id,
@@ -126,6 +129,16 @@ def _extrair_campos(payload: dict, data: dict, status: str) -> dict:
         "comprador_email": comprador_email,
         "data_venda": _extrair_data(data, payload),
     }
+
+
+def _extrair_oferta_identidade(data: dict) -> tuple[str | None, str | None]:
+    """Nome e código da oferta no Guru: product.offer.{name,id}."""
+    product = data.get("product") or {}
+    if isinstance(product, dict):
+        offer = product.get("offer") or {}
+        if isinstance(offer, dict):
+            return offer.get("name"), offer.get("id")
+    return None, None
 
 
 def _extrair_produto_e_oferta(data: dict) -> tuple[str, str | None]:

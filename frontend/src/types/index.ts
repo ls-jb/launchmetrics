@@ -94,3 +94,11 @@ export interface ProdutoRanking {
   quantidade: number
   receita: number
 }
+
+export interface OfertaBreakdown {
+  oferta_nome: string | null
+  oferta_codigo: string | null
+  valor_oferta: number
+  quantidade: number
+  receita: number
+}

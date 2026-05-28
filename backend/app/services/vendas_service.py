@@ -17,6 +17,7 @@ from sqlalchemy.sql import Select
 
 from app.models import Venda
 from app.schemas.venda import (
+    OfertaBreakdown,
     PontoReceita,
     ProdutoRanking,
     ResumoVendas,
@@ -106,6 +107,43 @@ async def por_produto(
     rows = (await db.execute(stmt)).all()
     return [
         ProdutoRanking(produto=r.produto, quantidade=r.quantidade, receita=r.receita)
+        for r in rows
+    ]
+
+
+async def ofertas_por_produto(
+    db: AsyncSession,
+    produto: str,
+    inicio: date,
+    fim: date,
+) -> list[OfertaBreakdown]:
+    """
+    Detalhe das ofertas de UM produto, pro popup do ranking.
+    Agrupa por (oferta_nome, oferta_codigo). Aplica a mesma regra do
+    dashboard (status aprovada + recorrência seq<=1 + período).
+    valor_oferta = maior valor observado (preço cheio, sem desconto/juros).
+    """
+    stmt = (
+        select(
+            Venda.oferta_nome,
+            Venda.oferta_codigo,
+            func.max(Venda.valor).label("valor_oferta"),
+            func.count(Venda.id).label("quantidade"),
+            func.sum(Venda.valor).label("receita"),
+        )
+        .group_by(Venda.oferta_nome, Venda.oferta_codigo)
+        .order_by(func.sum(Venda.valor).desc())
+    )
+    stmt = _filtros_dashboard(stmt, inicio, fim, produto, None)
+    rows = (await db.execute(stmt)).all()
+    return [
+        OfertaBreakdown(
+            oferta_nome=r.oferta_nome,
+            oferta_codigo=r.oferta_codigo,
+            valor_oferta=r.valor_oferta,
+            quantidade=r.quantidade,
+            receita=r.receita,
+        )
         for r in rows
     ]
 

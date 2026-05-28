@@ -30,6 +30,8 @@ class VendaResponse(BaseModel):
     external_id: str | None = None
     produto: str
     oferta: Oferta | None = None
+    oferta_nome: str | None = None
+    oferta_codigo: str | None = None
     tipo: TipoVenda
     recorrencia_seq: int | None = None
     assinatura_id: str | None = None
@@ -87,6 +89,16 @@ class ProdutoRanking(BaseModel):
     """Um item do ranking de produtos."""
 
     produto: str
+    quantidade: int
+    receita: Money
+
+
+class OfertaBreakdown(BaseModel):
+    """Detalhe de uma oferta dentro de um produto (popup do ranking)."""
+
+    oferta_nome: str | None = None
+    oferta_codigo: str | None = None
+    valor_oferta: Money  # preço nominal da oferta (maior valor observado)
     quantidade: int
     receita: Money
 

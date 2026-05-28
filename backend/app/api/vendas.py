@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.middleware.auth import verify_token
 from app.schemas.venda import (
+    OfertaBreakdown,
     PontoReceita,
     ProdutoRanking,
     ResumoVendas,
@@ -86,3 +87,15 @@ async def listar_produtos(
     _: dict = Depends(verify_token),
 ):
     return await vendas_service.produtos_distintos(db)
+
+
+@router.get("/ofertas", response_model=list[OfertaBreakdown])
+async def ofertas_do_produto(
+    produto: str = Query(..., description="Nome exato do produto"),
+    inicio: date = Query(...),
+    fim: date = Query(...),
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(verify_token),
+):
+    """Detalha as ofertas de um produto (popup do ranking)."""
+    return await vendas_service.ofertas_por_produto(db, produto, inicio, fim)

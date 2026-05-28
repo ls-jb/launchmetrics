@@ -4,9 +4,15 @@ import { useEffect, useMemo, useState } from 'react'
 import { FiltroData } from '@/components/shared/FiltroData'
 import { GraficoReceitaDia } from '@/components/shared/GraficoReceitaDia'
 import { KPICard } from '@/components/shared/KPICard'
+import { Modal } from '@/components/shared/Modal'
 import { formatBRL, formatBRLPreciso, formatNum } from '@/lib/tokens'
 import { vendasService, type FiltroVendas } from '@/services/vendasService'
-import type { PontoReceita, ProdutoRanking, ResumoVendas } from '@/types'
+import type {
+  OfertaBreakdown,
+  PontoReceita,
+  ProdutoRanking,
+  ResumoVendas,
+} from '@/types'
 
 const OFERTAS = ['Principal', 'Order Bump', 'Upsell', 'Downsell']
 
@@ -23,6 +29,22 @@ export function Vendas() {
   const [produtos, setProdutos] = useState<string[]>([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
+
+  // Modal de ofertas de um produto (popup do ranking)
+  const [produtoModal, setProdutoModal] = useState<string | null>(null)
+  const [ofertas, setOfertas] = useState<OfertaBreakdown[]>([])
+  const [ofertasCarregando, setOfertasCarregando] = useState(false)
+
+  const abrirOfertas = (nomeProduto: string) => {
+    setProdutoModal(nomeProduto)
+    setOfertas([])
+    setOfertasCarregando(true)
+    vendasService
+      .ofertasPorProduto(nomeProduto, inicio, fim)
+      .then(setOfertas)
+      .catch(() => setOfertas([]))
+      .finally(() => setOfertasCarregando(false))
+  }
 
   const filtro: FiltroVendas = useMemo(
     () => ({ inicio, fim, produto: produto || null, oferta: oferta || null }),
@@ -180,7 +202,29 @@ export function Vendas() {
         ) : (
           <div style={{ display: 'grid', gap: 14 }}>
             {ranking.map((r, i) => (
-              <div key={r.produto}>
+              <button
+                key={r.produto}
+                onClick={() => abrirOfertas(r.produto)}
+                title="Ver ofertas deste produto"
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  textAlign: 'left',
+                  background: 'transparent',
+                  border: 'none',
+                  padding: '6px 8px',
+                  margin: '0 -8px',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#1F2937'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent'
+                }}
+              >
                 <div
                   style={{
                     display: 'flex',
@@ -192,7 +236,7 @@ export function Vendas() {
                     <span style={{ color: '#6B7280', marginRight: 8 }}>#{i + 1}</span>
                     {r.produto}
                   </span>
-                  <div style={{ display: 'flex', gap: 24 }}>
+                  <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
                     <span style={{ fontSize: 12, color: '#6B7280' }}>
                       {formatNum(r.quantidade)} vendas
                     </span>
@@ -207,6 +251,7 @@ export function Vendas() {
                     >
                       {formatBRL(r.receita)}
                     </span>
+                    <span style={{ fontSize: 14, color: '#4B5563' }}>›</span>
                   </div>
                 </div>
                 <div style={{ height: 6, background: '#1F2937', borderRadius: 99 }}>
@@ -219,10 +264,118 @@ export function Vendas() {
                     }}
                   />
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         )}
+      </div>
+
+      <Modal
+        aberto={produtoModal !== null}
+        titulo={produtoModal ? `Ofertas — ${produtoModal}` : 'Ofertas'}
+        onFechar={() => setProdutoModal(null)}
+        largura={620}
+      >
+        <ModalOfertas carregando={ofertasCarregando} ofertas={ofertas} />
+      </Modal>
+    </div>
+  )
+}
+
+function ModalOfertas({
+  carregando,
+  ofertas,
+}: {
+  carregando: boolean
+  ofertas: OfertaBreakdown[]
+}) {
+  if (carregando) {
+    return <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>Carregando ofertas…</p>
+  }
+  if (ofertas.length === 0) {
+    return (
+      <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
+        Nenhuma oferta encontrada no período.
+      </p>
+    )
+  }
+
+  const totalReceita = ofertas.reduce((acc, o) => acc + o.receita, 0)
+  const totalQtd = ofertas.reduce((acc, o) => acc + o.quantidade, 0)
+
+  return (
+    <div>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          fontSize: 11,
+          color: '#6B7280',
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+          padding: '0 0 8px',
+          borderBottom: '1px solid #1F2937',
+          marginBottom: 8,
+        }}
+      >
+        <span>Oferta</span>
+        <span>Vendas · Receita</span>
+      </div>
+
+      <div style={{ display: 'grid', gap: 10 }}>
+        {ofertas.map((o, i) => (
+          <div
+            key={o.oferta_codigo ?? `sem-codigo-${i}`}
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              gap: 16,
+              paddingBottom: 10,
+              borderBottom: '1px solid #161E2E',
+            }}
+          >
+            <div style={{ minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: 13, color: '#F9FAFB', fontWeight: 500 }}>
+                {o.oferta_nome ?? 'Sem nome'}
+              </p>
+              <p
+                style={{
+                  margin: '2px 0 0',
+                  fontSize: 11,
+                  color: '#6B7280',
+                  fontFamily: 'monospace',
+                }}
+              >
+                {o.oferta_codigo ?? '—'} · {formatBRLPreciso(o.valor_oferta)}
+              </p>
+            </div>
+            <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+              <p style={{ margin: 0, fontSize: 13, color: '#F9FAFB', fontWeight: 600 }}>
+                {formatBRL(o.receita)}
+              </p>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6B7280' }}>
+                {formatNum(o.quantidade)} {o.quantidade === 1 ? 'venda' : 'vendas'}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          marginTop: 12,
+          paddingTop: 10,
+          borderTop: '1px solid #1F2937',
+          fontSize: 13,
+          fontWeight: 700,
+          color: '#F9FAFB',
+        }}
+      >
+        <span>Total ({formatNum(totalQtd)} vendas)</span>
+        <span>{formatBRL(totalReceita)}</span>
       </div>
     </div>
   )

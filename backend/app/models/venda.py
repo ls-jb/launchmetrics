@@ -33,8 +33,14 @@ class Venda(Base):
     # O que foi vendido
     produto: Mapped[str] = mapped_column(String, nullable=False)
     oferta: Mapped[str | None] = mapped_column(String)
-    """Principal | Order Bump | Upsell | Downsell. Pode ficar NULL para
-    vendas manuais sem distinção de oferta."""
+    """Categoria: Principal | Order Bump | Upsell | Downsell. Pode ficar NULL
+    para vendas manuais sem distinção de oferta."""
+
+    oferta_nome: Mapped[str | None] = mapped_column(String)
+    """Nome real da oferta na plataforma (ex: 'Oferta Principal CVA 05/26')."""
+
+    oferta_codigo: Mapped[str | None] = mapped_column(String)
+    """Código/ID da oferta na plataforma (Hotmart offer.code, Guru offer.id)."""
 
     # Como é a venda
     tipo: Mapped[str] = mapped_column(String, nullable=False, default="unica")
