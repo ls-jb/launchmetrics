@@ -1,5 +1,5 @@
 import { format, subDays } from 'date-fns'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { FiltroData } from '@/components/shared/FiltroData'
 import { GraficoReceitaDia } from '@/components/shared/GraficoReceitaDia'
@@ -23,7 +23,7 @@ export function Vendas() {
   const hoje = format(new Date(), 'yyyy-MM-dd')
   const [inicio, setInicio] = useState(format(subDays(new Date(), 29), 'yyyy-MM-dd'))
   const [fim, setFim] = useState(hoje)
-  const [produto, setProduto] = useState<string>('')
+  const [produtosSel, setProdutosSel] = useState<string[]>([])
   const [oferta, setOferta] = useState<string>('')
 
   const [resumo, setResumo] = useState<ResumoVendas | null>(null)
@@ -56,8 +56,8 @@ export function Vendas() {
   }
 
   const filtro: FiltroVendas = useMemo(
-    () => ({ inicio, fim, produto: produto || null, oferta: oferta || null }),
-    [inicio, fim, produto, oferta],
+    () => ({ inicio, fim, produtos: produtosSel, oferta: oferta || null }),
+    [inicio, fim, produtosSel, oferta],
   )
 
   // Carrega a lista de produtos uma vez (alimenta o dropdown)
@@ -153,10 +153,10 @@ export function Vendas() {
             setFim(f)
           }}
         />
-        <Dropdown
-          label="Produto"
-          valor={produto}
-          onChange={setProduto}
+        <MultiSelect
+          label="Produtos"
+          selecionados={produtosSel}
+          onChange={setProdutosSel}
           opcoes={produtos}
           placeholder="Todos os produtos"
         />
@@ -236,7 +236,16 @@ export function Vendas() {
             Nenhuma venda encontrada para os filtros selecionados.
           </p>
         ) : (
-          <div style={{ display: 'grid', gap: 14 }}>
+          <div
+            style={{
+              display: 'grid',
+              gap: 14,
+              // a partir de 10 produtos, vira área rolável pra não esticar a página
+              maxHeight: ranking.length > 10 ? 520 : undefined,
+              overflowY: ranking.length > 10 ? 'auto' : undefined,
+              paddingRight: ranking.length > 10 ? 8 : undefined,
+            }}
+          >
             {ranking.map((r, i) => (
               <button
                 key={r.produto}
@@ -774,6 +783,159 @@ function LinhaOferta({
           {formatNum(o.quantidade)} {o.quantidade === 1 ? 'venda' : 'vendas'}
         </p>
       </div>
+    </div>
+  )
+}
+
+function MultiSelect({
+  label,
+  selecionados,
+  onChange,
+  opcoes,
+  placeholder,
+}: {
+  label: string
+  selecionados: string[]
+  onChange: (v: string[]) => void
+  opcoes: string[]
+  placeholder: string
+}) {
+  const [aberto, setAberto] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!aberto) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setAberto(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [aberto])
+
+  const toggle = (opcao: string) => {
+    if (selecionados.includes(opcao)) {
+      onChange(selecionados.filter((s) => s !== opcao))
+    } else {
+      onChange([...selecionados, opcao])
+    }
+  }
+
+  const resumo =
+    selecionados.length === 0
+      ? placeholder
+      : selecionados.length === 1
+        ? selecionados[0]
+        : `${selecionados.length} selecionados`
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <label style={{ display: 'block', fontSize: 11, color: '#6B7280', marginBottom: 6 }}>
+        {label}
+      </label>
+      <button
+        type="button"
+        onClick={() => setAberto((v) => !v)}
+        style={{
+          background: '#0F172A',
+          border: '1px solid #374151',
+          borderRadius: 8,
+          padding: '8px 12px',
+          color: selecionados.length ? '#F9FAFB' : '#6B7280',
+          fontSize: 13,
+          minWidth: 200,
+          maxWidth: 260,
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+        }}
+      >
+        <span
+          style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+        >
+          {resumo}
+        </span>
+        <span style={{ fontSize: 10, color: '#6B7280' }}>▼</span>
+      </button>
+
+      {aberto && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 4px)',
+            left: 0,
+            zIndex: 30,
+            width: 280,
+            maxHeight: 300,
+            overflowY: 'auto',
+            background: '#111827',
+            border: '1px solid #374151',
+            borderRadius: 8,
+            padding: 6,
+            boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+          }}
+        >
+          {selecionados.length > 0 && (
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                background: 'transparent',
+                border: 'none',
+                color: '#7C6AF7',
+                fontSize: 12,
+                padding: '6px 8px',
+                cursor: 'pointer',
+              }}
+            >
+              Limpar seleção
+            </button>
+          )}
+          {opcoes.length === 0 && (
+            <p style={{ margin: 0, padding: '8px', fontSize: 12, color: '#6B7280' }}>
+              Sem produtos.
+            </p>
+          )}
+          {opcoes.map((o) => {
+            const marcado = selecionados.includes(o)
+            return (
+              <label
+                key={o}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '7px 8px',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  color: '#E5E7EB',
+                  background: marcado ? '#1F2937' : 'transparent',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={marcado}
+                  onChange={() => toggle(o)}
+                  style={{ accentColor: '#7C6AF7', cursor: 'pointer' }}
+                />
+                <span
+                  style={{
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {o}
+                </span>
+              </label>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

@@ -15,7 +15,8 @@
       "Bash(curl -s -H 'Authorization: Bearer __TRACKED_VAR__' --max-time 15 'https://lauchmetrics-ls.vercel.app/api/vendas/ofertas?produto=Comunidade%20Vida%20Alinhada&inicio=2026-05-01&fim=2026-05-31')",
       "Bash(curl -s -H 'Authorization: Bearer __TRACKED_VAR__' 'http://127.0.0.1:8000/api/vendas/por-produto?inicio=2026-05-01&fim=2026-05-31')",
       "Bash(python -c ' *)",
-      "Bash(curl -s -w '\\\\nHTTP %{http_code}\\\\n' -X POST -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' --data '{\"produto\":\"Venda Avulsa Teste\",\"valor\":497,\"metodo_pagamento\":\"pix\",\"data_venda\":\"2026-05-20T12:00:00Z\",\"comprador_nome\":\"Fulano\",\"comprador_email\":\"fulano@teste.com\",\"oferta\":\"Principal\",\"tipo\":\"unica\"}' http://127.0.0.1:8000/api/vendas)"
+      "Bash(curl -s -w '\\\\nHTTP %{http_code}\\\\n' -X POST -H 'Authorization: Bearer __TRACKED_VAR__' -H 'Content-Type: application/json' --data '{\"produto\":\"Venda Avulsa Teste\",\"valor\":497,\"metodo_pagamento\":\"pix\",\"data_venda\":\"2026-05-20T12:00:00Z\",\"comprador_nome\":\"Fulano\",\"comprador_email\":\"fulano@teste.com\",\"oferta\":\"Principal\",\"tipo\":\"unica\"}' http://127.0.0.1:8000/api/vendas)",
+      "PowerShell(C:\\\\Users\\\\joao.boone\\\\Desktop\\\\DASHBOARD_CLAUDE\\\\backend\\\\venv\\\\Scripts\\\\python.exe -c \"import ast; [ast.parse\\(open\\(f, encoding='utf-8'\\).read\\(\\)\\) for f in [r'C:\\\\Users\\\\joao.boone\\\\Desktop\\\\DASHBOARD_CLAUDE\\\\backend\\\\app\\\\services\\\\vendas_service.py', r'C:\\\\Users\\\\joao.boone\\\\Desktop\\\\DASHBOARD_CLAUDE\\\\backend\\\\app\\\\api\\\\vendas.py']]; print\\('backend OK'\\)\")"
     ],
     "additionalDirectories": [
       "c:\\c\\Users\\joao.boone\\Desktop\\DASHBOARD_CLAUDE\\frontend\\src\\lib"

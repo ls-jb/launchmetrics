@@ -11,15 +11,20 @@ import type {
 export interface FiltroVendas {
   inicio: string // YYYY-MM-DD
   fim: string // YYYY-MM-DD
-  produto?: string | null
+  produtos?: string[]
   oferta?: string | null
 }
 
-function paramsDe(f: FiltroVendas): { params: Record<string, string> } {
-  const p: Record<string, string> = { inicio: f.inicio, fim: f.fim }
-  if (f.produto) p.produto = f.produto
-  if (f.oferta) p.oferta = f.oferta
-  return { params: p }
+function paramsDe(f: FiltroVendas) {
+  const params: Record<string, string | string[]> = {
+    inicio: f.inicio,
+    fim: f.fim,
+  }
+  if (f.produtos && f.produtos.length > 0) params.produtos = f.produtos
+  if (f.oferta) params.oferta = f.oferta
+  // indexes:null serializa arrays como ?produtos=A&produtos=B (formato que o
+  // FastAPI entende como list[str])
+  return { params, paramsSerializer: { indexes: null } }
 }
 
 export const vendasService = {

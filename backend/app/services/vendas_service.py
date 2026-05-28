@@ -46,15 +46,19 @@ STATUS_FATURADO = "aprovada"
 # ============================================================
 # Subquery base do dashboard (override de preço + dedup)
 # ============================================================
-def _vendas_efetivas(inicio: date, fim: date, produto: str | None, oferta: str | None):
+def _vendas_efetivas(
+    inicio: date, fim: date, produtos: list[str] | None, oferta: str | None
+):
     """
     Monta a subquery de vendas "efetivas" do dashboard:
-    - filtra status aprovada, período, recorrência seq<=1, produto/oferta
+    - filtra status aprovada, período, recorrência seq<=1, produtos/oferta
     - valor_efetivo = override de ofertas_precos OU valor da venda
     - dedup: mantém 1 linha por (email, oferta_codigo) quando ambos não nulos
 
     Retorna uma subquery com colunas: produto, oferta_nome, oferta_codigo,
     valor_efetivo, data_venda.
+
+    `produtos` aceita uma lista (multi-seleção). Vazio/None = todos.
     """
     inicio_dt, fim_dt = _range_utc(inicio, fim)
 
@@ -93,8 +97,8 @@ def _vendas_efetivas(inicio: date, fim: date, produto: str | None, oferta: str |
             or_(Venda.recorrencia_seq.is_(None), Venda.recorrencia_seq == 1),
         )
     )
-    if produto:
-        base = base.where(Venda.produto == produto)
+    if produtos:
+        base = base.where(Venda.produto.in_(produtos))
     if oferta:
         base = base.where(Venda.oferta == oferta)
 
@@ -107,9 +111,13 @@ def _vendas_efetivas(inicio: date, fim: date, produto: str | None, oferta: str |
 # Leitura — agregações do dashboard
 # ============================================================
 async def resumo(
-    db: AsyncSession, inicio: date, fim: date, produto: str | None, oferta: str | None
+    db: AsyncSession,
+    inicio: date,
+    fim: date,
+    produtos: list[str] | None,
+    oferta: str | None,
 ) -> ResumoVendas:
-    sub = _vendas_efetivas(inicio, fim, produto, oferta)
+    sub = _vendas_efetivas(inicio, fim, produtos, oferta)
     stmt = select(
         func.coalesce(func.sum(sub.c.valor_efetivo), 0).label("receita_total"),
         func.count().label("quantidade"),
@@ -122,9 +130,13 @@ async def resumo(
 
 
 async def por_dia(
-    db: AsyncSession, inicio: date, fim: date, produto: str | None, oferta: str | None
+    db: AsyncSession,
+    inicio: date,
+    fim: date,
+    produtos: list[str] | None,
+    oferta: str | None,
 ) -> list[PontoReceita]:
-    sub = _vendas_efetivas(inicio, fim, produto, oferta)
+    sub = _vendas_efetivas(inicio, fim, produtos, oferta)
     dia = cast(sub.c.data_venda, Date).label("dia")
     stmt = (
         select(dia, func.sum(sub.c.valor_efetivo).label("receita"))
@@ -137,9 +149,13 @@ async def por_dia(
 
 
 async def por_produto(
-    db: AsyncSession, inicio: date, fim: date, produto: str | None, oferta: str | None
+    db: AsyncSession,
+    inicio: date,
+    fim: date,
+    produtos: list[str] | None,
+    oferta: str | None,
 ) -> list[ProdutoRanking]:
-    sub = _vendas_efetivas(inicio, fim, produto, oferta)
+    sub = _vendas_efetivas(inicio, fim, produtos, oferta)
     stmt = (
         select(
             sub.c.produto.label("produto"),
@@ -161,7 +177,7 @@ async def ofertas_por_produto(
     db: AsyncSession, produto: str, inicio: date, fim: date
 ) -> list[OfertaBreakdown]:
     """Detalhe das ofertas de UM produto (popup do ranking)."""
-    sub = _vendas_efetivas(inicio, fim, produto, None)
+    sub = _vendas_efetivas(inicio, fim, [produto], None)
     stmt = (
         select(
             sub.c.oferta_nome,
@@ -207,7 +223,7 @@ async def listar(
     db: AsyncSession,
     inicio: date,
     fim: date,
-    produto: str | None,
+    produtos: list[str] | None,
     oferta: str | None,
     limit: int,
     offset: int,
@@ -221,8 +237,8 @@ async def listar(
         Venda.data_venda < fim_dt,
         Venda.status == STATUS_FATURADO,
     )
-    if produto:
-        stmt = stmt.where(Venda.produto == produto)
+    if produtos:
+        stmt = stmt.where(Venda.produto.in_(produtos))
     if oferta:
         stmt = stmt.where(Venda.oferta == oferta)
     stmt = stmt.offset(offset).limit(limit)
