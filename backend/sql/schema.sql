@@ -184,6 +184,17 @@ create index if not exists ix_webhook_logs_recebido
     on launchmetrics.webhook_logs (recebido_em desc);
 
 -- ============================================================
+-- PERFIS — papel de cada usuário (admin / viewer)
+-- ============================================================
+create table if not exists launchmetrics.perfis (
+    user_id uuid primary key,  -- id do Supabase Auth (== 'sub' do JWT)
+    email text not null,
+    nome text,
+    papel text not null default 'viewer' check (papel in ('admin', 'viewer')),
+    criado_em timestamptz not null default now()
+);
+
+-- ============================================================
 -- ROW LEVEL SECURITY — defesa em profundidade
 -- ============================================================
 -- Mesmo o schema estando fora das schemas expostas pelo PostgREST,

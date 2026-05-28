@@ -9,7 +9,7 @@ if sys.platform == "win32":
 from fastapi import FastAPI  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
-from app.api import lancamentos, vendas, webhooks  # noqa: E402
+from app.api import lancamentos, usuarios, vendas, webhooks  # noqa: E402
 from app.core.config import settings  # noqa: E402
 
 app = FastAPI(
@@ -29,6 +29,7 @@ app.add_middleware(
 app.include_router(lancamentos.router, prefix="/api")
 app.include_router(vendas.router, prefix="/api")
 app.include_router(webhooks.router, prefix="/api")
+app.include_router(usuarios.router, prefix="/api")
 
 
 @app.get("/health", tags=["health"])

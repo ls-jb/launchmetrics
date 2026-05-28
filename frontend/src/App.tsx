@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 
 import { Layout } from '@/components/shared/Layout'
 import { RotaProtegida } from '@/components/shared/RotaProtegida'
+import { Configuracoes } from '@/pages/Configuracoes'
 import { Lancamentos } from '@/pages/Lancamentos'
 import { LancamentoDetalhe } from '@/pages/LancamentoDetalhe'
 import { LancamentoPago } from '@/pages/LancamentoPago'
@@ -33,6 +34,7 @@ export default function App() {
           <Route path="/lancamentos/:id" element={<LancamentoDetalhe />} />
           <Route path="/lancamento-pago" element={<LancamentoPago />} />
           <Route path="/vendas" element={<Vendas />} />
+          <Route path="/configuracoes" element={<Configuracoes />} />
         </Route>
       </Routes>
     </BrowserRouter>

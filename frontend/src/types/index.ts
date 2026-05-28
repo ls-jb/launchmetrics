@@ -65,6 +65,23 @@ export interface Venda {
   criado_em: string
 }
 
+export type Papel = 'admin' | 'viewer'
+
+export interface Usuario {
+  user_id: string
+  email: string
+  nome: string | null
+  papel: Papel
+  criado_em: string
+}
+
+export interface MeuPerfil {
+  user_id: string
+  email: string
+  nome: string | null
+  papel: Papel
+}
+
 export interface VendaManualCreatePayload {
   produto: string
   valor: number
