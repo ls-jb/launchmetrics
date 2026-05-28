@@ -8,10 +8,13 @@ import { Modal } from '@/components/shared/Modal'
 import { formatBRL, formatBRLPreciso, formatNum } from '@/lib/tokens'
 import { vendasService, type FiltroVendas } from '@/services/vendasService'
 import type {
+  MetodoPagamento,
   OfertaBreakdown,
+  Oferta,
   PontoReceita,
   ProdutoRanking,
   ResumoVendas,
+  VendaManualCreatePayload,
 } from '@/types'
 
 const OFERTAS = ['Principal', 'Order Bump', 'Upsell', 'Downsell']
@@ -30,10 +33,16 @@ export function Vendas() {
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
 
+  // refetch manual (após cadastrar venda)
+  const [refreshKey, setRefreshKey] = useState(0)
+
   // Modal de ofertas de um produto (popup do ranking)
   const [produtoModal, setProdutoModal] = useState<string | null>(null)
   const [ofertas, setOfertas] = useState<OfertaBreakdown[]>([])
   const [ofertasCarregando, setOfertasCarregando] = useState(false)
+
+  // Modal de cadastro de venda manual
+  const [modalVenda, setModalVenda] = useState(false)
 
   const abrirOfertas = (nomeProduto: string) => {
     setProdutoModal(nomeProduto)
@@ -72,7 +81,7 @@ export function Vendas() {
       })
       .catch((e) => setErro(extrairErro(e)))
       .finally(() => setCarregando(false))
-  }, [filtro])
+  }, [filtro, refreshKey])
 
   const porDiaFormatado = useMemo(
     () =>
@@ -87,13 +96,40 @@ export function Vendas() {
 
   return (
     <div>
-      <header style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: '#F9FAFB' }}>
-          Dashboard de Vendas
-        </h1>
-        <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
-          Painel unificado de Hotmart, PagMe e PagTrust
-        </p>
+      <header
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-end',
+          marginBottom: '1.5rem',
+        }}
+      >
+        <div>
+          <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: '#F9FAFB' }}>
+            Dashboard de Vendas
+          </h1>
+          <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
+            Hotmart, Guru e vendas manuais (PIX, avulsas)
+          </p>
+        </div>
+        <button
+          onClick={() => setModalVenda(true)}
+          style={{
+            background: '#7C6AF7',
+            border: 'none',
+            color: '#fff',
+            padding: '10px 16px',
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Cadastrar venda
+        </button>
       </header>
 
       <div
@@ -282,6 +318,251 @@ export function Vendas() {
           onSalvou={() => produtoModal && abrirOfertas(produtoModal)}
         />
       </Modal>
+
+      <Modal
+        aberto={modalVenda}
+        titulo="Cadastrar venda manual"
+        onFechar={() => setModalVenda(false)}
+        largura={560}
+      >
+        <FormVendaManual
+          onCancelar={() => setModalVenda(false)}
+          onCriou={() => {
+            setModalVenda(false)
+            setRefreshKey((k) => k + 1)
+            vendasService.produtos().then(setProdutos).catch(() => {})
+          }}
+        />
+      </Modal>
+    </div>
+  )
+}
+
+const METODOS: { valor: MetodoPagamento; label: string }[] = [
+  { valor: 'pix', label: 'PIX' },
+  { valor: 'cartao', label: 'Cartão' },
+  { valor: 'boleto', label: 'Boleto' },
+  { valor: 'transferencia', label: 'Transferência' },
+  { valor: 'cartao_2x', label: 'Cartão (2 cartões)' },
+  { valor: 'outro', label: 'Outro' },
+]
+
+const OFERTAS_CAT: Oferta[] = ['Principal', 'Order Bump', 'Upsell', 'Downsell']
+
+function FormVendaManual({
+  onCancelar,
+  onCriou,
+}: {
+  onCancelar: () => void
+  onCriou: () => void
+}) {
+  const [produtoNome, setProdutoNome] = useState('')
+  const [valor, setValor] = useState('')
+  const [metodo, setMetodo] = useState<MetodoPagamento>('pix')
+  const [dataVenda, setDataVenda] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [compradorNome, setCompradorNome] = useState('')
+  const [compradorEmail, setCompradorEmail] = useState('')
+  const [ofertaCat, setOfertaCat] = useState<string>('')
+  const [enviando, setEnviando] = useState(false)
+  const [erro, setErro] = useState('')
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setErro('')
+    setEnviando(true)
+    const payload: VendaManualCreatePayload = {
+      produto: produtoNome,
+      valor: Number(valor),
+      metodo_pagamento: metodo,
+      // meio-dia UTC pra cair no dia certo independente de fuso
+      data_venda: `${dataVenda}T12:00:00Z`,
+      comprador_nome: compradorNome || null,
+      comprador_email: compradorEmail || null,
+      oferta: (ofertaCat || null) as Oferta | null,
+      tipo: 'unica',
+    }
+    try {
+      await vendasService.criarManual(payload)
+      onCriou()
+    } catch (err) {
+      setErro(extrairErro(err))
+      setEnviando(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 14 }}>
+      <CampoVenda label="Produto" required>
+        <input
+          value={produtoNome}
+          onChange={(e) => setProdutoNome(e.target.value)}
+          placeholder="Ex: Comunidade Vida Alinhada"
+          required
+          style={inputVenda}
+        />
+      </CampoVenda>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <CampoVenda label="Valor (R$)" required>
+          <input
+            type="number"
+            step="0.01"
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
+            placeholder="2997.00"
+            required
+            style={inputVenda}
+          />
+        </CampoVenda>
+        <CampoVenda label="Data do pagamento" required>
+          <input
+            type="date"
+            value={dataVenda}
+            onChange={(e) => setDataVenda(e.target.value)}
+            required
+            style={{ ...inputVenda, colorScheme: 'dark' }}
+          />
+        </CampoVenda>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <CampoVenda label="Método de pagamento" required>
+          <select
+            value={metodo}
+            onChange={(e) => setMetodo(e.target.value as MetodoPagamento)}
+            style={{ ...inputVenda, colorScheme: 'dark' }}
+          >
+            {METODOS.map((m) => (
+              <option key={m.valor} value={m.valor}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </CampoVenda>
+        <CampoVenda label="Oferta (opcional)">
+          <select
+            value={ofertaCat}
+            onChange={(e) => setOfertaCat(e.target.value)}
+            style={{ ...inputVenda, colorScheme: 'dark' }}
+          >
+            <option value="">—</option>
+            {OFERTAS_CAT.map((o) => (
+              <option key={o} value={o}>
+                {o}
+              </option>
+            ))}
+          </select>
+        </CampoVenda>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <CampoVenda label="Nome do comprador (opcional)">
+          <input
+            value={compradorNome}
+            onChange={(e) => setCompradorNome(e.target.value)}
+            placeholder="Maria Silva"
+            style={inputVenda}
+          />
+        </CampoVenda>
+        <CampoVenda label="Email do comprador (opcional)">
+          <input
+            type="email"
+            value={compradorEmail}
+            onChange={(e) => setCompradorEmail(e.target.value)}
+            placeholder="maria@email.com"
+            style={inputVenda}
+          />
+        </CampoVenda>
+      </div>
+
+      {erro && (
+        <div
+          style={{
+            background: '#EF444422',
+            border: '1px solid #EF444444',
+            color: '#FCA5A5',
+            padding: '8px 12px',
+            borderRadius: 8,
+            fontSize: 12,
+          }}
+        >
+          {erro}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+        <button
+          type="button"
+          onClick={onCancelar}
+          disabled={enviando}
+          style={{
+            background: 'transparent',
+            border: '1px solid #374151',
+            color: '#9CA3AF',
+            padding: '9px 16px',
+            borderRadius: 8,
+            fontSize: 13,
+            cursor: 'pointer',
+          }}
+        >
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          disabled={enviando || !produtoNome || !valor}
+          style={{
+            background: enviando ? '#4B5563' : '#7C6AF7',
+            border: 'none',
+            color: '#fff',
+            padding: '9px 18px',
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: enviando ? 'not-allowed' : 'pointer',
+            opacity: !produtoNome || !valor ? 0.6 : 1,
+          }}
+        >
+          {enviando ? 'Salvando…' : 'Cadastrar venda'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+const inputVenda: React.CSSProperties = {
+  width: '100%',
+  background: '#0F172A',
+  border: '1px solid #374151',
+  borderRadius: 8,
+  padding: '9px 12px',
+  color: '#F9FAFB',
+  fontSize: 13,
+}
+
+function CampoVenda({
+  label,
+  required,
+  children,
+}: {
+  label: string
+  required?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <div>
+      <label
+        style={{
+          display: 'block',
+          fontSize: 11,
+          color: '#9CA3AF',
+          marginBottom: 6,
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+        }}
+      >
+        {label} {required && <span style={{ color: '#7C6AF7' }}>*</span>}
+      </label>
+      {children}
     </div>
   )
 }
