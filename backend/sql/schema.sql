@@ -93,8 +93,10 @@ create table if not exists launchmetrics.vendas (
 
     -- O que foi vendido
     produto text not null,
-    oferta text -- 'Principal' | 'Order Bump' | 'Upsell' | 'Downsell' (nullable para manual)
+    oferta text -- categoria: 'Principal' | 'Order Bump' | 'Upsell' | 'Downsell'
         check (oferta is null or oferta in ('Principal', 'Order Bump', 'Upsell', 'Downsell')),
+    oferta_nome text,    -- nome real da oferta na plataforma
+    oferta_codigo text,  -- código/id da oferta (Hotmart offer.code, Guru offer.id)
 
     -- Como é a venda
     tipo text not null default 'unica'
@@ -144,6 +146,42 @@ create index if not exists ix_vendas_metodo on launchmetrics.vendas (metodo_paga
 create index if not exists ix_vendas_assinatura_id
     on launchmetrics.vendas (assinatura_id)
     where assinatura_id is not null;
+
+create index if not exists ix_vendas_oferta_codigo
+    on launchmetrics.vendas (produto, oferta_codigo);
+
+-- ============================================================
+-- OFERTAS_PRECOS — override de valor por oferta
+-- ============================================================
+-- Algumas ofertas (ex: boleto parcelado Hotmart) não trazem o valor à vista
+-- no webhook, só a parcela. Aqui o usuário cadastra o valor real, e o
+-- dashboard usa ele no lugar do valor da transação para todas as vendas
+-- daquela oferta.
+create table if not exists launchmetrics.ofertas_precos (
+    oferta_codigo text primary key,
+    oferta_nome text,
+    valor numeric(12, 2) not null,
+    criado_em timestamptz not null default now(),
+    atualizado_em timestamptz not null default now()
+);
+
+-- ============================================================
+-- WEBHOOK_LOGS — auditoria de webhooks recebidos
+-- ============================================================
+create table if not exists launchmetrics.webhook_logs (
+    id uuid primary key default gen_random_uuid(),
+    plataforma text not null check (plataforma in ('Hotmart', 'Guru', 'GHL')),
+    evento text,
+    autorizado boolean not null default true,
+    processado boolean not null default false,
+    erro text,
+    headers jsonb,
+    payload jsonb,
+    recebido_em timestamptz not null default now()
+);
+
+create index if not exists ix_webhook_logs_recebido
+    on launchmetrics.webhook_logs (recebido_em desc);
 
 -- ============================================================
 -- ROW LEVEL SECURITY — defesa em profundidade

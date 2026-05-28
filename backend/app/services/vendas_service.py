@@ -1,23 +1,38 @@
 """
 Agregações e filtros do dashboard de vendas + cadastro manual.
 
-REGRAS DE NEGÓCIO IMPORTANTES (alinhadas com o usuário):
-- Cada linha da tabela = uma compra do cliente (não uma transação).
-- Vendas de recorrência são gravadas todas (auditoria), mas no dashboard
-  só conta a PRIMEIRA cobrança (recorrencia_seq = 1).
-- Vendas únicas (tipo='unica') têm recorrencia_seq NULL e sempre contam.
-- Só vendas com status='aprovada' entram nos cálculos de receita.
+REGRAS DE NEGÓCIO (alinhadas com o usuário):
+- Cada linha = uma compra do cliente.
+- Recorrências: só a PRIMEIRA cobrança (recorrencia_seq = 1) conta; seq>1 fica
+  gravado mas não entra no dashboard.
+- Só status='aprovada' entra nos cálculos.
+- OVERRIDE DE VALOR: se a oferta tem um valor cadastrado em ofertas_precos,
+  usamos ele no lugar do valor da transação (ex: boleto parcelado, onde o
+  webhook só manda a parcela, não o valor à vista).
+- DEDUP DE SPLIT: o mesmo email comprando a mesma oferta (oferta_codigo) conta
+  uma vez só — cobre pagamento em 2 cartões / 2 transações da mesma compra.
+  Como offer codes são específicos por lançamento, isso não funde recompras
+  de campanhas diferentes.
 """
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 
-from sqlalchemy import Date, cast, func, or_, select
+from sqlalchemy import (
+    Date,
+    String,
+    and_,
+    case,
+    cast,
+    func,
+    or_,
+    select,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql import Select
 
-from app.models import Venda
+from app.models import OfertaPreco, Venda
 from app.schemas.venda import (
     OfertaBreakdown,
+    OfertaPrecoUpsert,
     PontoReceita,
     ProdutoRanking,
     ResumoVendas,
@@ -29,8 +44,165 @@ STATUS_FATURADO = "aprovada"
 
 
 # ============================================================
-# Operações públicas — leitura
+# Subquery base do dashboard (override de preço + dedup)
 # ============================================================
+def _vendas_efetivas(inicio: date, fim: date, produto: str | None, oferta: str | None):
+    """
+    Monta a subquery de vendas "efetivas" do dashboard:
+    - filtra status aprovada, período, recorrência seq<=1, produto/oferta
+    - valor_efetivo = override de ofertas_precos OU valor da venda
+    - dedup: mantém 1 linha por (email, oferta_codigo) quando ambos não nulos
+
+    Retorna uma subquery com colunas: produto, oferta_nome, oferta_codigo,
+    valor_efetivo, data_venda.
+    """
+    inicio_dt, fim_dt = _range_utc(inicio, fim)
+
+    valor_efetivo = func.coalesce(OfertaPreco.valor, Venda.valor).label("valor_efetivo")
+
+    # Chave de dedup: email|oferta quando ambos existem; senão, o id da venda
+    # (cada linha vira seu próprio grupo → nunca é deduplicada).
+    dedup_key = case(
+        (
+            and_(Venda.comprador_email.is_not(None), Venda.oferta_codigo.is_not(None)),
+            Venda.comprador_email + cast(Venda.oferta_codigo, String),
+        ),
+        else_=cast(Venda.id, String),
+    )
+    rn = (
+        func.row_number()
+        .over(partition_by=dedup_key, order_by=Venda.data_venda)
+        .label("rn")
+    )
+
+    base = (
+        select(
+            Venda.produto.label("produto"),
+            Venda.oferta_nome.label("oferta_nome"),
+            Venda.oferta_codigo.label("oferta_codigo"),
+            valor_efetivo,
+            Venda.data_venda.label("data_venda"),
+            rn,
+        )
+        .select_from(Venda)
+        .outerjoin(OfertaPreco, OfertaPreco.oferta_codigo == Venda.oferta_codigo)
+        .where(
+            Venda.data_venda >= inicio_dt,
+            Venda.data_venda < fim_dt,
+            Venda.status == STATUS_FATURADO,
+            or_(Venda.recorrencia_seq.is_(None), Venda.recorrencia_seq == 1),
+        )
+    )
+    if produto:
+        base = base.where(Venda.produto == produto)
+    if oferta:
+        base = base.where(Venda.oferta == oferta)
+
+    base_sub = base.subquery()
+    # mantém só a primeira de cada grupo de dedup
+    return select(base_sub).where(base_sub.c.rn == 1).subquery()
+
+
+# ============================================================
+# Leitura — agregações do dashboard
+# ============================================================
+async def resumo(
+    db: AsyncSession, inicio: date, fim: date, produto: str | None, oferta: str | None
+) -> ResumoVendas:
+    sub = _vendas_efetivas(inicio, fim, produto, oferta)
+    stmt = select(
+        func.coalesce(func.sum(sub.c.valor_efetivo), 0).label("receita_total"),
+        func.count().label("quantidade"),
+    ).select_from(sub)
+    row = (await db.execute(stmt)).one()
+    receita = Decimal(row.receita_total)
+    qtd = int(row.quantidade)
+    ticket = (receita / qtd) if qtd > 0 else ZERO
+    return ResumoVendas(receita_total=receita, quantidade=qtd, ticket_medio=ticket)
+
+
+async def por_dia(
+    db: AsyncSession, inicio: date, fim: date, produto: str | None, oferta: str | None
+) -> list[PontoReceita]:
+    sub = _vendas_efetivas(inicio, fim, produto, oferta)
+    dia = cast(sub.c.data_venda, Date).label("dia")
+    stmt = (
+        select(dia, func.sum(sub.c.valor_efetivo).label("receita"))
+        .select_from(sub)
+        .group_by(dia)
+        .order_by(dia)
+    )
+    rows = (await db.execute(stmt)).all()
+    return [PontoReceita(data=r.dia, receita=r.receita) for r in rows]
+
+
+async def por_produto(
+    db: AsyncSession, inicio: date, fim: date, produto: str | None, oferta: str | None
+) -> list[ProdutoRanking]:
+    sub = _vendas_efetivas(inicio, fim, produto, oferta)
+    stmt = (
+        select(
+            sub.c.produto.label("produto"),
+            func.count().label("quantidade"),
+            func.sum(sub.c.valor_efetivo).label("receita"),
+        )
+        .select_from(sub)
+        .group_by(sub.c.produto)
+        .order_by(func.sum(sub.c.valor_efetivo).desc())
+    )
+    rows = (await db.execute(stmt)).all()
+    return [
+        ProdutoRanking(produto=r.produto, quantidade=r.quantidade, receita=r.receita)
+        for r in rows
+    ]
+
+
+async def ofertas_por_produto(
+    db: AsyncSession, produto: str, inicio: date, fim: date
+) -> list[OfertaBreakdown]:
+    """Detalhe das ofertas de UM produto (popup do ranking)."""
+    sub = _vendas_efetivas(inicio, fim, produto, None)
+    stmt = (
+        select(
+            sub.c.oferta_nome,
+            sub.c.oferta_codigo,
+            func.max(sub.c.valor_efetivo).label("valor_oferta"),
+            func.count().label("quantidade"),
+            func.sum(sub.c.valor_efetivo).label("receita"),
+        )
+        .select_from(sub)
+        .group_by(sub.c.oferta_nome, sub.c.oferta_codigo)
+        .order_by(func.sum(sub.c.valor_efetivo).desc())
+    )
+    rows = (await db.execute(stmt)).all()
+
+    # Anexa o valor de override cadastrado (se houver) pra cada oferta,
+    # pra UI mostrar/editar o valor registrado.
+    codigos = [r.oferta_codigo for r in rows if r.oferta_codigo]
+    overrides: dict[str, Decimal] = {}
+    if codigos:
+        ov = (
+            await db.execute(
+                select(OfertaPreco.oferta_codigo, OfertaPreco.valor).where(
+                    OfertaPreco.oferta_codigo.in_(codigos)
+                )
+            )
+        ).all()
+        overrides = {codigo: valor for codigo, valor in ov}
+
+    return [
+        OfertaBreakdown(
+            oferta_nome=r.oferta_nome,
+            oferta_codigo=r.oferta_codigo,
+            valor_oferta=r.valor_oferta,
+            quantidade=r.quantidade,
+            receita=r.receita,
+            valor_override=overrides.get(r.oferta_codigo) if r.oferta_codigo else None,
+        )
+        for r in rows
+    ]
+
+
 async def listar(
     db: AsyncSession,
     inicio: date,
@@ -40,112 +212,21 @@ async def listar(
     limit: int,
     offset: int,
 ) -> list[Venda]:
-    """
-    Listagem detalhada (vai para a tabela de vendas). Inclui TODAS as vendas
-    no período (inclusive recorrências seq>1) para fins de auditoria.
-    """
+    """Listagem detalhada (auditoria). Mostra TODAS as vendas do período,
+    inclusive recorrências seq>1 e duplicatas — sem dedup, sem override."""
+    inicio_dt, fim_dt = _range_utc(inicio, fim)
     stmt = select(Venda).order_by(Venda.data_venda.desc())
-    stmt = _filtros_basicos(stmt, inicio, fim, produto, oferta)
+    stmt = stmt.where(
+        Venda.data_venda >= inicio_dt,
+        Venda.data_venda < fim_dt,
+        Venda.status == STATUS_FATURADO,
+    )
+    if produto:
+        stmt = stmt.where(Venda.produto == produto)
+    if oferta:
+        stmt = stmt.where(Venda.oferta == oferta)
     stmt = stmt.offset(offset).limit(limit)
     return list((await db.execute(stmt)).scalars().all())
-
-
-async def resumo(
-    db: AsyncSession,
-    inicio: date,
-    fim: date,
-    produto: str | None,
-    oferta: str | None,
-) -> ResumoVendas:
-    stmt = select(
-        func.coalesce(func.sum(Venda.valor), 0).label("receita_total"),
-        func.count(Venda.id).label("quantidade"),
-    )
-    stmt = _filtros_dashboard(stmt, inicio, fim, produto, oferta)
-    row = (await db.execute(stmt)).one()
-    receita = Decimal(row.receita_total)
-    qtd = int(row.quantidade)
-    ticket = (receita / qtd) if qtd > 0 else ZERO
-    return ResumoVendas(receita_total=receita, quantidade=qtd, ticket_medio=ticket)
-
-
-async def por_dia(
-    db: AsyncSession,
-    inicio: date,
-    fim: date,
-    produto: str | None,
-    oferta: str | None,
-) -> list[PontoReceita]:
-    dia = cast(Venda.data_venda, Date).label("dia")
-    stmt = (
-        select(dia, func.sum(Venda.valor).label("receita"))
-        .group_by(dia)
-        .order_by(dia)
-    )
-    stmt = _filtros_dashboard(stmt, inicio, fim, produto, oferta)
-    rows = (await db.execute(stmt)).all()
-    return [PontoReceita(data=r.dia, receita=r.receita) for r in rows]
-
-
-async def por_produto(
-    db: AsyncSession,
-    inicio: date,
-    fim: date,
-    produto: str | None,
-    oferta: str | None,
-) -> list[ProdutoRanking]:
-    stmt = (
-        select(
-            Venda.produto.label("produto"),
-            func.count(Venda.id).label("quantidade"),
-            func.sum(Venda.valor).label("receita"),
-        )
-        .group_by(Venda.produto)
-        .order_by(func.sum(Venda.valor).desc())
-    )
-    stmt = _filtros_dashboard(stmt, inicio, fim, produto, oferta)
-    rows = (await db.execute(stmt)).all()
-    return [
-        ProdutoRanking(produto=r.produto, quantidade=r.quantidade, receita=r.receita)
-        for r in rows
-    ]
-
-
-async def ofertas_por_produto(
-    db: AsyncSession,
-    produto: str,
-    inicio: date,
-    fim: date,
-) -> list[OfertaBreakdown]:
-    """
-    Detalhe das ofertas de UM produto, pro popup do ranking.
-    Agrupa por (oferta_nome, oferta_codigo). Aplica a mesma regra do
-    dashboard (status aprovada + recorrência seq<=1 + período).
-    valor_oferta = maior valor observado (preço cheio, sem desconto/juros).
-    """
-    stmt = (
-        select(
-            Venda.oferta_nome,
-            Venda.oferta_codigo,
-            func.max(Venda.valor).label("valor_oferta"),
-            func.count(Venda.id).label("quantidade"),
-            func.sum(Venda.valor).label("receita"),
-        )
-        .group_by(Venda.oferta_nome, Venda.oferta_codigo)
-        .order_by(func.sum(Venda.valor).desc())
-    )
-    stmt = _filtros_dashboard(stmt, inicio, fim, produto, None)
-    rows = (await db.execute(stmt)).all()
-    return [
-        OfertaBreakdown(
-            oferta_nome=r.oferta_nome,
-            oferta_codigo=r.oferta_codigo,
-            valor_oferta=r.valor_oferta,
-            quantidade=r.quantidade,
-            receita=r.receita,
-        )
-        for r in rows
-    ]
 
 
 async def produtos_distintos(db: AsyncSession) -> list[str]:
@@ -160,7 +241,7 @@ async def produtos_distintos(db: AsyncSession) -> list[str]:
 
 
 # ============================================================
-# Operações públicas — escrita
+# Escrita
 # ============================================================
 async def criar_manual(db: AsyncSession, dados: VendaManualCreate) -> Venda:
     """Cria uma venda manual (PIX direto, venda avulsa)."""
@@ -186,50 +267,41 @@ async def criar_manual(db: AsyncSession, dados: VendaManualCreate) -> Venda:
     return venda
 
 
+async def upsert_preco_oferta(db: AsyncSession, dados: OfertaPrecoUpsert) -> OfertaPreco:
+    """Cadastra ou atualiza o valor à vista de uma oferta."""
+    preco = await db.get(OfertaPreco, dados.oferta_codigo)
+    if preco:
+        preco.valor = dados.valor
+        if dados.oferta_nome:
+            preco.oferta_nome = dados.oferta_nome
+        preco.atualizado_em = datetime.now(timezone.utc)
+    else:
+        preco = OfertaPreco(
+            oferta_codigo=dados.oferta_codigo,
+            oferta_nome=dados.oferta_nome,
+            valor=dados.valor,
+        )
+        db.add(preco)
+    await db.commit()
+    await db.refresh(preco)
+    return preco
+
+
+async def remover_preco_oferta(db: AsyncSession, oferta_codigo: str) -> bool:
+    """Remove o override — a oferta volta a usar o valor da transação."""
+    preco = await db.get(OfertaPreco, oferta_codigo)
+    if not preco:
+        return False
+    await db.delete(preco)
+    await db.commit()
+    return True
+
+
 # ============================================================
-# Helpers privados
+# Helpers
 # ============================================================
 def _range_utc(inicio: date, fim: date) -> tuple[datetime, datetime]:
     """Converte YYYY-MM-DD em range [inicio_00, fim+1_00) UTC."""
     inicio_dt = datetime.combine(inicio, time.min, tzinfo=timezone.utc)
     fim_dt = datetime.combine(fim + timedelta(days=1), time.min, tzinfo=timezone.utc)
     return inicio_dt, fim_dt
-
-
-def _filtros_basicos(
-    stmt: Select,
-    inicio: date,
-    fim: date,
-    produto: str | None,
-    oferta: str | None,
-) -> Select:
-    """Filtros comuns: período + status aprovada + produto + oferta opcionais."""
-    inicio_dt, fim_dt = _range_utc(inicio, fim)
-    stmt = stmt.where(
-        Venda.data_venda >= inicio_dt,
-        Venda.data_venda < fim_dt,
-        Venda.status == STATUS_FATURADO,
-    )
-    if produto:
-        stmt = stmt.where(Venda.produto == produto)
-    if oferta:
-        stmt = stmt.where(Venda.oferta == oferta)
-    return stmt
-
-
-def _filtros_dashboard(
-    stmt: Select,
-    inicio: date,
-    fim: date,
-    produto: str | None,
-    oferta: str | None,
-) -> Select:
-    """
-    Filtros do DASHBOARD: aplica os básicos e adicionalmente exclui cobranças
-    recorrentes seq > 1 (só a primeira cobrança de cada assinatura conta).
-    """
-    stmt = _filtros_basicos(stmt, inicio, fim, produto, oferta)
-    stmt = stmt.where(
-        or_(Venda.recorrencia_seq.is_(None), Venda.recorrencia_seq == 1)
-    )
-    return stmt

@@ -51,4 +51,13 @@ export const vendasService = {
         params: { produto, inicio, fim },
       })
       .then((r) => r.data),
+
+  definirPrecoOferta: (
+    oferta_codigo: string,
+    oferta_nome: string | null,
+    valor: number,
+  ) =>
+    api
+      .put('/api/vendas/ofertas/preco', { oferta_codigo, oferta_nome, valor })
+      .then((r) => r.data),
 }

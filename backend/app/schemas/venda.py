@@ -101,6 +101,24 @@ class OfertaBreakdown(BaseModel):
     valor_oferta: Money  # preço nominal da oferta (maior valor observado)
     quantidade: int
     receita: Money
+    valor_override: Money | None = None
+    """Se preenchido, há um valor cadastrado em ofertas_precos pra essa oferta."""
+
+
+class OfertaPrecoUpsert(BaseModel):
+    """Cadastro/edição do valor à vista de uma oferta."""
+
+    oferta_codigo: str = Field(..., min_length=1)
+    oferta_nome: str | None = None
+    valor: Money = Field(..., gt=0)
+
+
+class OfertaPrecoResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    oferta_codigo: str
+    oferta_nome: str | None = None
+    valor: Money
 
 
 # Tipo auxiliar — usado pelo webhook service ao normalizar payloads.

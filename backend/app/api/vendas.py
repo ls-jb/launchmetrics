@@ -7,6 +7,8 @@ from app.db.session import get_db
 from app.middleware.auth import verify_token
 from app.schemas.venda import (
     OfertaBreakdown,
+    OfertaPrecoResponse,
+    OfertaPrecoUpsert,
     PontoReceita,
     ProdutoRanking,
     ResumoVendas,
@@ -99,3 +101,27 @@ async def ofertas_do_produto(
 ):
     """Detalha as ofertas de um produto (popup do ranking)."""
     return await vendas_service.ofertas_por_produto(db, produto, inicio, fim)
+
+
+@router.put("/ofertas/preco", response_model=OfertaPrecoResponse)
+async def definir_preco_oferta(
+    dados: OfertaPrecoUpsert,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(verify_token),
+):
+    """
+    Cadastra/atualiza o valor à vista de uma oferta. Usado quando o webhook
+    não traz o valor real (ex: boleto parcelado Hotmart). Aplica a todas as
+    vendas dessa oferta no dashboard (passadas e futuras).
+    """
+    return await vendas_service.upsert_preco_oferta(db, dados)
+
+
+@router.delete("/ofertas/preco/{oferta_codigo}", status_code=status.HTTP_204_NO_CONTENT)
+async def remover_preco_oferta(
+    oferta_codigo: str,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(verify_token),
+):
+    """Remove o override — a oferta volta a usar o valor da transação."""
+    await vendas_service.remover_preco_oferta(db, oferta_codigo)

@@ -274,9 +274,13 @@ export function Vendas() {
         aberto={produtoModal !== null}
         titulo={produtoModal ? `Ofertas — ${produtoModal}` : 'Ofertas'}
         onFechar={() => setProdutoModal(null)}
-        largura={620}
+        largura={640}
       >
-        <ModalOfertas carregando={ofertasCarregando} ofertas={ofertas} />
+        <ModalOfertas
+          carregando={ofertasCarregando}
+          ofertas={ofertas}
+          onSalvou={() => produtoModal && abrirOfertas(produtoModal)}
+        />
       </Modal>
     </div>
   )
@@ -285,9 +289,11 @@ export function Vendas() {
 function ModalOfertas({
   carregando,
   ofertas,
+  onSalvou,
 }: {
   carregando: boolean
   ofertas: OfertaBreakdown[]
+  onSalvou: () => void
 }) {
   if (carregando) {
     return <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>Carregando ofertas…</p>
@@ -305,60 +311,19 @@ function ModalOfertas({
 
   return (
     <div>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          fontSize: 11,
-          color: '#6B7280',
-          textTransform: 'uppercase',
-          letterSpacing: '0.06em',
-          padding: '0 0 8px',
-          borderBottom: '1px solid #1F2937',
-          marginBottom: 8,
-        }}
-      >
-        <span>Oferta</span>
-        <span>Vendas · Receita</span>
-      </div>
+      <p style={{ margin: '0 0 12px', fontSize: 12, color: '#6B7280' }}>
+        Clique no lápis pra ajustar o valor da oferta (ex: boleto parcelado, onde
+        a plataforma só manda a parcela). O valor cadastrado vale pra todas as
+        vendas dessa oferta.
+      </p>
 
       <div style={{ display: 'grid', gap: 10 }}>
         {ofertas.map((o, i) => (
-          <div
+          <LinhaOferta
             key={o.oferta_codigo ?? `sem-codigo-${i}`}
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'flex-start',
-              gap: 16,
-              paddingBottom: 10,
-              borderBottom: '1px solid #161E2E',
-            }}
-          >
-            <div style={{ minWidth: 0 }}>
-              <p style={{ margin: 0, fontSize: 13, color: '#F9FAFB', fontWeight: 500 }}>
-                {o.oferta_nome ?? 'Sem nome'}
-              </p>
-              <p
-                style={{
-                  margin: '2px 0 0',
-                  fontSize: 11,
-                  color: '#6B7280',
-                  fontFamily: 'monospace',
-                }}
-              >
-                {o.oferta_codigo ?? '—'} · {formatBRLPreciso(o.valor_oferta)}
-              </p>
-            </div>
-            <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-              <p style={{ margin: 0, fontSize: 13, color: '#F9FAFB', fontWeight: 600 }}>
-                {formatBRL(o.receita)}
-              </p>
-              <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6B7280' }}>
-                {formatNum(o.quantidade)} {o.quantidade === 1 ? 'venda' : 'vendas'}
-              </p>
-            </div>
-          </div>
+            oferta={o}
+            onSalvou={onSalvou}
+          />
         ))}
       </div>
 
@@ -376,6 +341,157 @@ function ModalOfertas({
       >
         <span>Total ({formatNum(totalQtd)} vendas)</span>
         <span>{formatBRL(totalReceita)}</span>
+      </div>
+    </div>
+  )
+}
+
+function LinhaOferta({
+  oferta: o,
+  onSalvou,
+}: {
+  oferta: OfertaBreakdown
+  onSalvou: () => void
+}) {
+  const [editando, setEditando] = useState(false)
+  const [valor, setValor] = useState(String(o.valor_oferta))
+  const [salvando, setSalvando] = useState(false)
+
+  const salvar = async () => {
+    const num = Number(valor)
+    if (!o.oferta_codigo || Number.isNaN(num) || num <= 0) return
+    setSalvando(true)
+    try {
+      await vendasService.definirPrecoOferta(o.oferta_codigo, o.oferta_nome, num)
+      setEditando(false)
+      onSalvou()
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        gap: 16,
+        paddingBottom: 10,
+        borderBottom: '1px solid #161E2E',
+      }}
+    >
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <p style={{ margin: 0, fontSize: 13, color: '#F9FAFB', fontWeight: 500 }}>
+          {o.oferta_nome ?? 'Sem nome'}
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
+          <span style={{ fontSize: 11, color: '#6B7280', fontFamily: 'monospace' }}>
+            {o.oferta_codigo ?? '—'}
+          </span>
+          {editando ? (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 12, color: '#6B7280' }}>R$</span>
+              <input
+                type="number"
+                step="0.01"
+                value={valor}
+                autoFocus
+                onChange={(e) => setValor(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') salvar()
+                  if (e.key === 'Escape') setEditando(false)
+                }}
+                style={{
+                  width: 90,
+                  background: '#0F172A',
+                  border: '1px solid #374151',
+                  borderRadius: 6,
+                  padding: '3px 8px',
+                  color: '#F9FAFB',
+                  fontSize: 12,
+                }}
+              />
+              <button
+                onClick={salvar}
+                disabled={salvando}
+                style={{
+                  background: '#3ECFB2',
+                  border: 'none',
+                  color: '#0B0F19',
+                  borderRadius: 6,
+                  padding: '3px 10px',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                {salvando ? '...' : 'Salvar'}
+              </button>
+              <button
+                onClick={() => setEditando(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#6B7280',
+                  fontSize: 11,
+                  cursor: 'pointer',
+                }}
+              >
+                Cancelar
+              </button>
+            </span>
+          ) : (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 11, color: '#9CA3AF' }}>
+                {formatBRLPreciso(o.valor_oferta)}
+              </span>
+              {o.valor_override != null && (
+                <span
+                  style={{
+                    fontSize: 9,
+                    color: '#3ECFB2',
+                    background: '#3ECFB222',
+                    padding: '1px 6px',
+                    borderRadius: 99,
+                    fontWeight: 600,
+                  }}
+                  title="Valor cadastrado manualmente"
+                >
+                  FIXADO
+                </span>
+              )}
+              {o.oferta_codigo && (
+                <button
+                  onClick={() => {
+                    setValor(String(o.valor_oferta))
+                    setEditando(true)
+                  }}
+                  title="Editar valor da oferta"
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#6B7280',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    padding: 0,
+                    lineHeight: 1,
+                  }}
+                >
+                  ✎
+                </button>
+              )}
+            </span>
+          )}
+        </div>
+      </div>
+      <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+        <p style={{ margin: 0, fontSize: 13, color: '#F9FAFB', fontWeight: 600 }}>
+          {formatBRL(o.receita)}
+        </p>
+        <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6B7280' }}>
+          {formatNum(o.quantidade)} {o.quantidade === 1 ? 'venda' : 'vendas'}
+        </p>
       </div>
     </div>
   )

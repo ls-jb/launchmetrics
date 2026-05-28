@@ -101,4 +101,5 @@ export interface OfertaBreakdown {
   valor_oferta: number
   quantidade: number
   receita: number
+  valor_override: number | null
 }
