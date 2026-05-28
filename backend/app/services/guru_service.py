@@ -129,15 +129,19 @@ def _extrair_campos(payload: dict, data: dict, status: str) -> dict:
 
 
 def _extrair_produto_e_oferta(data: dict) -> tuple[str, str | None]:
-    product = data.get("product") or data.get("offer") or {}
+    product = data.get("product") or {}
+    nome = "Produto Guru"
+    offer_name = ""
     if isinstance(product, dict):
-        nome = product.get("name") or product.get("title") or "Produto Guru"
-    else:
-        nome = "Produto Guru"
+        nome = product.get("name") or product.get("title") or nome
+        offer = product.get("offer") or {}
+        if isinstance(offer, dict):
+            offer_name = (offer.get("name") or "").lower()
 
-    offer = data.get("offer") or {}
-    offer_name = (offer.get("name") or "").lower() if isinstance(offer, dict) else ""
-    if "order" in offer_name and "bump" in offer_name:
+    # Guru marca order bump no campo is_order_bump (raiz do payload)
+    if data.get("is_order_bump"):
+        return nome, "Order Bump"
+    if "order bump" in offer_name or "orderbump" in offer_name:
         return nome, "Order Bump"
     if "upsell" in offer_name:
         return nome, "Upsell"
@@ -194,40 +198,78 @@ def _extrair_metodo(data: dict) -> str | None:
 
 def _extrair_valor(data: dict) -> Decimal:
     """
-    Guru às vezes manda valor em reais (1997.00) e às vezes em centavos (199700).
-    Heurística: se > 1_000_000 e inteiro, provavelmente é centavos.
+    Usa o VALOR DA OFERTA (product.total_value), não o payment.total — assim
+    parcelamento com juros não infla o número. Ex: R$2.997 em 12x com juros
+    continua aparecendo como R$2.997.
+
+    Guru manda valores em REAIS (confirmado com o usuário: 2997 = R$2.997),
+    então NÃO dividimos por 100.
+
+    Ordem de tentativa:
+    1. product.total_value (valor da oferta)
+    2. items[0].total_value
+    3. product.unit_value
+    4. payment.gross (fallback — pode incluir juros)
     """
-    valor = data.get("amount") or data.get("value") or data.get("total")
-    if valor is None:
-        payment = data.get("payment") or {}
-        if isinstance(payment, dict):
-            valor = payment.get("amount") or payment.get("value")
-    if valor is None:
-        return Decimal("0")
+    product = data.get("product") or {}
+    if isinstance(product, dict):
+        for chave in ("total_value", "unit_value"):
+            v = product.get(chave)
+            if v is not None:
+                return _para_decimal(v)
+
+    items = data.get("items") or []
+    if isinstance(items, list) and items and isinstance(items[0], dict):
+        v = items[0].get("total_value") or items[0].get("unit_value")
+        if v is not None:
+            return _para_decimal(v)
+
+    payment = data.get("payment") or {}
+    if isinstance(payment, dict):
+        v = payment.get("gross") or payment.get("total") or payment.get("net")
+        if v is not None:
+            return _para_decimal(v)
+
+    return Decimal("0")
+
+
+def _para_decimal(v) -> Decimal:
     try:
-        d = Decimal(str(valor))
-        if d > 1_000_000 and d == d.to_integral_value():
-            d = d / 100
-        return d
+        return Decimal(str(v))
     except Exception:
         return Decimal("0")
 
 
 def _extrair_data(data: dict, payload: dict) -> datetime:
-    """Guru manda ISO 8601 normalmente."""
-    for key in ("confirmed_at", "approved_at", "paid_at", "created_at", "date"):
-        v = data.get(key) or payload.get(key)
-        if v:
-            try:
-                # remove 'Z' e usa fromisoformat
-                if isinstance(v, str):
-                    v_clean = v.replace("Z", "+00:00")
-                    return datetime.fromisoformat(v_clean)
-                if isinstance(v, (int, float)):
-                    # alguns webhooks mandam timestamp Unix
-                    return datetime.fromtimestamp(int(v), tz=timezone.utc)
-            except (TypeError, ValueError):
-                continue
+    """
+    Guru aninha as datas no objeto 'dates'. Prioriza confirmed_at (quando o
+    pagamento foi confirmado), depois ordered_at, created_at.
+    """
+    candidatos: list = []
+    dates = data.get("dates") or {}
+    if isinstance(dates, dict):
+        candidatos += [
+            dates.get("confirmed_at"),
+            dates.get("ordered_at"),
+            dates.get("created_at"),
+        ]
+    # fallback pra campos na raiz (formatos antigos)
+    candidatos += [
+        data.get("confirmed_at"),
+        data.get("approved_at"),
+        data.get("created_at"),
+    ]
+
+    for v in candidatos:
+        if not v:
+            continue
+        try:
+            if isinstance(v, str):
+                return datetime.fromisoformat(v.replace("Z", "+00:00"))
+            if isinstance(v, (int, float)):
+                return datetime.fromtimestamp(int(v), tz=timezone.utc)
+        except (TypeError, ValueError):
+            continue
     return datetime.now(tz=timezone.utc)
 
 
