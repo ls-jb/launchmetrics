@@ -6,7 +6,6 @@ SUPABASE_SERVICE_KEY. O papel (admin/viewer) fica na tabela perfis.
 """
 from uuid import UUID
 
-import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,6 +44,8 @@ async def listar(db: AsyncSession) -> list[Perfil]:
 # Escrita (usa API admin do Supabase)
 # ============================================================
 async def criar(db: AsyncSession, dados: UsuarioCreate) -> Perfil:
+    import httpx  # lazy: não quebra o import do app se httpx faltar no build
+
     if not settings.SUPABASE_SERVICE_KEY:
         raise ServiceKeyAusente()
 
@@ -93,6 +94,8 @@ async def atualizar_papel(db: AsyncSession, user_id: str, papel: str) -> Perfil 
 
 
 async def remover(db: AsyncSession, user_id: str) -> bool:
+    import httpx  # lazy: não quebra o import do app se httpx faltar no build
+
     if not settings.SUPABASE_SERVICE_KEY:
         raise ServiceKeyAusente()
 
