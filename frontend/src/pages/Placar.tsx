@@ -16,26 +16,26 @@ export function Placar() {
   const [lancamentos, setLancamentos] = useState<PlacarLancamento[]>([])
   const [lancId, setLancId] = useState<string | null>(null)
   const [placar, setPlacar] = useState<PlacarCompleto | null>(null)
-  const [carregando, setCarregando] = useState(true)
+  const [carregandoLista, setCarregandoLista] = useState(true)
+  const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState('')
   const [vendedorModal, setVendedorModal] = useState<PlacarVendedor | null>(null)
 
-  // carrega a lista de lançamentos uma vez e escolhe o ativo (ou o primeiro)
-  useEffect(() => {
+  const recarregarLista = useCallback(() => {
+    setCarregandoLista(true)
+    setErro('')
     placarService
       .listarLancamentos()
-      .then((ls) => {
-        setLancamentos(ls)
-        const ativo = ls.find((l) => l.ativo) ?? ls[0]
-        setLancId(ativo?.id ?? null)
-        if (!ativo) setCarregando(false)
-      })
-      .catch((e) => {
-        setErro(extrairErro(e))
-        setCarregando(false)
-      })
+      .then(setLancamentos)
+      .catch((e) => setErro(extrairErro(e)))
+      .finally(() => setCarregandoLista(false))
   }, [])
 
+  useEffect(() => {
+    recarregarLista()
+  }, [recarregarLista])
+
+  // carrega o placar do lançamento escolhido (só quando um está selecionado)
   const carregar = useCallback(
     async (silencioso = false) => {
       if (!lancId) return
@@ -56,11 +56,12 @@ export function Placar() {
     carregar(false)
   }, [carregar])
 
-  // auto-refresh: reconcilia com o servidor a cada 30s (placar compartilhado)
+  // auto-refresh só faz sentido dentro de um lançamento aberto
   useEffect(() => {
+    if (!lancId) return
     const id = setInterval(() => carregar(true), 30_000)
     return () => clearInterval(id)
-  }, [carregar])
+  }, [carregar, lancId])
 
   const contagemMap = useMemo(() => {
     const m = new Map<string, number>()
@@ -73,135 +74,191 @@ export function Placar() {
   const qtyDe = (vendedorId: string, ofertaId: string) =>
     contagemMap.get(`${vendedorId}|${ofertaId}`) ?? 0
 
-  // marca +1/-1 com atualização otimista (resposta imediata); reconcilia no erro
   const marcar = async (vendedor: PlacarVendedor, oferta: PlacarOferta, delta: 1 | -1) => {
     const atual = qtyDe(vendedor.id, oferta.id)
     if (delta === -1 && atual <= 0) return
-
     setPlacar((p) => (p ? aplicarDelta(p, vendedor.id, oferta, delta) : p))
     try {
       await placarService.marcar(vendedor.id, oferta.id, delta)
     } catch {
-      carregar(true) // resync silencioso se algo falhar
+      carregar(true)
     }
   }
 
-  const lancamentoAtual = lancamentos.find((l) => l.id === lancId)
+  const abrirLancamento = (l: PlacarLancamento) => {
+    setLancId(l.id)
+    setPlacar(null)
+    setErro('')
+  }
 
-  return (
-    <div>
-      <header
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-end',
-          marginBottom: '1.5rem',
-          flexWrap: 'wrap',
-          gap: 12,
-        }}
-      >
-        <div>
+  const voltar = () => {
+    setLancId(null)
+    setPlacar(null)
+    setErro('')
+    recarregarLista()
+  }
+
+  // ============================================================
+  // TELA 1 — lista de lançamentos
+  // ============================================================
+  if (!lancId) {
+    return (
+      <div>
+        <header style={{ marginBottom: '1.5rem' }}>
           <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: '#F9FAFB' }}>
             Placar de Líderes
           </h1>
           <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
-            Clique no seu nome e marque cada venda que fechar
+            Escolha o lançamento para ver o ranking
           </p>
-        </div>
-        {lancamentos.length > 1 && (
-          <select
-            value={lancId ?? ''}
-            onChange={(e) => {
-              setLancId(e.target.value)
-              setPlacar(null)
-            }}
-            style={{
-              background: '#0F172A',
-              border: '1px solid #374151',
-              borderRadius: 8,
-              padding: '8px 12px',
-              color: '#F9FAFB',
-              fontSize: 13,
-              colorScheme: 'dark',
-            }}
-          >
-            {lancamentos.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.nome} {l.ativo ? '(ativo)' : ''}
-              </option>
-            ))}
-          </select>
+        </header>
+
+        {erro && <Aviso texto={`Erro: ${erro}`} />}
+
+        {!carregandoLista && lancamentos.length === 0 && (
+          <CardVazio
+            titulo="Nenhum lançamento no placar"
+            mensagem="Peça a um administrador para criar um lançamento e cadastrar as ofertas e os vendedores em Configurações."
+          />
         )}
+
+        <div style={{ display: 'grid', gap: 10 }}>
+          {lancamentos.map((l) => (
+            <button
+              key={l.id}
+              onClick={() => abrirLancamento(l)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                width: '100%',
+                textAlign: 'left',
+                background: '#111827',
+                border: '1px solid #1F2937',
+                borderRadius: 12,
+                padding: '16px 18px',
+                cursor: 'pointer',
+                transition: 'border-color 0.15s',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#7C6AF7')}
+              onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#1F2937')}
+            >
+              <span style={{ flex: 1, fontSize: 16, fontWeight: 600, color: '#F9FAFB' }}>
+                {l.nome}
+              </span>
+              {l.ativo && (
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: '#3ECFB2',
+                    background: '#3ECFB222',
+                    padding: '3px 8px',
+                    borderRadius: 99,
+                  }}
+                >
+                  ATIVO
+                </span>
+              )}
+              <span style={{ fontSize: 18, color: '#4B5563' }}>›</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // ============================================================
+  // TELA 2 — ranking de um lançamento
+  // ============================================================
+  const nomeLanc = placar?.lancamento.nome ?? lancamentos.find((l) => l.id === lancId)?.nome ?? ''
+
+  return (
+    <div>
+      <button
+        onClick={voltar}
+        style={{
+          background: 'transparent',
+          border: 'none',
+          color: '#9CA3AF',
+          fontSize: 13,
+          cursor: 'pointer',
+          padding: 0,
+          marginBottom: 14,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+        }}
+      >
+        ‹ Voltar aos lançamentos
+      </button>
+
+      <header style={{ marginBottom: '1.5rem' }}>
+        <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: '#F9FAFB' }}>
+          {nomeLanc}
+        </h1>
+        <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
+          Clique no seu nome e marque cada venda que fechar
+        </p>
       </header>
 
       {erro && <Aviso texto={`Erro: ${erro}`} />}
 
-      {!carregando && lancamentos.length === 0 && (
+      {placar && placar.vendedores.length === 0 ? (
         <CardVazio
-          titulo="Nenhum lançamento no placar"
-          mensagem="Peça a um administrador para criar um lançamento e cadastrar as ofertas e os vendedores em Configurações."
+          titulo="Sem vendedores"
+          mensagem="Nenhum vendedor cadastrado neste lançamento ainda. Cadastre o time em Configurações."
         />
-      )}
-
-      {lancamentoAtual && placar && (
-        <>
-          {placar.vendedores.length === 0 ? (
-            <CardVazio
-              titulo={lancamentoAtual.nome}
-              mensagem="Nenhum vendedor cadastrado neste lançamento ainda. Cadastre o time em Configurações."
-            />
-          ) : (
-            <div style={{ display: 'grid', gap: 10, opacity: carregando ? 0.6 : 1 }}>
-              {placar.ranking.map((r, i) => (
-                <button
-                  key={r.vendedor_id}
-                  onClick={() =>
-                    setVendedorModal({ id: r.vendedor_id, nome: r.nome })
-                  }
+      ) : (
+        placar && (
+          <div style={{ display: 'grid', gap: 10, opacity: carregando ? 0.6 : 1 }}>
+            {placar.ranking.map((r, i) => (
+              <button
+                key={r.vendedor_id}
+                onClick={() => setVendedorModal({ id: r.vendedor_id, nome: r.nome })}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 14,
+                  width: '100%',
+                  textAlign: 'left',
+                  background: '#111827',
+                  border: '1px solid #1F2937',
+                  borderRadius: 12,
+                  padding: '14px 16px',
+                  cursor: 'pointer',
+                  transition: 'border-color 0.15s',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#7C6AF7')}
+                onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#1F2937')}
+              >
+                <span
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 14,
-                    width: '100%',
-                    textAlign: 'left',
-                    background: '#111827',
-                    border: '1px solid #1F2937',
-                    borderRadius: 12,
-                    padding: '14px 16px',
-                    cursor: 'pointer',
-                    transition: 'border-color 0.15s',
+                    fontSize: 18,
+                    width: 32,
+                    textAlign: 'center',
+                    color: '#6B7280',
+                    fontWeight: 700,
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#7C6AF7')}
-                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#1F2937')}
                 >
-                  <span
-                    style={{
-                      fontSize: 18,
-                      width: 32,
-                      textAlign: 'center',
-                      color: '#6B7280',
-                      fontWeight: 700,
-                    }}
-                  >
-                    {MEDALHA[i] ?? `${i + 1}º`}
-                  </span>
-                  <span style={{ flex: 1, fontSize: 15, fontWeight: 600, color: '#F9FAFB' }}>
-                    {r.nome}
-                  </span>
-                  <div style={{ textAlign: 'right' }}>
-                    <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#3ECFB2' }}>
-                      {formatBRL(r.receita_total)}
-                    </p>
-                    <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6B7280' }}>
-                      {formatNum(r.quantidade_total)}{' '}
-                      {r.quantidade_total === 1 ? 'venda' : 'vendas'}
-                    </p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </>
+                  {MEDALHA[i] ?? `${i + 1}º`}
+                </span>
+                <span style={{ flex: 1, fontSize: 15, fontWeight: 600, color: '#F9FAFB' }}>
+                  {r.nome}
+                </span>
+                <div style={{ textAlign: 'right' }}>
+                  <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#3ECFB2' }}>
+                    {formatBRL(r.receita_total)}
+                  </p>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6B7280' }}>
+                    {formatNum(r.quantidade_total)}{' '}
+                    {r.quantidade_total === 1 ? 'venda' : 'vendas'}
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
+        )
       )}
 
       <Modal
