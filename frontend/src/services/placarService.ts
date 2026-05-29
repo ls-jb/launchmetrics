@@ -9,6 +9,7 @@ import type {
 export interface OfertaPayload {
   produto: string
   oferta?: string | null
+  oferta_codigo?: string | null
   valor: number
 }
 

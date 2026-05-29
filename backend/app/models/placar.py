@@ -46,6 +46,9 @@ class PlacarOferta(Base):
     )
     produto: Mapped[str] = mapped_column(String, nullable=False)
     oferta: Mapped[str | None] = mapped_column(String)
+    oferta_codigo: Mapped[str | None] = mapped_column(String)
+    """Código da oferta real (vendas.oferta_codigo) — liga o placar às vendas
+    automáticas pra calcular o total real do produto/oferta."""
     valor: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

@@ -204,6 +204,30 @@ export function Placar() {
 
       {erro && <Aviso texto={`Erro: ${erro}`} />}
 
+      {placar && (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            gap: 12,
+            marginBottom: '1.5rem',
+          }}
+        >
+          <CardTotal
+            titulo="Vendas reais (plataformas)"
+            qtd={placar.total_real.quantidade}
+            receita={placar.total_real.receita}
+            cor="#3ECFB2"
+          />
+          <CardTotal
+            titulo="Marcado pelos closers"
+            qtd={placar.total_closers.quantidade}
+            receita={placar.total_closers.receita}
+            cor="#7C6AF7"
+          />
+        </div>
+      )}
+
       {placar && placar.vendedores.length === 0 ? (
         <CardVazio
           titulo="Sem vendedores"
@@ -381,6 +405,47 @@ function BotaoContador({
     >
       {texto}
     </button>
+  )
+}
+
+function CardTotal({
+  titulo,
+  qtd,
+  receita,
+  cor,
+}: {
+  titulo: string
+  qtd: number
+  receita: number
+  cor: string
+}) {
+  return (
+    <div
+      style={{
+        background: '#111827',
+        border: '1px solid #1F2937',
+        borderRadius: 12,
+        padding: '1rem 1.25rem',
+      }}
+    >
+      <p
+        style={{
+          margin: '0 0 6px',
+          fontSize: 11,
+          color: '#6B7280',
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+        }}
+      >
+        {titulo}
+      </p>
+      <p style={{ margin: 0, fontSize: 22, fontWeight: 700, color: cor }}>
+        {formatBRL(receita)}
+      </p>
+      <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6B7280' }}>
+        {formatNum(qtd)} {qtd === 1 ? 'venda' : 'vendas'}
+      </p>
+    </div>
   )
 }
 

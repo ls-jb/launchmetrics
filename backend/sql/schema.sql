@@ -212,10 +212,12 @@ create table if not exists launchmetrics.placar_ofertas (
     lancamento_id uuid not null references launchmetrics.placar_lancamentos (id) on delete cascade,
     produto text not null,
     oferta text,
+    oferta_codigo text,  -- liga à oferta real (vendas.oferta_codigo) p/ total real
     valor numeric(12, 2) not null,
     criado_em timestamptz not null default now()
 );
 create index if not exists ix_placar_ofertas_lancamento on launchmetrics.placar_ofertas (lancamento_id);
+create index if not exists ix_placar_ofertas_codigo on launchmetrics.placar_ofertas (oferta_codigo);
 
 create table if not exists launchmetrics.placar_vendedores (
     id uuid primary key default gen_random_uuid(),

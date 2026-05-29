@@ -118,7 +118,7 @@ async def adicionar_oferta(
     _: dict = Depends(require_admin),
 ):
     of = await placar_service.adicionar_oferta(
-        db, lancamento_id, dados.produto, dados.oferta, dados.valor
+        db, lancamento_id, dados.produto, dados.oferta, dados.oferta_codigo, dados.valor
     )
     if not of:
         raise HTTPException(status_code=404, detail="Lançamento não encontrado.")

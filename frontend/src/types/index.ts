@@ -134,6 +134,7 @@ export interface PlacarOferta {
   id: string
   produto: string
   oferta: string | null
+  oferta_codigo: string | null
   valor: number
 }
 
@@ -155,10 +156,17 @@ export interface PlacarRankingItem {
   receita_total: number
 }
 
+export interface PlacarTotal {
+  quantidade: number
+  receita: number
+}
+
 export interface PlacarCompleto {
   lancamento: PlacarLancamento
   ofertas: PlacarOferta[]
   vendedores: PlacarVendedor[]
   ranking: PlacarRankingItem[]
   contagens: PlacarContagem[]
+  total_real: PlacarTotal
+  total_closers: PlacarTotal
 }

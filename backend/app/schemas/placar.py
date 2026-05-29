@@ -21,6 +21,7 @@ class LancamentoUpdate(BaseModel):
 class OfertaCreate(BaseModel):
     produto: str = Field(..., min_length=1, max_length=200)
     oferta: str | None = Field(default=None, max_length=200)
+    oferta_codigo: str | None = Field(default=None, max_length=200)
     valor: Money = Field(..., gt=0)
 
 
@@ -60,6 +61,7 @@ class OfertaResponse(BaseModel):
     id: UUID
     produto: str
     oferta: str | None = None
+    oferta_codigo: str | None = None
     valor: Money
 
 
@@ -83,6 +85,11 @@ class RankingItem(BaseModel):
     receita_total: Money
 
 
+class TotalVendas(BaseModel):
+    quantidade: int
+    receita: Money
+
+
 class PlacarCompleto(BaseModel):
     """Tudo que a página do placar precisa numa tacada só."""
 
@@ -91,3 +98,7 @@ class PlacarCompleto(BaseModel):
     vendedores: list[VendedorResponse]
     ranking: list[RankingItem]
     contagens: list[ContagemItem]
+    total_real: TotalVendas
+    """Vendas reais (plataformas) das ofertas configuradas no lançamento."""
+    total_closers: TotalVendas
+    """Soma do que os closers marcaram manualmente no placar."""

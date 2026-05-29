@@ -7,8 +7,15 @@ import {
   usuariosService,
   type UsuarioCreatePayload,
 } from '@/services/usuariosService'
+import { vendasService } from '@/services/vendasService'
 import { useAuthStore } from '@/store/authStore'
-import type { Papel, PlacarCompleto, PlacarLancamento, Usuario } from '@/types'
+import type {
+  OfertaBreakdown,
+  Papel,
+  PlacarCompleto,
+  PlacarLancamento,
+  Usuario,
+} from '@/types'
 
 export function Configuracoes() {
   const papel = useAuthStore((s) => s.papel)
@@ -197,9 +204,12 @@ function GerenciarLancamento({ lancamentoId }: { lancamentoId: string }) {
   const [placar, setPlacar] = useState<PlacarCompleto | null>(null)
   const [erro, setErro] = useState('')
 
-  // form oferta
-  const [produto, setProduto] = useState('')
-  const [oferta, setOferta] = useState('')
+  // produtos/ofertas reais (vindos do dashboard de vendas)
+  const [produtos, setProdutos] = useState<string[]>([])
+  const [produtoSel, setProdutoSel] = useState('')
+  const [ofertasReais, setOfertasReais] = useState<OfertaBreakdown[]>([])
+  const [carregandoOfertas, setCarregandoOfertas] = useState(false)
+  const [ofertaIdx, setOfertaIdx] = useState('')
   const [valor, setValor] = useState('')
   // form vendedor
   const [vendedorNome, setVendedorNome] = useState('')
@@ -213,20 +223,47 @@ function GerenciarLancamento({ lancamentoId }: { lancamentoId: string }) {
 
   useEffect(() => {
     recarregar()
+    vendasService.produtos().then(setProdutos).catch(() => setProdutos([]))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lancamentoId])
 
+  // ao escolher um produto, busca as ofertas reais dele (todo o período)
+  useEffect(() => {
+    setOfertaIdx('')
+    setValor('')
+    if (!produtoSel) {
+      setOfertasReais([])
+      return
+    }
+    const hoje = new Date().toISOString().slice(0, 10)
+    setCarregandoOfertas(true)
+    vendasService
+      .ofertasPorProduto(produtoSel, '2020-01-01', hoje)
+      .then((ofs) => setOfertasReais(ofs))
+      .catch(() => setOfertasReais([]))
+      .finally(() => setCarregandoOfertas(false))
+  }, [produtoSel])
+
+  const selecionarOferta = (idxStr: string) => {
+    setOfertaIdx(idxStr)
+    const of = ofertasReais[Number(idxStr)]
+    if (of) setValor(String(of.valor_override ?? of.valor_oferta))
+  }
+
   const addOferta = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!produto.trim() || !valor) return
+    const of = ofertasReais[Number(ofertaIdx)]
+    if (!produtoSel || !of || !valor) return
     try {
       await placarService.adicionarOferta(lancamentoId, {
-        produto: produto.trim(),
-        oferta: oferta.trim() || null,
+        produto: produtoSel,
+        oferta: of.oferta_nome,
+        oferta_codigo: of.oferta_codigo,
         valor: Number(valor),
       })
-      setProduto('')
-      setOferta('')
+      setProdutoSel('')
+      setOfertasReais([])
+      setOfertaIdx('')
       setValor('')
       recarregar()
     } catch (err) {
@@ -254,34 +291,61 @@ function GerenciarLancamento({ lancamentoId }: { lancamentoId: string }) {
     <div style={{ display: 'grid', gap: 20 }}>
       {/* OFERTAS */}
       <div>
-        <p style={{ ...titulo, marginBottom: 8 }}>Ofertas (produto, valor)</p>
-        <form
-          onSubmit={addOferta}
-          style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}
-        >
-          <input
-            value={produto}
-            onChange={(e) => setProduto(e.target.value)}
-            placeholder="Produto"
-            style={{ ...inputBase, flex: '2 1 160px' }}
-          />
-          <input
-            value={oferta}
-            onChange={(e) => setOferta(e.target.value)}
-            placeholder="Oferta (opcional)"
-            style={{ ...inputBase, flex: '2 1 140px' }}
-          />
-          <input
-            type="number"
-            step="0.01"
-            value={valor}
-            onChange={(e) => setValor(e.target.value)}
-            placeholder="Valor R$"
-            style={{ ...inputBase, flex: '1 1 100px' }}
-          />
-          <button type="submit" disabled={!produto.trim() || !valor} style={botaoRoxo(!produto.trim() || !valor)}>
-            Adicionar
-          </button>
+        <p style={{ ...titulo, marginBottom: 8 }}>Ofertas (do dashboard de vendas)</p>
+        <form onSubmit={addOferta} style={{ display: 'grid', gap: 8, marginBottom: 10 }}>
+          <select
+            value={produtoSel}
+            onChange={(e) => setProdutoSel(e.target.value)}
+            style={{ ...inputBase, colorScheme: 'dark' }}
+          >
+            <option value="">Selecione o produto…</option>
+            {produtos.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={ofertaIdx}
+            onChange={(e) => selecionarOferta(e.target.value)}
+            disabled={!produtoSel || carregandoOfertas}
+            style={{ ...inputBase, colorScheme: 'dark', opacity: !produtoSel ? 0.6 : 1 }}
+          >
+            <option value="">
+              {!produtoSel
+                ? 'Escolha um produto primeiro'
+                : carregandoOfertas
+                  ? 'Carregando ofertas…'
+                  : ofertasReais.length === 0
+                    ? 'Nenhuma oferta encontrada'
+                    : 'Selecione a oferta…'}
+            </option>
+            {ofertasReais.map((o, i) => (
+              <option key={o.oferta_codigo ?? i} value={String(i)}>
+                {(o.oferta_nome ?? 'Sem nome')} —{' '}
+                {formatBRL(o.valor_override ?? o.valor_oferta)}
+              </option>
+            ))}
+          </select>
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              type="number"
+              step="0.01"
+              value={valor}
+              onChange={(e) => setValor(e.target.value)}
+              placeholder="Valor da oferta (R$)"
+              style={{ ...inputBase, flex: 1 }}
+            />
+            <button
+              type="submit"
+              disabled={!ofertaIdx || !valor}
+              style={botaoRoxo(!ofertaIdx || !valor)}
+            >
+              Adicionar oferta
+            </button>
+          </div>
         </form>
         <div style={{ display: 'grid', gap: 6 }}>
           {placar.ofertas.length === 0 && (

@@ -6,17 +6,20 @@ marcando ao mesmo tempo não se sobrescrevem, e a contagem nunca fica negativa.
 Ranking (quantidade e receita = soma de qtd × valor da oferta) é calculado no
 banco, seguindo a regra de manter cálculo no backend.
 """
+from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import String, and_, case, cast, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
+    OfertaPreco,
     PlacarContagem,
     PlacarLancamento,
     PlacarOferta,
     PlacarVendedor,
+    Venda,
 )
 from app.schemas.placar import (
     ContagemItem,
@@ -24,6 +27,7 @@ from app.schemas.placar import (
     OfertaResponse,
     PlacarCompleto,
     RankingItem,
+    TotalVendas,
     VendedorResponse,
 )
 
@@ -81,12 +85,21 @@ async def remover_lancamento(db: AsyncSession, lancamento_id: UUID) -> bool:
 # Ofertas / Vendedores
 # ============================================================
 async def adicionar_oferta(
-    db: AsyncSession, lancamento_id: UUID, produto: str, oferta: str | None, valor
+    db: AsyncSession,
+    lancamento_id: UUID,
+    produto: str,
+    oferta: str | None,
+    oferta_codigo: str | None,
+    valor,
 ) -> PlacarOferta | None:
     if not await db.get(PlacarLancamento, lancamento_id):
         return None
     of = PlacarOferta(
-        lancamento_id=lancamento_id, produto=produto, oferta=oferta, valor=valor
+        lancamento_id=lancamento_id,
+        produto=produto,
+        oferta=oferta,
+        oferta_codigo=oferta_codigo,
+        valor=valor,
     )
     db.add(of)
     await db.commit()
@@ -214,18 +227,63 @@ async def obter_placar(db: AsyncSession, lancamento_id: UUID) -> PlacarCompleto 
         )
     ).all()
 
+    ranking = [
+        RankingItem(
+            vendedor_id=r[0], nome=r[1], quantidade_total=int(r[2]), receita_total=r[3]
+        )
+        for r in ranking_rows
+    ]
+    total_closers = TotalVendas(
+        quantidade=sum(it.quantidade_total for it in ranking),
+        receita=sum((it.receita_total for it in ranking), Decimal("0")),
+    )
+    total_real = await _total_real(db, [o.oferta_codigo for o in ofertas if o.oferta_codigo])
+
     return PlacarCompleto(
         lancamento=LancamentoResponse.model_validate(lanc),
         ofertas=[OfertaResponse.model_validate(o) for o in ofertas],
         vendedores=[VendedorResponse.model_validate(v) for v in vendedores],
-        ranking=[
-            RankingItem(
-                vendedor_id=r[0], nome=r[1], quantidade_total=int(r[2]), receita_total=r[3]
-            )
-            for r in ranking_rows
-        ],
+        ranking=ranking,
         contagens=[
             ContagemItem(vendedor_id=c[0], oferta_id=c[1], quantidade=int(c[2]))
             for c in contagens_rows
         ],
+        total_real=total_real,
+        total_closers=total_closers,
     )
+
+
+async def _total_real(db: AsyncSession, codigos: list[str]) -> TotalVendas:
+    """Total de vendas REAIS (plataformas) das ofertas configuradas, com a mesma
+    regra do dashboard: override de preço, recorrência seq<=1, dedup por
+    email+oferta_codigo, status aprovada."""
+    if not codigos:
+        return TotalVendas(quantidade=0, receita=Decimal("0"))
+
+    valor_efetivo = func.coalesce(OfertaPreco.valor, Venda.valor).label("v")
+    dedup_key = case(
+        (
+            and_(Venda.comprador_email.is_not(None), Venda.oferta_codigo.is_not(None)),
+            Venda.comprador_email + cast(Venda.oferta_codigo, String),
+        ),
+        else_=cast(Venda.id, String),
+    )
+    rn = func.row_number().over(partition_by=dedup_key, order_by=Venda.data_venda).label("rn")
+    base = (
+        select(valor_efetivo, rn)
+        .select_from(Venda)
+        .outerjoin(OfertaPreco, OfertaPreco.oferta_codigo == Venda.oferta_codigo)
+        .where(
+            Venda.oferta_codigo.in_(codigos),
+            Venda.status == "aprovada",
+            or_(Venda.recorrencia_seq.is_(None), Venda.recorrencia_seq == 1),
+        )
+        .subquery()
+    )
+    sub = select(base).where(base.c.rn == 1).subquery()
+    row = (
+        await db.execute(
+            select(func.count(), func.coalesce(func.sum(sub.c.v), 0)).select_from(sub)
+        )
+    ).one()
+    return TotalVendas(quantidade=int(row[0]), receita=Decimal(row[1]))
