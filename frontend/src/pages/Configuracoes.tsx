@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 
 import { Modal } from '@/components/shared/Modal'
+import { formatBRL } from '@/lib/tokens'
+import { placarService } from '@/services/placarService'
 import {
   usuariosService,
   type UsuarioCreatePayload,
 } from '@/services/usuariosService'
 import { useAuthStore } from '@/store/authStore'
-import type { Papel, Usuario } from '@/types'
+import type { Papel, PlacarCompleto, PlacarLancamento, Usuario } from '@/types'
 
 export function Configuracoes() {
   const papel = useAuthStore((s) => s.papel)
@@ -25,14 +27,350 @@ export function Configuracoes() {
       <SecaoTema />
 
       {papel === 'admin' ? (
-        <SecaoUsuarios />
+        <>
+          <SecaoPlacar />
+          <SecaoUsuarios />
+        </>
       ) : (
         <Card>
           <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
-            Gestão de usuários disponível apenas para administradores.
+            Gestão de usuários e do placar disponível apenas para administradores.
           </p>
         </Card>
       )}
+    </div>
+  )
+}
+
+// ============================================================
+// Placar de líderes — cadastro de lançamentos, ofertas e vendedores
+// ============================================================
+function SecaoPlacar() {
+  const [lancs, setLancs] = useState<PlacarLancamento[]>([])
+  const [carregando, setCarregando] = useState(true)
+  const [erro, setErro] = useState('')
+  const [novoNome, setNovoNome] = useState('')
+  const [criando, setCriando] = useState(false)
+  const [gerenciar, setGerenciar] = useState<PlacarLancamento | null>(null)
+
+  const recarregar = () => {
+    setCarregando(true)
+    setErro('')
+    placarService
+      .listarLancamentos()
+      .then(setLancs)
+      .catch((e) => setErro(extrairErro(e)))
+      .finally(() => setCarregando(false))
+  }
+
+  useEffect(() => {
+    recarregar()
+  }, [])
+
+  const criar = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!novoNome.trim()) return
+    setCriando(true)
+    try {
+      await placarService.criarLancamento(novoNome.trim())
+      setNovoNome('')
+      recarregar()
+    } catch (err) {
+      alert(extrairErro(err))
+    } finally {
+      setCriando(false)
+    }
+  }
+
+  const ativar = async (l: PlacarLancamento) => {
+    await placarService.atualizarLancamento(l.id, { ativo: true })
+    recarregar()
+  }
+
+  const remover = async (l: PlacarLancamento) => {
+    if (
+      !confirm(
+        `Remover o lançamento "${l.nome}"? Isso apaga as ofertas, vendedores e todas as marcações dele.`,
+      )
+    )
+      return
+    try {
+      await placarService.removerLancamento(l.id)
+      recarregar()
+    } catch (err) {
+      alert(extrairErro(err))
+    }
+  }
+
+  return (
+    <Card>
+      <p style={titulo}>Placar de Líderes</p>
+      <form onSubmit={criar} style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <input
+          value={novoNome}
+          onChange={(e) => setNovoNome(e.target.value)}
+          placeholder="Nome do lançamento (ex: CVA 05/26)"
+          style={{ ...inputBase, flex: 1 }}
+        />
+        <button
+          type="submit"
+          disabled={criando || !novoNome.trim()}
+          style={botaoRoxo(criando || !novoNome.trim())}
+        >
+          + Adicionar lançamento
+        </button>
+      </form>
+
+      {carregando && <p style={textoMudo}>Carregando…</p>}
+      {erro && <p style={{ ...textoMudo, color: '#FCA5A5' }}>{erro}</p>}
+
+      <div style={{ display: 'grid', gap: 8 }}>
+        {!carregando && lancs.length === 0 && (
+          <p style={textoMudo}>Nenhum lançamento cadastrado ainda.</p>
+        )}
+        {lancs.map((l) => (
+          <div
+            key={l.id}
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 12,
+              padding: '10px 12px',
+              background: '#0F172A',
+              border: '1px solid #1F2937',
+              borderRadius: 8,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+              <span style={{ fontSize: 13, color: '#F9FAFB', fontWeight: 500 }}>
+                {l.nome}
+              </span>
+              {l.ativo && (
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 600,
+                    color: '#3ECFB2',
+                    background: '#3ECFB222',
+                    padding: '2px 6px',
+                    borderRadius: 99,
+                  }}
+                >
+                  ATIVO
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {!l.ativo && (
+                <button onClick={() => ativar(l)} style={botaoSecundario}>
+                  Ativar
+                </button>
+              )}
+              <button onClick={() => setGerenciar(l)} style={botaoSecundario}>
+                Gerenciar
+              </button>
+              <button
+                onClick={() => remover(l)}
+                style={{ ...botaoSecundario, color: '#EF4444' }}
+              >
+                Remover
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <Modal
+        aberto={gerenciar !== null}
+        titulo={gerenciar ? `Gerenciar — ${gerenciar.nome}` : ''}
+        onFechar={() => setGerenciar(null)}
+        largura={700}
+      >
+        {gerenciar && <GerenciarLancamento lancamentoId={gerenciar.id} />}
+      </Modal>
+    </Card>
+  )
+}
+
+function GerenciarLancamento({ lancamentoId }: { lancamentoId: string }) {
+  const [placar, setPlacar] = useState<PlacarCompleto | null>(null)
+  const [erro, setErro] = useState('')
+
+  // form oferta
+  const [produto, setProduto] = useState('')
+  const [oferta, setOferta] = useState('')
+  const [valor, setValor] = useState('')
+  // form vendedor
+  const [vendedorNome, setVendedorNome] = useState('')
+
+  const recarregar = () => {
+    placarService
+      .obter(lancamentoId)
+      .then(setPlacar)
+      .catch((e) => setErro(extrairErro(e)))
+  }
+
+  useEffect(() => {
+    recarregar()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lancamentoId])
+
+  const addOferta = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!produto.trim() || !valor) return
+    try {
+      await placarService.adicionarOferta(lancamentoId, {
+        produto: produto.trim(),
+        oferta: oferta.trim() || null,
+        valor: Number(valor),
+      })
+      setProduto('')
+      setOferta('')
+      setValor('')
+      recarregar()
+    } catch (err) {
+      alert(extrairErro(err))
+    }
+  }
+
+  const addVendedor = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!vendedorNome.trim()) return
+    try {
+      await placarService.adicionarVendedor(lancamentoId, vendedorNome.trim())
+      setVendedorNome('')
+      recarregar()
+    } catch (err) {
+      alert(extrairErro(err))
+    }
+  }
+
+  if (!placar) {
+    return <p style={textoMudo}>{erro || 'Carregando…'}</p>
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 20 }}>
+      {/* OFERTAS */}
+      <div>
+        <p style={{ ...titulo, marginBottom: 8 }}>Ofertas (produto, valor)</p>
+        <form
+          onSubmit={addOferta}
+          style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}
+        >
+          <input
+            value={produto}
+            onChange={(e) => setProduto(e.target.value)}
+            placeholder="Produto"
+            style={{ ...inputBase, flex: '2 1 160px' }}
+          />
+          <input
+            value={oferta}
+            onChange={(e) => setOferta(e.target.value)}
+            placeholder="Oferta (opcional)"
+            style={{ ...inputBase, flex: '2 1 140px' }}
+          />
+          <input
+            type="number"
+            step="0.01"
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
+            placeholder="Valor R$"
+            style={{ ...inputBase, flex: '1 1 100px' }}
+          />
+          <button type="submit" disabled={!produto.trim() || !valor} style={botaoRoxo(!produto.trim() || !valor)}>
+            Adicionar
+          </button>
+        </form>
+        <div style={{ display: 'grid', gap: 6 }}>
+          {placar.ofertas.length === 0 && (
+            <p style={textoMudo}>Nenhuma oferta ainda.</p>
+          )}
+          {placar.ofertas.map((o) => (
+            <LinhaRemovivel
+              key={o.id}
+              texto={`${o.produto}${o.oferta ? ` · ${o.oferta}` : ''} — ${formatBRL(o.valor)}`}
+              onRemover={async () => {
+                await placarService.removerOferta(o.id)
+                recarregar()
+              }}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* VENDEDORES */}
+      <div>
+        <p style={{ ...titulo, marginBottom: 8 }}>Vendedores (time comercial)</p>
+        <form onSubmit={addVendedor} style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+          <input
+            value={vendedorNome}
+            onChange={(e) => setVendedorNome(e.target.value)}
+            placeholder="Nome do vendedor"
+            style={{ ...inputBase, flex: 1 }}
+          />
+          <button type="submit" disabled={!vendedorNome.trim()} style={botaoRoxo(!vendedorNome.trim())}>
+            Adicionar
+          </button>
+        </form>
+        <div style={{ display: 'grid', gap: 6 }}>
+          {placar.vendedores.length === 0 && (
+            <p style={textoMudo}>Nenhum vendedor ainda.</p>
+          )}
+          {placar.vendedores.map((v) => (
+            <LinhaRemovivel
+              key={v.id}
+              texto={v.nome}
+              onRemover={async () => {
+                if (!confirm(`Remover ${v.nome} e as marcações dele?`)) return
+                await placarService.removerVendedor(v.id)
+                recarregar()
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function LinhaRemovivel({
+  texto,
+  onRemover,
+}: {
+  texto: string
+  onRemover: () => void
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 12,
+        padding: '8px 10px',
+        background: '#0F172A',
+        border: '1px solid #1F2937',
+        borderRadius: 6,
+      }}
+    >
+      <span style={{ fontSize: 13, color: '#E5E7EB', minWidth: 0 }}>{texto}</span>
+      <button
+        onClick={onRemover}
+        title="Remover"
+        style={{
+          background: 'transparent',
+          border: 'none',
+          color: '#6B7280',
+          cursor: 'pointer',
+          fontSize: 16,
+          lineHeight: 1,
+          padding: 0,
+        }}
+      >
+        ×
+      </button>
     </div>
   )
 }
@@ -371,6 +709,31 @@ const inputBase: React.CSSProperties = {
   padding: '9px 12px',
   color: '#F9FAFB',
   fontSize: 13,
+}
+
+function botaoRoxo(desabilitado: boolean): React.CSSProperties {
+  return {
+    background: desabilitado ? '#4B5563' : '#7C6AF7',
+    border: 'none',
+    color: '#fff',
+    padding: '9px 14px',
+    borderRadius: 8,
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: desabilitado ? 'not-allowed' : 'pointer',
+    whiteSpace: 'nowrap',
+  }
+}
+
+const botaoSecundario: React.CSSProperties = {
+  background: 'transparent',
+  border: '1px solid #374151',
+  color: '#9CA3AF',
+  borderRadius: 6,
+  padding: '5px 10px',
+  fontSize: 12,
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
 }
 
 function Campo({

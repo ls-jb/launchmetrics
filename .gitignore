@@ -79,6 +79,11 @@ desktop.ini
 logs/
 
 # ============================
+# Importação de dados (contém dados pessoais — nunca versionar)
+# ============================
+backend/import/
+
+# ============================
 # Outros
 # ============================
 *.sqlite

@@ -120,3 +120,45 @@ export interface OfertaBreakdown {
   receita: number
   valor_override: number | null
 }
+
+// ============================================================
+// Placar de líderes
+// ============================================================
+export interface PlacarLancamento {
+  id: string
+  nome: string
+  ativo: boolean
+}
+
+export interface PlacarOferta {
+  id: string
+  produto: string
+  oferta: string | null
+  valor: number
+}
+
+export interface PlacarVendedor {
+  id: string
+  nome: string
+}
+
+export interface PlacarContagem {
+  vendedor_id: string
+  oferta_id: string
+  quantidade: number
+}
+
+export interface PlacarRankingItem {
+  vendedor_id: string
+  nome: string
+  quantidade_total: number
+  receita_total: number
+}
+
+export interface PlacarCompleto {
+  lancamento: PlacarLancamento
+  ofertas: PlacarOferta[]
+  vendedores: PlacarVendedor[]
+  ranking: PlacarRankingItem[]
+  contagens: PlacarContagem[]
+}

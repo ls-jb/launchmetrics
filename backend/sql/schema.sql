@@ -195,6 +195,49 @@ create table if not exists launchmetrics.perfis (
 );
 
 -- ============================================================
+-- PLACAR DE LÍDERES — atribuição manual de vendas ao time comercial
+-- ============================================================
+-- Independente das vendas automáticas. O time só "marca" quem fechou:
+-- cada lançamento tem ofertas (produto + valor) e vendedores; a contagem
+-- é um tally por (vendedor, oferta).
+create table if not exists launchmetrics.placar_lancamentos (
+    id uuid primary key default gen_random_uuid(),
+    nome text not null,
+    ativo boolean not null default false,
+    criado_em timestamptz not null default now()
+);
+
+create table if not exists launchmetrics.placar_ofertas (
+    id uuid primary key default gen_random_uuid(),
+    lancamento_id uuid not null references launchmetrics.placar_lancamentos (id) on delete cascade,
+    produto text not null,
+    oferta text,
+    valor numeric(12, 2) not null,
+    criado_em timestamptz not null default now()
+);
+create index if not exists ix_placar_ofertas_lancamento on launchmetrics.placar_ofertas (lancamento_id);
+
+create table if not exists launchmetrics.placar_vendedores (
+    id uuid primary key default gen_random_uuid(),
+    lancamento_id uuid not null references launchmetrics.placar_lancamentos (id) on delete cascade,
+    nome text not null,
+    criado_em timestamptz not null default now(),
+    constraint uq_placar_vendedor_nome unique (lancamento_id, nome)
+);
+create index if not exists ix_placar_vendedores_lancamento on launchmetrics.placar_vendedores (lancamento_id);
+
+create table if not exists launchmetrics.placar_contagens (
+    id uuid primary key default gen_random_uuid(),
+    vendedor_id uuid not null references launchmetrics.placar_vendedores (id) on delete cascade,
+    oferta_id uuid not null references launchmetrics.placar_ofertas (id) on delete cascade,
+    quantidade integer not null default 0 check (quantidade >= 0),
+    atualizado_em timestamptz not null default now(),
+    constraint uq_placar_contagem unique (vendedor_id, oferta_id)
+);
+create index if not exists ix_placar_contagens_vendedor on launchmetrics.placar_contagens (vendedor_id);
+create index if not exists ix_placar_contagens_oferta on launchmetrics.placar_contagens (oferta_id);
+
+-- ============================================================
 -- ROW LEVEL SECURITY — defesa em profundidade
 -- ============================================================
 -- Mesmo o schema estando fora das schemas expostas pelo PostgREST,
@@ -207,6 +250,10 @@ alter table launchmetrics.lancamentos enable row level security;
 alter table launchmetrics.canais       enable row level security;
 alter table launchmetrics.leads        enable row level security;
 alter table launchmetrics.vendas       enable row level security;
+alter table launchmetrics.placar_lancamentos enable row level security;
+alter table launchmetrics.placar_ofertas     enable row level security;
+alter table launchmetrics.placar_vendedores  enable row level security;
+alter table launchmetrics.placar_contagens   enable row level security;
 
 -- ============================================================
 -- DADOS DE EXEMPLO (opcional — apague esta seção em produção)

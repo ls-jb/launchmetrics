@@ -7,6 +7,12 @@ from app.models.lancamento import Lancamento
 from app.models.lead import Lead
 from app.models.oferta_preco import OfertaPreco
 from app.models.perfil import Perfil
+from app.models.placar import (
+    PlacarContagem,
+    PlacarLancamento,
+    PlacarOferta,
+    PlacarVendedor,
+)
 from app.models.venda import Venda
 from app.models.webhook_log import WebhookLog
 
@@ -16,6 +22,10 @@ __all__ = [
     "Lead",
     "OfertaPreco",
     "Perfil",
+    "PlacarContagem",
+    "PlacarLancamento",
+    "PlacarOferta",
+    "PlacarVendedor",
     "Venda",
     "WebhookLog",
 ]
