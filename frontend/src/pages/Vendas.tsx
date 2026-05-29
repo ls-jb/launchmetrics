@@ -1,5 +1,5 @@
 import { format, subDays } from 'date-fns'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { FiltroData } from '@/components/shared/FiltroData'
 import { GraficoReceitaDia } from '@/components/shared/GraficoReceitaDia'
@@ -65,23 +65,42 @@ export function Vendas() {
     vendasService.produtos().then(setProdutos).catch(() => setProdutos([]))
   }, [])
 
-  // Refetch dos agregados sempre que o filtro muda
-  useEffect(() => {
-    setCarregando(true)
-    setErro('')
-    Promise.all([
-      vendasService.resumo(filtro),
-      vendasService.porDia(filtro),
-      vendasService.porProduto(filtro),
-    ])
-      .then(([r, d, p]) => {
+  // Busca os agregados. silencioso=true → refresh em background (sem spinner
+  // nem flash de erro), usado pelo auto-refresh de 30s pra não piscar a tela.
+  const carregar = useCallback(
+    async (silencioso = false) => {
+      if (!silencioso) {
+        setCarregando(true)
+        setErro('')
+      }
+      try {
+        const [r, d, p] = await Promise.all([
+          vendasService.resumo(filtro),
+          vendasService.porDia(filtro),
+          vendasService.porProduto(filtro),
+        ])
         setResumo(r)
         setPorDia(d)
         setRanking(p)
-      })
-      .catch((e) => setErro(extrairErro(e)))
-      .finally(() => setCarregando(false))
-  }, [filtro, refreshKey])
+      } catch (e) {
+        if (!silencioso) setErro(extrairErro(e))
+      } finally {
+        if (!silencioso) setCarregando(false)
+      }
+    },
+    [filtro],
+  )
+
+  // Carga inicial + quando muda filtro ou após cadastrar venda (com spinner)
+  useEffect(() => {
+    carregar(false)
+  }, [carregar, refreshKey])
+
+  // Auto-refresh: recarrega em background a cada 30s
+  useEffect(() => {
+    const id = setInterval(() => carregar(true), 30_000)
+    return () => clearInterval(id)
+  }, [carregar])
 
   const porDiaFormatado = useMemo(
     () =>
@@ -96,6 +115,7 @@ export function Vendas() {
 
   return (
     <div>
+      <style>{`@keyframes lm-spin { to { transform: rotate(360deg) } }`}</style>
       <header
         style={{
           display: 'flex',
@@ -111,25 +131,70 @@ export function Vendas() {
           <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
             Hotmart, Guru e vendas manuais (PIX, avulsas)
           </p>
+          <p
+            style={{
+              margin: '4px 0 0',
+              fontSize: 11,
+              color: '#4B5563',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: 99,
+                background: '#3ECFB2',
+                display: 'inline-block',
+              }}
+            />
+            Atualiza automaticamente a cada 30s
+          </p>
         </div>
-        <button
-          onClick={() => setModalVenda(true)}
-          style={{
-            background: '#7C6AF7',
-            border: 'none',
-            color: '#fff',
-            padding: '10px 16px',
-            borderRadius: 8,
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-          }}
-        >
-          <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Cadastrar venda
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button
+            onClick={() => carregar(false)}
+            disabled={carregando}
+            title="Atualizar agora"
+            style={{
+              background: 'transparent',
+              border: '1px solid #374151',
+              color: '#9CA3AF',
+              padding: '10px 14px',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: carregando ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              opacity: carregando ? 0.6 : 1,
+            }}
+          >
+            <IconeAtualizar girando={carregando} />
+            {carregando ? 'Atualizando…' : 'Atualizar'}
+          </button>
+          <button
+            onClick={() => setModalVenda(true)}
+            style={{
+              background: '#7C6AF7',
+              border: 'none',
+              color: '#fff',
+              padding: '10px 16px',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Cadastrar venda
+          </button>
+        </div>
       </header>
 
       <div
@@ -1012,6 +1077,27 @@ function CardVazio({ titulo, mensagem }: { titulo: string; mensagem: string }) {
         {mensagem}
       </div>
     </div>
+  )
+}
+
+function IconeAtualizar({ girando }: { girando: boolean }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ animation: girando ? 'lm-spin 0.8s linear infinite' : undefined }}
+    >
+      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+      <path d="M21 3v5h-5" />
+      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+      <path d="M8 16H3v5" />
+    </svg>
   )
 }
 
