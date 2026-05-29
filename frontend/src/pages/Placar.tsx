@@ -525,7 +525,14 @@ function aplicarDelta(
         a.nome.localeCompare(b.nome),
     )
 
-  return { ...p, contagens, ranking }
+  // total_closers = atribuição manual (só placar). NÃO mexer em total_real,
+  // que vem das vendas reais.
+  const total_closers = {
+    quantidade: Math.max(0, p.total_closers.quantidade + delta),
+    receita: Math.max(0, p.total_closers.receita + delta * oferta.valor),
+  }
+
+  return { ...p, contagens, ranking, total_closers }
 }
 
 function extrairErro(err: unknown): string {
