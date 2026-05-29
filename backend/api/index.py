@@ -1,27 +1,40 @@
 """
 Ponto de entrada para o Vercel Python runtime.
-O Vercel detecta arquivos em /api e expõe o objeto `app` como ASGI handler.
 
-Envolvemos o import do app real num try/except: se ele falhar (ex: erro de
-import específico do ambiente Vercel), expomos o traceback numa rota de
-diagnóstico em vez de derrubar a função inteira sem mensagem. APAGAR o
-fallback depois de resolver.
+Diagnóstico: tentamos importar o app real. Se falhar, servimos o traceback
+via um app ASGI PURO (sem nenhuma dependência além da stdlib), pra garantir
+que conseguimos ver o erro mesmo que o problema seja no import do FastAPI.
+APAGAR o fallback depois de resolver.
 """
+import json
+import sys
+import traceback
+
+_erro: str | None = None
 try:
-    from app.main import app
-except Exception:  # noqa: BLE001
-    import traceback
+    from app.main import app as _real_app
+except Exception:
+    _erro = traceback.format_exc() + "\n\npython=" + sys.version
 
-    _TB = traceback.format_exc()
 
-    from fastapi import FastAPI
+if _erro is None:
+    app = _real_app
+else:
 
-    app = FastAPI()
-
-    @app.get("/_import_error")
-    @app.get("/{caminho:path}")
-    def _import_error(caminho: str = ""):
-        return {"erro_de_import": _TB}
+    async def app(scope, receive, send):  # type: ignore[no-redef]
+        if scope.get("type") != "http":
+            return
+        corpo = json.dumps(
+            {"erro_de_import": _erro}, ensure_ascii=False
+        ).encode("utf-8")
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 500,
+                "headers": [(b"content-type", b"application/json; charset=utf-8")],
+            }
+        )
+        await send({"type": "http.response.body", "body": corpo})
 
 
 __all__ = ["app"]

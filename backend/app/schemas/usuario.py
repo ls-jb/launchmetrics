@@ -20,7 +20,7 @@ class UsuarioResponse(BaseModel):
 class UsuarioCreate(BaseModel):
     """Cria um usuário no Supabase Auth + perfil. Requer SUPABASE_SERVICE_KEY."""
 
-    email: EmailStr
+    email: str
     senha: str = Field(..., min_length=6)
     nome: str | None = None
     papel: Papel = "viewer"
