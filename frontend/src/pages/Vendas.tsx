@@ -427,11 +427,14 @@ function FormVendaManual({
   onCancelar: () => void
   onCriou: () => void
 }) {
+  const NOVO = '__novo__'
   const [produtos, setProdutos] = useState<string[]>([])
   const [produtoSel, setProdutoSel] = useState('')
+  const [produtoNovo, setProdutoNovo] = useState('')
   const [ofertas, setOfertas] = useState<OfertaBreakdown[]>([])
   const [carregandoOfertas, setCarregandoOfertas] = useState(false)
-  const [ofertaIdx, setOfertaIdx] = useState('')
+  const [ofertaSel, setOfertaSel] = useState('')
+  const [ofertaNova, setOfertaNova] = useState('')
   const [valor, setValor] = useState('')
   const [metodo, setMetodo] = useState<MetodoPagamento>('pix')
   const [dataVenda, setDataVenda] = useState(format(new Date(), 'yyyy-MM-dd'))
@@ -440,15 +443,19 @@ function FormVendaManual({
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState('')
 
+  const produtoNovoModo = produtoSel === NOVO
+  const produtoFinal = (produtoNovoModo ? produtoNovo : produtoSel).trim()
+
   useEffect(() => {
     vendasService.produtos().then(setProdutos).catch(() => setProdutos([]))
   }, [])
 
-  // ao escolher o produto, busca as ofertas reais dele (todo o período)
+  // ao escolher um produto existente, busca as ofertas reais dele
   useEffect(() => {
-    setOfertaIdx('')
+    setOfertaSel('')
+    setOfertaNova('')
     setValor('')
-    if (!produtoSel) {
+    if (!produtoSel || produtoSel === NOVO) {
       setOfertas([])
       return
     }
@@ -461,27 +468,32 @@ function FormVendaManual({
       .finally(() => setCarregandoOfertas(false))
   }, [produtoSel])
 
-  const selecionarOferta = (idxStr: string) => {
-    setOfertaIdx(idxStr)
-    const of = ofertas[Number(idxStr)]
-    if (of) setValor(String(of.valor_override ?? of.valor_oferta))
+  const selecionarOferta = (v: string) => {
+    setOfertaSel(v)
+    const of = ofertas[Number(v)]
+    if (of && v !== NOVO) setValor(String(of.valor_override ?? of.valor_oferta))
   }
+
+  // oferta escolhida: real (índice), nova (digitada) ou nenhuma
+  const ofertaReal =
+    !produtoNovoModo && ofertaSel !== '' && ofertaSel !== NOVO
+      ? ofertas[Number(ofertaSel)]
+      : undefined
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErro('')
     setEnviando(true)
-    const of = ofertas[Number(ofertaIdx)]
     const payload: VendaManualCreatePayload = {
-      produto: produtoSel,
+      produto: produtoFinal,
       valor: Number(valor),
       metodo_pagamento: metodo,
       // meio-dia UTC pra cair no dia certo independente de fuso
       data_venda: `${dataVenda}T12:00:00Z`,
       comprador_nome: compradorNome || null,
       comprador_email: compradorEmail || null,
-      oferta_nome: of?.oferta_nome ?? null,
-      oferta_codigo: of?.oferta_codigo ?? null,
+      oferta_nome: ofertaReal ? ofertaReal.oferta_nome : ofertaNova.trim() || null,
+      oferta_codigo: ofertaReal ? ofertaReal.oferta_codigo : null,
       tipo: 'unica',
     }
     try {
@@ -508,7 +520,17 @@ function FormVendaManual({
               {p}
             </option>
           ))}
+          <option value={NOVO}>➕ Outro produto (digitar)</option>
         </select>
+        {produtoNovoModo && (
+          <input
+            value={produtoNovo}
+            onChange={(e) => setProdutoNovo(e.target.value)}
+            placeholder="Nome do novo produto"
+            required
+            style={{ ...inputVenda, marginTop: 8 }}
+          />
+        )}
       </CampoVenda>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -534,46 +556,62 @@ function FormVendaManual({
         </CampoVenda>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <CampoVenda label="Método de pagamento" required>
-          <select
-            value={metodo}
-            onChange={(e) => setMetodo(e.target.value as MetodoPagamento)}
-            style={{ ...inputVenda, colorScheme: 'dark' }}
-          >
-            {METODOS.map((m) => (
-              <option key={m.valor} value={m.valor}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-        </CampoVenda>
-        <CampoVenda label="Oferta" required>
-          <select
-            value={ofertaIdx}
-            onChange={(e) => selecionarOferta(e.target.value)}
-            disabled={!produtoSel || carregandoOfertas}
-            required
-            style={{ ...inputVenda, colorScheme: 'dark', opacity: !produtoSel ? 0.6 : 1 }}
-          >
-            <option value="">
-              {!produtoSel
-                ? 'Escolha um produto'
-                : carregandoOfertas
-                  ? 'Carregando…'
-                  : ofertas.length === 0
-                    ? 'Sem ofertas'
-                    : 'Selecione a oferta…'}
+      <CampoVenda label="Método de pagamento" required>
+        <select
+          value={metodo}
+          onChange={(e) => setMetodo(e.target.value as MetodoPagamento)}
+          style={{ ...inputVenda, colorScheme: 'dark' }}
+        >
+          {METODOS.map((m) => (
+            <option key={m.valor} value={m.valor}>
+              {m.label}
             </option>
-            {ofertas.map((o, i) => (
-              <option key={o.oferta_codigo ?? i} value={String(i)}>
-                {(o.oferta_nome ?? 'Sem nome')} —{' '}
-                {formatBRL(o.valor_override ?? o.valor_oferta)}
+          ))}
+        </select>
+      </CampoVenda>
+
+      <CampoVenda label="Oferta (opcional)">
+        {produtoNovoModo ? (
+          <input
+            value={ofertaNova}
+            onChange={(e) => setOfertaNova(e.target.value)}
+            placeholder="Nome da oferta (opcional)"
+            style={inputVenda}
+          />
+        ) : (
+          <>
+            <select
+              value={ofertaSel}
+              onChange={(e) => selecionarOferta(e.target.value)}
+              disabled={!produtoSel || carregandoOfertas}
+              style={{ ...inputVenda, colorScheme: 'dark', opacity: !produtoSel ? 0.6 : 1 }}
+            >
+              <option value="">
+                {!produtoSel
+                  ? 'Escolha um produto primeiro'
+                  : carregandoOfertas
+                    ? 'Carregando…'
+                    : 'Selecione a oferta…'}
               </option>
-            ))}
-          </select>
-        </CampoVenda>
-      </div>
+              {ofertas.map((o, i) => (
+                <option key={o.oferta_codigo ?? i} value={String(i)}>
+                  {(o.oferta_nome ?? 'Sem nome')} —{' '}
+                  {formatBRL(o.valor_override ?? o.valor_oferta)}
+                </option>
+              ))}
+              {produtoSel && <option value={NOVO}>➕ Outra oferta (digitar)</option>}
+            </select>
+            {ofertaSel === NOVO && (
+              <input
+                value={ofertaNova}
+                onChange={(e) => setOfertaNova(e.target.value)}
+                placeholder="Nome da oferta (opcional)"
+                style={{ ...inputVenda, marginTop: 8 }}
+              />
+            )}
+          </>
+        )}
+      </CampoVenda>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <CampoVenda label="Nome do comprador (opcional)">
@@ -629,7 +667,7 @@ function FormVendaManual({
         </button>
         <button
           type="submit"
-          disabled={enviando || !produtoSel || !ofertaIdx || !valor}
+          disabled={enviando || !produtoFinal || !valor}
           style={{
             background: enviando ? '#4B5563' : '#7C6AF7',
             border: 'none',
@@ -639,7 +677,7 @@ function FormVendaManual({
             fontSize: 13,
             fontWeight: 600,
             cursor: enviando ? 'not-allowed' : 'pointer',
-            opacity: !produtoSel || !ofertaIdx || !valor ? 0.6 : 1,
+            opacity: !produtoFinal || !valor ? 0.6 : 1,
           }}
         >
           {enviando ? 'Salvando…' : 'Cadastrar venda'}

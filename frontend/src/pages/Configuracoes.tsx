@@ -201,18 +201,24 @@ function SecaoPlacar() {
 }
 
 function GerenciarLancamento({ lancamentoId }: { lancamentoId: string }) {
+  const NOVO = '__novo__'
   const [placar, setPlacar] = useState<PlacarCompleto | null>(null)
   const [erro, setErro] = useState('')
 
   // produtos/ofertas reais (vindos do dashboard de vendas)
   const [produtos, setProdutos] = useState<string[]>([])
   const [produtoSel, setProdutoSel] = useState('')
+  const [produtoNovo, setProdutoNovo] = useState('')
   const [ofertasReais, setOfertasReais] = useState<OfertaBreakdown[]>([])
   const [carregandoOfertas, setCarregandoOfertas] = useState(false)
-  const [ofertaIdx, setOfertaIdx] = useState('')
+  const [ofertaSel, setOfertaSel] = useState('')
+  const [ofertaNova, setOfertaNova] = useState('')
   const [valor, setValor] = useState('')
   // form vendedor
   const [vendedorNome, setVendedorNome] = useState('')
+
+  const produtoNovoModo = produtoSel === NOVO
+  const produtoFinal = (produtoNovoModo ? produtoNovo : produtoSel).trim()
 
   const recarregar = () => {
     placarService
@@ -227,11 +233,12 @@ function GerenciarLancamento({ lancamentoId }: { lancamentoId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lancamentoId])
 
-  // ao escolher um produto, busca as ofertas reais dele (todo o período)
+  // ao escolher um produto existente, busca as ofertas reais dele
   useEffect(() => {
-    setOfertaIdx('')
+    setOfertaSel('')
+    setOfertaNova('')
     setValor('')
-    if (!produtoSel) {
+    if (!produtoSel || produtoSel === NOVO) {
       setOfertasReais([])
       return
     }
@@ -244,26 +251,32 @@ function GerenciarLancamento({ lancamentoId }: { lancamentoId: string }) {
       .finally(() => setCarregandoOfertas(false))
   }, [produtoSel])
 
-  const selecionarOferta = (idxStr: string) => {
-    setOfertaIdx(idxStr)
-    const of = ofertasReais[Number(idxStr)]
-    if (of) setValor(String(of.valor_override ?? of.valor_oferta))
+  const selecionarOferta = (v: string) => {
+    setOfertaSel(v)
+    const of = ofertasReais[Number(v)]
+    if (of && v !== NOVO) setValor(String(of.valor_override ?? of.valor_oferta))
   }
+
+  const ofertaReal =
+    !produtoNovoModo && ofertaSel !== '' && ofertaSel !== NOVO
+      ? ofertasReais[Number(ofertaSel)]
+      : undefined
 
   const addOferta = async (e: React.FormEvent) => {
     e.preventDefault()
-    const of = ofertasReais[Number(ofertaIdx)]
-    if (!produtoSel || !of || !valor) return
+    if (!produtoFinal || !valor) return
     try {
       await placarService.adicionarOferta(lancamentoId, {
-        produto: produtoSel,
-        oferta: of.oferta_nome,
-        oferta_codigo: of.oferta_codigo,
+        produto: produtoFinal,
+        oferta: ofertaReal ? ofertaReal.oferta_nome : ofertaNova.trim() || null,
+        oferta_codigo: ofertaReal ? ofertaReal.oferta_codigo : null,
         valor: Number(valor),
       })
       setProdutoSel('')
+      setProdutoNovo('')
       setOfertasReais([])
-      setOfertaIdx('')
+      setOfertaSel('')
+      setOfertaNova('')
       setValor('')
       recarregar()
     } catch (err) {
@@ -304,30 +317,57 @@ function GerenciarLancamento({ lancamentoId }: { lancamentoId: string }) {
                 {p}
               </option>
             ))}
+            <option value={NOVO}>➕ Outro produto (digitar)</option>
           </select>
+          {produtoNovoModo && (
+            <input
+              value={produtoNovo}
+              onChange={(e) => setProdutoNovo(e.target.value)}
+              placeholder="Nome do novo produto"
+              style={inputBase}
+            />
+          )}
 
-          <select
-            value={ofertaIdx}
-            onChange={(e) => selecionarOferta(e.target.value)}
-            disabled={!produtoSel || carregandoOfertas}
-            style={{ ...inputBase, colorScheme: 'dark', opacity: !produtoSel ? 0.6 : 1 }}
-          >
-            <option value="">
-              {!produtoSel
-                ? 'Escolha um produto primeiro'
-                : carregandoOfertas
-                  ? 'Carregando ofertas…'
-                  : ofertasReais.length === 0
-                    ? 'Nenhuma oferta encontrada'
-                    : 'Selecione a oferta…'}
-            </option>
-            {ofertasReais.map((o, i) => (
-              <option key={o.oferta_codigo ?? i} value={String(i)}>
-                {(o.oferta_nome ?? 'Sem nome')} —{' '}
-                {formatBRL(o.valor_override ?? o.valor_oferta)}
-              </option>
-            ))}
-          </select>
+          {produtoNovoModo ? (
+            <input
+              value={ofertaNova}
+              onChange={(e) => setOfertaNova(e.target.value)}
+              placeholder="Nome da oferta (opcional)"
+              style={inputBase}
+            />
+          ) : (
+            <>
+              <select
+                value={ofertaSel}
+                onChange={(e) => selecionarOferta(e.target.value)}
+                disabled={!produtoSel || carregandoOfertas}
+                style={{ ...inputBase, colorScheme: 'dark', opacity: !produtoSel ? 0.6 : 1 }}
+              >
+                <option value="">
+                  {!produtoSel
+                    ? 'Escolha um produto primeiro'
+                    : carregandoOfertas
+                      ? 'Carregando ofertas…'
+                      : 'Selecione a oferta…'}
+                </option>
+                {ofertasReais.map((o, i) => (
+                  <option key={o.oferta_codigo ?? i} value={String(i)}>
+                    {(o.oferta_nome ?? 'Sem nome')} —{' '}
+                    {formatBRL(o.valor_override ?? o.valor_oferta)}
+                  </option>
+                ))}
+                {produtoSel && <option value={NOVO}>➕ Outra oferta (digitar)</option>}
+              </select>
+              {ofertaSel === NOVO && (
+                <input
+                  value={ofertaNova}
+                  onChange={(e) => setOfertaNova(e.target.value)}
+                  placeholder="Nome da oferta (opcional)"
+                  style={inputBase}
+                />
+              )}
+            </>
+          )}
 
           <div style={{ display: 'flex', gap: 8 }}>
             <input
@@ -340,8 +380,8 @@ function GerenciarLancamento({ lancamentoId }: { lancamentoId: string }) {
             />
             <button
               type="submit"
-              disabled={!ofertaIdx || !valor}
-              style={botaoRoxo(!ofertaIdx || !valor)}
+              disabled={!produtoFinal || !valor}
+              style={botaoRoxo(!produtoFinal || !valor)}
             >
               Adicionar oferta
             </button>
