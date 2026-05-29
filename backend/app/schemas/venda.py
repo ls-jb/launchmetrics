@@ -57,6 +57,8 @@ class VendaManualCreate(BaseModel):
     comprador_nome: str | None = Field(default=None, max_length=200)
     comprador_email: str | None = Field(default=None, max_length=200)
     oferta: Oferta | None = None
+    oferta_nome: str | None = Field(default=None, max_length=200)
+    oferta_codigo: str | None = Field(default=None, max_length=200)
     tipo: TipoVenda = "unica"
     recorrencia_seq: int | None = Field(default=None, ge=1)
     assinatura_id: str | None = None

@@ -10,7 +10,6 @@ import { vendasService, type FiltroVendas } from '@/services/vendasService'
 import type {
   MetodoPagamento,
   OfertaBreakdown,
-  Oferta,
   PontoReceita,
   ProdutoRanking,
   ResumoVendas,
@@ -421,8 +420,6 @@ const METODOS: { valor: MetodoPagamento; label: string }[] = [
   { valor: 'outro', label: 'Outro' },
 ]
 
-const OFERTAS_CAT: Oferta[] = ['Principal', 'Order Bump', 'Upsell', 'Downsell']
-
 function FormVendaManual({
   onCancelar,
   onCriou,
@@ -430,29 +427,61 @@ function FormVendaManual({
   onCancelar: () => void
   onCriou: () => void
 }) {
-  const [produtoNome, setProdutoNome] = useState('')
+  const [produtos, setProdutos] = useState<string[]>([])
+  const [produtoSel, setProdutoSel] = useState('')
+  const [ofertas, setOfertas] = useState<OfertaBreakdown[]>([])
+  const [carregandoOfertas, setCarregandoOfertas] = useState(false)
+  const [ofertaIdx, setOfertaIdx] = useState('')
   const [valor, setValor] = useState('')
   const [metodo, setMetodo] = useState<MetodoPagamento>('pix')
   const [dataVenda, setDataVenda] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [compradorNome, setCompradorNome] = useState('')
   const [compradorEmail, setCompradorEmail] = useState('')
-  const [ofertaCat, setOfertaCat] = useState<string>('')
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState('')
+
+  useEffect(() => {
+    vendasService.produtos().then(setProdutos).catch(() => setProdutos([]))
+  }, [])
+
+  // ao escolher o produto, busca as ofertas reais dele (todo o período)
+  useEffect(() => {
+    setOfertaIdx('')
+    setValor('')
+    if (!produtoSel) {
+      setOfertas([])
+      return
+    }
+    const hoje = format(new Date(), 'yyyy-MM-dd')
+    setCarregandoOfertas(true)
+    vendasService
+      .ofertasPorProduto(produtoSel, '2020-01-01', hoje)
+      .then(setOfertas)
+      .catch(() => setOfertas([]))
+      .finally(() => setCarregandoOfertas(false))
+  }, [produtoSel])
+
+  const selecionarOferta = (idxStr: string) => {
+    setOfertaIdx(idxStr)
+    const of = ofertas[Number(idxStr)]
+    if (of) setValor(String(of.valor_override ?? of.valor_oferta))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErro('')
     setEnviando(true)
+    const of = ofertas[Number(ofertaIdx)]
     const payload: VendaManualCreatePayload = {
-      produto: produtoNome,
+      produto: produtoSel,
       valor: Number(valor),
       metodo_pagamento: metodo,
       // meio-dia UTC pra cair no dia certo independente de fuso
       data_venda: `${dataVenda}T12:00:00Z`,
       comprador_nome: compradorNome || null,
       comprador_email: compradorEmail || null,
-      oferta: (ofertaCat || null) as Oferta | null,
+      oferta_nome: of?.oferta_nome ?? null,
+      oferta_codigo: of?.oferta_codigo ?? null,
       tipo: 'unica',
     }
     try {
@@ -467,13 +496,19 @@ function FormVendaManual({
   return (
     <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 14 }}>
       <CampoVenda label="Produto" required>
-        <input
-          value={produtoNome}
-          onChange={(e) => setProdutoNome(e.target.value)}
-          placeholder="Ex: Comunidade Vida Alinhada"
+        <select
+          value={produtoSel}
+          onChange={(e) => setProdutoSel(e.target.value)}
           required
-          style={inputVenda}
-        />
+          style={{ ...inputVenda, colorScheme: 'dark' }}
+        >
+          <option value="">Selecione o produto…</option>
+          {produtos.map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </select>
       </CampoVenda>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -513,16 +548,27 @@ function FormVendaManual({
             ))}
           </select>
         </CampoVenda>
-        <CampoVenda label="Oferta (opcional)">
+        <CampoVenda label="Oferta" required>
           <select
-            value={ofertaCat}
-            onChange={(e) => setOfertaCat(e.target.value)}
-            style={{ ...inputVenda, colorScheme: 'dark' }}
+            value={ofertaIdx}
+            onChange={(e) => selecionarOferta(e.target.value)}
+            disabled={!produtoSel || carregandoOfertas}
+            required
+            style={{ ...inputVenda, colorScheme: 'dark', opacity: !produtoSel ? 0.6 : 1 }}
           >
-            <option value="">—</option>
-            {OFERTAS_CAT.map((o) => (
-              <option key={o} value={o}>
-                {o}
+            <option value="">
+              {!produtoSel
+                ? 'Escolha um produto'
+                : carregandoOfertas
+                  ? 'Carregando…'
+                  : ofertas.length === 0
+                    ? 'Sem ofertas'
+                    : 'Selecione a oferta…'}
+            </option>
+            {ofertas.map((o, i) => (
+              <option key={o.oferta_codigo ?? i} value={String(i)}>
+                {(o.oferta_nome ?? 'Sem nome')} —{' '}
+                {formatBRL(o.valor_override ?? o.valor_oferta)}
               </option>
             ))}
           </select>
@@ -583,7 +629,7 @@ function FormVendaManual({
         </button>
         <button
           type="submit"
-          disabled={enviando || !produtoNome || !valor}
+          disabled={enviando || !produtoSel || !ofertaIdx || !valor}
           style={{
             background: enviando ? '#4B5563' : '#7C6AF7',
             border: 'none',
@@ -593,7 +639,7 @@ function FormVendaManual({
             fontSize: 13,
             fontWeight: 600,
             cursor: enviando ? 'not-allowed' : 'pointer',
-            opacity: !produtoNome || !valor ? 0.6 : 1,
+            opacity: !produtoSel || !ofertaIdx || !valor ? 0.6 : 1,
           }}
         >
           {enviando ? 'Salvando…' : 'Cadastrar venda'}

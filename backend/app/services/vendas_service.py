@@ -266,6 +266,8 @@ async def criar_manual(db: AsyncSession, dados: VendaManualCreate) -> Venda:
         external_id=None,
         produto=dados.produto,
         oferta=dados.oferta,
+        oferta_nome=dados.oferta_nome,
+        oferta_codigo=dados.oferta_codigo,
         tipo=dados.tipo,
         recorrencia_seq=dados.recorrencia_seq,
         assinatura_id=dados.assinatura_id,

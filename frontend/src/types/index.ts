@@ -90,6 +90,8 @@ export interface VendaManualCreatePayload {
   comprador_nome?: string | null
   comprador_email?: string | null
   oferta?: Oferta | null
+  oferta_nome?: string | null
+  oferta_codigo?: string | null
   tipo?: TipoVenda
   recorrencia_seq?: number | null
   assinatura_id?: string | null
