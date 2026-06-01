@@ -343,6 +343,7 @@ function DetalheLancamento({
         <div
           style={{
             display: 'grid',
+            gridTemplateColumns: 'repeat(2, minmax(0, 480px))',
             gap: 12,
             marginBottom: '1.5rem',
           }}
