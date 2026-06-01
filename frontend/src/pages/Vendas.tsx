@@ -13,6 +13,7 @@ import type {
   PontoReceita,
   ProdutoRanking,
   ResumoVendas,
+  Venda,
   VendaManualCreatePayload,
 } from '@/types'
 
@@ -42,6 +43,8 @@ export function Vendas() {
 
   // Modal de cadastro de venda manual
   const [modalVenda, setModalVenda] = useState(false)
+  // Modal de remoção de venda manual
+  const [modalRemover, setModalRemover] = useState(false)
 
   const abrirOfertas = (nomeProduto: string) => {
     setProdutoModal(nomeProduto)
@@ -174,6 +177,22 @@ export function Vendas() {
           >
             <IconeAtualizar girando={carregando} />
             {carregando ? 'Atualizando…' : 'Atualizar'}
+          </button>
+          <button
+            onClick={() => setModalRemover(true)}
+            title="Listar e remover vendas manuais do período"
+            style={{
+              background: 'transparent',
+              border: '1px solid #374151',
+              color: '#9CA3AF',
+              padding: '10px 14px',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: 'pointer',
+            }}
+          >
+            Remover venda
           </button>
           <button
             onClick={() => setModalVenda(true)}
@@ -407,6 +426,18 @@ export function Vendas() {
           }}
         />
       </Modal>
+
+      <Modal
+        aberto={modalRemover}
+        titulo="Remover venda manual"
+        onFechar={() => setModalRemover(false)}
+        largura={720}
+      >
+        <RemoverVendasManuais
+          filtro={filtro}
+          onRemoveu={() => setRefreshKey((k) => k + 1)}
+        />
+      </Modal>
     </div>
   )
 }
@@ -436,6 +467,7 @@ function FormVendaManual({
   const [ofertaSel, setOfertaSel] = useState('')
   const [ofertaNova, setOfertaNova] = useState('')
   const [valor, setValor] = useState('')
+  const [quantidade, setQuantidade] = useState('1')
   const [metodo, setMetodo] = useState<MetodoPagamento>('pix')
   const [dataVenda, setDataVenda] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [compradorNome, setCompradorNome] = useState('')
@@ -487,6 +519,7 @@ function FormVendaManual({
     const payload: VendaManualCreatePayload = {
       produto: produtoFinal,
       valor: Number(valor),
+      quantidade: Math.max(1, Number(quantidade) || 1),
       metodo_pagamento: metodo,
       // meio-dia UTC pra cair no dia certo independente de fuso
       data_venda: `${dataVenda}T12:00:00Z`,
@@ -533,7 +566,20 @@ function FormVendaManual({
         )}
       </CampoVenda>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '0.7fr 1fr 1fr', gap: 12 }}>
+        <CampoVenda label="Quantidade" required>
+          <input
+            type="number"
+            min={1}
+            max={200}
+            step={1}
+            value={quantidade}
+            onChange={(e) => setQuantidade(e.target.value)}
+            required
+            title="Quantas vendas iguais cadastrar de uma vez"
+            style={inputVenda}
+          />
+        </CampoVenda>
         <CampoVenda label="Valor (R$)" required>
           <input
             type="number"
@@ -1159,6 +1205,130 @@ function CardVazio({ titulo, mensagem }: { titulo: string; mensagem: string }) {
         }}
       >
         {mensagem}
+      </div>
+    </div>
+  )
+}
+
+function RemoverVendasManuais({
+  filtro,
+  onRemoveu,
+}: {
+  filtro: FiltroVendas
+  onRemoveu: () => void
+}) {
+  const [vendas, setVendas] = useState<Venda[]>([])
+  const [carregando, setCarregando] = useState(true)
+  const [erro, setErro] = useState('')
+
+  const carregar = () => {
+    setCarregando(true)
+    setErro('')
+    vendasService
+      .listar(filtro)
+      .then((vs) => setVendas(vs.filter((v) => v.plataforma === 'Manual')))
+      .catch((e) => setErro(extrairErro(e)))
+      .finally(() => setCarregando(false))
+  }
+
+  useEffect(carregar, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const remover = async (v: Venda) => {
+    const rotulo = `${v.produto}${v.oferta_nome ? ' · ' + v.oferta_nome : ''}`
+    if (!confirm(`Remover esta venda de ${formatBRL(v.valor)} (${rotulo})?`)) return
+    try {
+      await vendasService.remover(v.id)
+      setVendas((vs) => vs.filter((x) => x.id !== v.id))
+      onRemoveu()
+    } catch (e) {
+      alert(extrairErro(e))
+    }
+  }
+
+  if (carregando) {
+    return <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>Carregando…</p>
+  }
+  if (erro) {
+    return (
+      <p style={{ margin: 0, fontSize: 13, color: '#FCA5A5' }}>{erro}</p>
+    )
+  }
+  if (vendas.length === 0) {
+    return (
+      <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
+        Nenhuma venda manual no período/filtros selecionados.
+      </p>
+    )
+  }
+
+  return (
+    <div>
+      <p style={{ margin: '0 0 12px', fontSize: 12, color: '#6B7280' }}>
+        Mostra só vendas cadastradas manualmente (PIX e afins) no período do
+        dashboard. Vendas das plataformas devem ser estornadas na origem — o
+        webhook de reembolso atualiza o status automaticamente.
+      </p>
+      <div style={{ display: 'grid', gap: 6 }}>
+        {vendas.map((v) => (
+          <div
+            key={v.id}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: '8px 10px',
+              background: '#0F172A',
+              border: '1px solid #1F2937',
+              borderRadius: 6,
+            }}
+          >
+            <span
+              style={{
+                fontSize: 11,
+                color: '#9CA3AF',
+                fontFamily: 'monospace',
+                width: 50,
+              }}
+            >
+              {v.data_venda.slice(8, 10)}/{v.data_venda.slice(5, 7)}
+            </span>
+            <span style={{ flex: 1, fontSize: 13, color: '#F9FAFB', minWidth: 0 }}>
+              {v.produto}
+              {v.oferta_nome ? ` · ${v.oferta_nome}` : ''}
+              {v.comprador_email ? (
+                <span style={{ color: '#6B7280', fontSize: 11, marginLeft: 8 }}>
+                  ({v.comprador_email})
+                </span>
+              ) : null}
+            </span>
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: '#F9FAFB',
+                minWidth: 90,
+                textAlign: 'right',
+              }}
+            >
+              {formatBRL(v.valor)}
+            </span>
+            <button
+              onClick={() => remover(v)}
+              title="Remover esta venda"
+              style={{
+                background: 'transparent',
+                border: '1px solid #374151',
+                color: '#EF4444',
+                borderRadius: 6,
+                padding: '4px 10px',
+                fontSize: 12,
+                cursor: 'pointer',
+              }}
+            >
+              ×
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   )

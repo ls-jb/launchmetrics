@@ -53,6 +53,8 @@ export interface Venda {
   external_id: string | null
   produto: string
   oferta: Oferta | null
+  oferta_nome: string | null
+  oferta_codigo: string | null
   tipo: TipoVenda
   recorrencia_seq: number | null
   assinatura_id: string | null
@@ -87,6 +89,7 @@ export interface VendaManualCreatePayload {
   valor: number
   metodo_pagamento: MetodoPagamento
   data_venda: string
+  quantidade?: number
   comprador_nome?: string | null
   comprador_email?: string | null
   oferta?: Oferta | null

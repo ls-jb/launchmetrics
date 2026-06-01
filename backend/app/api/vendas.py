@@ -1,6 +1,7 @@
 from datetime import date
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -27,10 +28,22 @@ async def cadastrar_venda_manual(
     _: dict = Depends(verify_token),
 ):
     """
-    Cadastra manualmente uma venda (PIX direto, venda avulsa).
-    Plataforma fica como 'Manual' automaticamente.
+    Cadastra manualmente uma ou mais vendas (PIX direto, venda avulsa).
+    quantidade>1 cria N linhas idênticas (lote). Plataforma = 'Manual'.
     """
     return await vendas_service.criar_manual(db, dados)
+
+
+@router.delete("/{venda_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remover_venda(
+    venda_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(verify_token),
+):
+    """Remove uma venda por id. Útil para apagar PIX adicionado errado ou
+    venda manual reembolsada fora da plataforma."""
+    if not await vendas_service.remover(db, venda_id):
+        raise HTTPException(status_code=404, detail="Venda não encontrada.")
 
 
 @router.get("", response_model=list[VendaResponse])

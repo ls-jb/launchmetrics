@@ -48,12 +48,14 @@ class VendaManualCreate(BaseModel):
     """
     Payload do cadastro manual de venda (PIX direto, venda avulsa).
     Sempre cria como plataforma='Manual'. external_id fica em branco.
+    quantidade>1 cria N linhas idênticas numa só transação (lote PIX).
     """
 
     produto: str = Field(..., min_length=1, max_length=200)
     valor: Money = Field(..., gt=0)
     metodo_pagamento: MetodoPagamento
     data_venda: datetime
+    quantidade: int = Field(default=1, ge=1, le=200)
     comprador_nome: str | None = Field(default=None, max_length=200)
     comprador_email: str | None = Field(default=None, max_length=200)
     oferta: Oferta | None = None

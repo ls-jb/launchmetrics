@@ -260,29 +260,44 @@ async def produtos_distintos(db: AsyncSession) -> list[str]:
 # Escrita
 # ============================================================
 async def criar_manual(db: AsyncSession, dados: VendaManualCreate) -> Venda:
-    """Cria uma venda manual (PIX direto, venda avulsa)."""
-    venda = Venda(
-        plataforma="Manual",
-        external_id=None,
-        produto=dados.produto,
-        oferta=dados.oferta,
-        oferta_nome=dados.oferta_nome,
-        oferta_codigo=dados.oferta_codigo,
-        tipo=dados.tipo,
-        recorrencia_seq=dados.recorrencia_seq,
-        assinatura_id=dados.assinatura_id,
-        metodo_pagamento=dados.metodo_pagamento,
-        valor=dados.valor,
-        status="aprovada",
-        comprador_nome=dados.comprador_nome,
-        comprador_email=dados.comprador_email,
-        data_venda=dados.data_venda,
-        payload_bruto=None,
-    )
-    db.add(venda)
+    """Cria N vendas manuais (PIX direto, venda avulsa). quantidade>1 vira
+    N linhas idênticas (lote). Retorna a última criada."""
+    ultima: Venda | None = None
+    for _ in range(dados.quantidade):
+        venda = Venda(
+            plataforma="Manual",
+            external_id=None,
+            produto=dados.produto,
+            oferta=dados.oferta,
+            oferta_nome=dados.oferta_nome,
+            oferta_codigo=dados.oferta_codigo,
+            tipo=dados.tipo,
+            recorrencia_seq=dados.recorrencia_seq,
+            assinatura_id=dados.assinatura_id,
+            metodo_pagamento=dados.metodo_pagamento,
+            valor=dados.valor,
+            status="aprovada",
+            comprador_nome=dados.comprador_nome,
+            comprador_email=dados.comprador_email,
+            data_venda=dados.data_venda,
+            payload_bruto=None,
+        )
+        db.add(venda)
+        ultima = venda
     await db.commit()
-    await db.refresh(venda)
-    return venda
+    assert ultima is not None
+    await db.refresh(ultima)
+    return ultima
+
+
+async def remover(db: AsyncSession, venda_id) -> bool:
+    """Remove uma venda por id. Retorna True se removeu, False se não existia."""
+    venda = await db.get(Venda, venda_id)
+    if not venda:
+        return False
+    await db.delete(venda)
+    await db.commit()
+    return True
 
 
 async def upsert_preco_oferta(db: AsyncSession, dados: OfertaPrecoUpsert) -> OfertaPreco:

@@ -34,6 +34,9 @@ export const vendasService = {
   criarManual: (dados: VendaManualCreatePayload) =>
     api.post<Venda>('/api/vendas', dados).then((r) => r.data),
 
+  remover: (id: string) =>
+    api.delete(`/api/vendas/${id}`).then(() => undefined),
+
   resumo: (f: FiltroVendas) =>
     api.get<ResumoVendas>('/api/vendas/resumo', paramsDe(f)).then((r) => r.data),
 
