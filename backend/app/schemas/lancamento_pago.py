@@ -62,18 +62,31 @@ class OfertaResponse(BaseModel):
     categoria: Categoria
 
 
+class OfertaDetalhe(BaseModel):
+    """Uma oferta configurada + métricas reais dela na janela do lançamento."""
+
+    id: UUID
+    produto: str
+    oferta_nome: str | None = None
+    oferta_codigo: str | None = None
+    quantidade: int
+    receita: Money
+
+
 class TotalCategoria(BaseModel):
     categoria: Categoria
     quantidade: int
     receita: Money
+    ofertas: list[OfertaDetalhe]
+    """Cada oferta configurada nessa categoria com suas métricas (0 se ainda
+    sem venda). Ordenadas por receita desc."""
 
 
 class LancamentoPagoCompleto(BaseModel):
     """Tudo que a página de detalhe precisa."""
 
     lancamento: LancamentoPagoResponse
-    ofertas: list[OfertaResponse]
     totais_por_categoria: list[TotalCategoria]
-    """Uma linha por categoria configurada (categorias sem oferta cadastrada
-    não aparecem). Receita do dashboard real (override + dedup + recorrência
-    seq<=1 + aprovada) restrita à janela do lançamento."""
+    """Categorias que têm pelo menos uma oferta configurada. Receita usa a
+    mesma regra do dashboard (override + dedup + recorrência seq<=1 +
+    aprovada), restrita à janela do lançamento."""

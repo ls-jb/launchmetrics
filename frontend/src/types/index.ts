@@ -203,14 +203,23 @@ export interface LancamentoPagoOferta {
   categoria: CategoriaLancPago
 }
 
-export interface LancamentoPagoTotal {
-  categoria: CategoriaLancPago
+export interface LancamentoPagoOfertaDetalhe {
+  id: string
+  produto: string
+  oferta_nome: string | null
+  oferta_codigo: string | null
   quantidade: number
   receita: number
 }
 
+export interface LancamentoPagoTotal {
+  categoria: CategoriaLancPago
+  quantidade: number
+  receita: number
+  ofertas: LancamentoPagoOfertaDetalhe[]
+}
+
 export interface LancamentoPagoCompleto {
   lancamento: LancamentoPago
-  ofertas: LancamentoPagoOferta[]
   totais_por_categoria: LancamentoPagoTotal[]
 }

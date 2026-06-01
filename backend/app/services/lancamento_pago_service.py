@@ -23,7 +23,7 @@ from app.models import (
 from app.schemas.lancamento_pago import (
     LancamentoPagoCompleto,
     LancamentoPagoResponse,
-    OfertaResponse,
+    OfertaDetalhe,
     TotalCategoria,
 )
 
@@ -151,7 +151,6 @@ async def obter(
 
     return LancamentoPagoCompleto(
         lancamento=LancamentoPagoResponse.model_validate(lanc),
-        ofertas=[OfertaResponse.model_validate(o) for o in ofertas],
         totais_por_categoria=totais,
     )
 
@@ -161,61 +160,82 @@ async def _totais_por_categoria(
     lanc: LancamentoPago,
     ofertas: list[LancamentoPagoOferta],
 ) -> list[TotalCategoria]:
-    """Soma das vendas reais por categoria, dentro da janela do lançamento."""
-    codigo_categoria = {
-        o.oferta_codigo: o.categoria for o in ofertas if o.oferta_codigo
-    }
-    if not codigo_categoria:
+    """Totais por categoria + breakdown por oferta (com métricas reais).
+    Ofertas sem código (digitadas à mão) entram com 0 vendas — mantém-se a
+    estrutura, mas elas não puxam dados das `vendas` reais."""
+    if not ofertas:
         return []
 
-    inicio_dt = datetime.combine(
-        lanc.data_inicio, datetime.min.time(), tzinfo=timezone.utc
-    )
-    fim_dt = datetime.combine(
-        lanc.data_fim + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc
-    )
-
-    valor_efetivo = func.coalesce(OfertaPreco.valor, Venda.valor).label("v")
-    dedup_key = case(
-        (
-            and_(Venda.comprador_email.is_not(None), Venda.oferta_codigo.is_not(None)),
-            Venda.comprador_email + cast(Venda.oferta_codigo, String),
-        ),
-        else_=cast(Venda.id, String),
-    )
-    rn = (
-        func.row_number()
-        .over(partition_by=dedup_key, order_by=Venda.data_venda)
-        .label("rn")
-    )
-    base = (
-        select(Venda.oferta_codigo.label("codigo"), valor_efetivo, rn)
-        .select_from(Venda)
-        .outerjoin(OfertaPreco, OfertaPreco.oferta_codigo == Venda.oferta_codigo)
-        .where(
-            Venda.oferta_codigo.in_(list(codigo_categoria.keys())),
-            Venda.status == "aprovada",
-            or_(Venda.recorrencia_seq.is_(None), Venda.recorrencia_seq == 1),
-            Venda.data_venda >= inicio_dt,
-            Venda.data_venda < fim_dt,
+    # 1) Métricas por oferta_codigo, dentro da janela do lançamento.
+    codigo_metricas: dict[str, tuple[int, Decimal]] = {}
+    codigos_validos = [o.oferta_codigo for o in ofertas if o.oferta_codigo]
+    if codigos_validos:
+        inicio_dt = datetime.combine(
+            lanc.data_inicio, datetime.min.time(), tzinfo=timezone.utc
         )
-        .subquery()
-    )
-    sub = select(base.c.codigo, base.c.v).where(base.c.rn == 1).subquery()
-    rows = (
-        await db.execute(
-            select(sub.c.codigo, func.count(), func.coalesce(func.sum(sub.c.v), 0))
-            .group_by(sub.c.codigo)
+        fim_dt = datetime.combine(
+            lanc.data_fim + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc
         )
-    ).all()
 
-    acumulado: dict[str, list] = defaultdict(lambda: [0, Decimal("0")])
-    for codigo, qtd, receita in rows:
-        cat = codigo_categoria[codigo]
-        acumulado[cat][0] += int(qtd)
-        acumulado[cat][1] += Decimal(receita)
+        valor_efetivo = func.coalesce(OfertaPreco.valor, Venda.valor).label("v")
+        dedup_key = case(
+            (
+                and_(
+                    Venda.comprador_email.is_not(None),
+                    Venda.oferta_codigo.is_not(None),
+                ),
+                Venda.comprador_email + cast(Venda.oferta_codigo, String),
+            ),
+            else_=cast(Venda.id, String),
+        )
+        rn = (
+            func.row_number()
+            .over(partition_by=dedup_key, order_by=Venda.data_venda)
+            .label("rn")
+        )
+        base = (
+            select(Venda.oferta_codigo.label("codigo"), valor_efetivo, rn)
+            .select_from(Venda)
+            .outerjoin(OfertaPreco, OfertaPreco.oferta_codigo == Venda.oferta_codigo)
+            .where(
+                Venda.oferta_codigo.in_(codigos_validos),
+                Venda.status == "aprovada",
+                or_(Venda.recorrencia_seq.is_(None), Venda.recorrencia_seq == 1),
+                Venda.data_venda >= inicio_dt,
+                Venda.data_venda < fim_dt,
+            )
+            .subquery()
+        )
+        sub = select(base.c.codigo, base.c.v).where(base.c.rn == 1).subquery()
+        rows = (
+            await db.execute(
+                select(sub.c.codigo, func.count(), func.coalesce(func.sum(sub.c.v), 0))
+                .group_by(sub.c.codigo)
+            )
+        ).all()
+        for codigo, qtd, receita in rows:
+            codigo_metricas[codigo] = (int(qtd), Decimal(receita))
 
-    # ordem fixa pras categorias aparecerem sempre na mesma sequência
+    # 2) Agrupa ofertas por categoria, anexa métricas (ou 0).
+    por_cat: dict[str, list[OfertaDetalhe]] = defaultdict(list)
+    for o in ofertas:
+        qtd, receita = (
+            codigo_metricas.get(o.oferta_codigo, (0, Decimal("0")))
+            if o.oferta_codigo
+            else (0, Decimal("0"))
+        )
+        por_cat[o.categoria].append(
+            OfertaDetalhe(
+                id=o.id,
+                produto=o.produto,
+                oferta_nome=o.oferta_nome,
+                oferta_codigo=o.oferta_codigo,
+                quantidade=qtd,
+                receita=receita,
+            )
+        )
+
+    # 3) Monta TotalCategoria na ordem fixa, ordenando ofertas por receita desc.
     ordem = [
         "ingresso",
         "order_bump_ingresso",
@@ -224,8 +244,23 @@ async def _totais_por_categoria(
         "upsell",
         "downsell",
     ]
-    return [
-        TotalCategoria(categoria=c, quantidade=acumulado[c][0], receita=acumulado[c][1])  # type: ignore[arg-type]
-        for c in ordem
-        if c in acumulado
-    ]
+    result: list[TotalCategoria] = []
+    for cat in ordem:
+        detalhes = por_cat.get(cat, [])
+        if not detalhes:
+            continue
+        detalhes_sorted = sorted(
+            detalhes,
+            key=lambda d: (-d.receita, -d.quantidade, d.oferta_nome or ""),
+        )
+        qtd_total = sum(d.quantidade for d in detalhes_sorted)
+        receita_total = sum((d.receita for d in detalhes_sorted), Decimal("0"))
+        result.append(
+            TotalCategoria(
+                categoria=cat,  # type: ignore[arg-type]
+                quantidade=qtd_total,
+                receita=receita_total,
+                ofertas=detalhes_sorted,
+            )
+        )
+    return result

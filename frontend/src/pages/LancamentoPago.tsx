@@ -13,6 +13,7 @@ import type {
   CategoriaLancPago,
   LancamentoPago as LancPago,
   LancamentoPagoCompleto,
+  LancamentoPagoOfertaDetalhe,
   OfertaBreakdown,
 } from '@/types'
 
@@ -331,7 +332,7 @@ function DetalheLancamento({
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))',
             gap: 12,
             marginBottom: '1.5rem',
           }}
@@ -342,59 +343,10 @@ function DetalheLancamento({
               categoria={t.categoria}
               quantidade={t.quantidade}
               receita={t.receita}
+              ofertas={t.ofertas}
+              isAdmin={isAdmin}
+              onRemoverOferta={removerOferta}
             />
-          ))}
-        </div>
-      )}
-
-      {/* Ofertas configuradas */}
-      <h3 style={{ margin: '24px 0 12px', fontSize: 14, fontWeight: 600, color: '#E5E7EB' }}>
-        Ofertas configuradas
-      </h3>
-      {placar.ofertas.length === 0 ? (
-        <p style={textoMudo}>Nenhuma oferta cadastrada.</p>
-      ) : (
-        <div style={{ display: 'grid', gap: 6 }}>
-          {placar.ofertas.map((o) => (
-            <div
-              key={o.id}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: '10px 12px',
-                background: '#0F172A',
-                border: '1px solid #1F2937',
-                borderRadius: 8,
-              }}
-            >
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  color: CAT_COR[o.categoria],
-                  background: `${CAT_COR[o.categoria]}22`,
-                  padding: '3px 8px',
-                  borderRadius: 99,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {CAT_LABEL[o.categoria]}
-              </span>
-              <span style={{ flex: 1, fontSize: 13, color: '#F9FAFB', minWidth: 0 }}>
-                {o.produto}
-                {o.oferta_nome ? ` · ${o.oferta_nome}` : ''}
-              </span>
-              {isAdmin && (
-                <button
-                  onClick={() => removerOferta(o.id)}
-                  title="Remover oferta"
-                  style={botaoXis}
-                >
-                  ×
-                </button>
-              )}
-            </div>
           ))}
         </div>
       )}
@@ -687,11 +639,18 @@ function CardCategoria({
   categoria,
   quantidade,
   receita,
+  ofertas,
+  isAdmin,
+  onRemoverOferta,
 }: {
   categoria: CategoriaLancPago
   quantidade: number
   receita: number
+  ofertas: LancamentoPagoOfertaDetalhe[]
+  isAdmin: boolean
+  onRemoverOferta: (id: string) => void
 }) {
+  const cor = CAT_COR[categoria]
   return (
     <div
       style={{
@@ -699,25 +658,98 @@ function CardCategoria({
         border: '1px solid #1F2937',
         borderRadius: 12,
         padding: '1rem 1.25rem',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
       }}
     >
-      <p
+      <div>
+        <p
+          style={{
+            margin: '0 0 6px',
+            fontSize: 11,
+            color: '#6B7280',
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+          }}
+        >
+          {CAT_LABEL[categoria]}
+        </p>
+        <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: cor }}>
+          {formatBRL(receita)}
+        </p>
+        <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6B7280' }}>
+          {formatNum(quantidade)} {quantidade === 1 ? 'venda' : 'vendas'}
+        </p>
+      </div>
+
+      <div
         style={{
-          margin: '0 0 6px',
-          fontSize: 11,
-          color: '#6B7280',
-          textTransform: 'uppercase',
-          letterSpacing: '0.06em',
+          display: 'grid',
+          gap: 4,
+          borderTop: '1px solid #1F2937',
+          paddingTop: 10,
         }}
       >
-        {CAT_LABEL[categoria]}
-      </p>
-      <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: CAT_COR[categoria] }}>
-        {formatBRL(receita)}
-      </p>
-      <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6B7280' }}>
-        {formatNum(quantidade)} {quantidade === 1 ? 'venda' : 'vendas'}
-      </p>
+        {ofertas.map((o) => (
+          <div
+            key={o.id}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '6px 4px',
+              fontSize: 12,
+            }}
+          >
+            <span
+              style={{
+                flex: 1,
+                minWidth: 0,
+                color: o.quantidade > 0 ? '#E5E7EB' : '#6B7280',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+              title={`${o.produto}${o.oferta_nome ? ' · ' + o.oferta_nome : ''}`}
+            >
+              {o.oferta_nome ?? o.produto}
+            </span>
+            <span
+              style={{
+                fontSize: 11,
+                color: '#6B7280',
+                whiteSpace: 'nowrap',
+                width: 60,
+                textAlign: 'right',
+              }}
+            >
+              {formatNum(o.quantidade)} {o.quantidade === 1 ? 'venda' : 'vendas'}
+            </span>
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: o.quantidade > 0 ? '#F9FAFB' : '#4B5563',
+                whiteSpace: 'nowrap',
+                width: 90,
+                textAlign: 'right',
+              }}
+            >
+              {formatBRL(o.receita)}
+            </span>
+            {isAdmin && (
+              <button
+                onClick={() => onRemoverOferta(o.id)}
+                title="Remover oferta deste lançamento"
+                style={botaoXis}
+              >
+                ×
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
