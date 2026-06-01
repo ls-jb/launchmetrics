@@ -343,7 +343,7 @@ function DetalheLancamento({
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(2, minmax(0, 480px))',
+            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
             gap: 12,
             marginBottom: '1.5rem',
           }}
@@ -794,6 +794,8 @@ function CardCategoria({
         display: 'flex',
         flexDirection: 'column',
         gap: 12,
+        minWidth: 0,
+        overflow: 'hidden',
       }}
     >
       <div>
@@ -825,13 +827,14 @@ function CardCategoria({
         }}
       >
         {ofertas.map((o) => (
-          <div key={o.id} style={{ display: 'grid', gap: 2 }}>
+          <div key={o.id} style={{ display: 'grid', gap: 2, minWidth: 0 }}>
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 10,
                 padding: '6px 4px',
+                minWidth: 0,
               }}
             >
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -922,6 +925,7 @@ function CardCategoria({
                   padding: '2px 4px 2px 16px',
                   fontSize: 11,
                   color: '#9CA3AF',
+                  minWidth: 0,
                 }}
               >
                 <span
