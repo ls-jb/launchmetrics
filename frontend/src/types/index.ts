@@ -175,3 +175,42 @@ export interface PlacarCompleto {
   total_real: PlacarTotal
   total_closers: PlacarTotal
 }
+
+// ============================================================
+// Lançamento Pago
+// ============================================================
+export type CategoriaLancPago =
+  | 'ingresso'
+  | 'order_bump_ingresso'
+  | 'principal'
+  | 'order_bump_principal'
+  | 'upsell'
+  | 'downsell'
+
+export interface LancamentoPago {
+  id: string
+  nome: string
+  data_inicio: string // YYYY-MM-DD
+  data_abertura_carrinho: string
+  data_fim: string
+}
+
+export interface LancamentoPagoOferta {
+  id: string
+  produto: string
+  oferta_nome: string | null
+  oferta_codigo: string | null
+  categoria: CategoriaLancPago
+}
+
+export interface LancamentoPagoTotal {
+  categoria: CategoriaLancPago
+  quantidade: number
+  receita: number
+}
+
+export interface LancamentoPagoCompleto {
+  lancamento: LancamentoPago
+  ofertas: LancamentoPagoOferta[]
+  totais_por_categoria: LancamentoPagoTotal[]
+}

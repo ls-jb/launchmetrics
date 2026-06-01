@@ -9,7 +9,14 @@ if sys.platform == "win32":
 from fastapi import FastAPI  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
-from app.api import lancamentos, placar, usuarios, vendas, webhooks  # noqa: E402
+from app.api import (  # noqa: E402
+    lancamentos,
+    lancamentos_pagos,
+    placar,
+    usuarios,
+    vendas,
+    webhooks,
+)
 from app.core.config import settings  # noqa: E402
 
 app = FastAPI(
@@ -27,6 +34,7 @@ app.add_middleware(
 )
 
 app.include_router(lancamentos.router, prefix="/api")
+app.include_router(lancamentos_pagos.router, prefix="/api")
 app.include_router(vendas.router, prefix="/api")
 app.include_router(webhooks.router, prefix="/api")
 app.include_router(usuarios.router, prefix="/api")

@@ -2,9 +2,16 @@ import { NavLink, useNavigate } from 'react-router-dom'
 
 import { useAuthStore } from '@/store/authStore'
 
-const ITENS = [
+type ItemMenu = {
+  path: string
+  label: string
+  icone: (props: { cor: string }) => JSX.Element
+  em_breve?: boolean
+}
+
+const ITENS: ItemMenu[] = [
   { path: '/lancamentos', label: 'Lançamentos', icone: IconeFoguete },
-  { path: '/lancamento-pago', label: 'Lançamento Pago', icone: IconeRaio, em_breve: true },
+  { path: '/lancamento-pago', label: 'Lançamento Pago', icone: IconeRaio },
   { path: '/vendas', label: 'Dashboard de Vendas', icone: IconeGrafico },
   { path: '/placar', label: 'Placar de Líderes', icone: IconeTrofeu },
 ]

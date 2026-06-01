@@ -240,6 +240,42 @@ create index if not exists ix_placar_contagens_vendedor on launchmetrics.placar_
 create index if not exists ix_placar_contagens_oferta on launchmetrics.placar_contagens (oferta_id);
 
 -- ============================================================
+-- LANÇAMENTOS PAGOS — agrupamento (semanal) de ofertas reais
+-- ============================================================
+-- Camada de tagging em cima de `vendas`: cada lançamento define uma janela
+-- de datas e marca quais oferta_codigo pertencem a ele e em qual categoria.
+-- As métricas são calculadas em cima de `vendas` (override + dedup + recor.
+-- seq<=1 + status aprovada), filtradas pelo intervalo.
+create table if not exists launchmetrics.lancamentos_pagos (
+    id uuid primary key default gen_random_uuid(),
+    nome text not null,
+    data_inicio date not null,            -- início das vendas de ingresso
+    data_abertura_carrinho date not null, -- dia do pitch (carrinho do principal)
+    data_fim date not null,               -- default = abertura_carrinho + 5 dias
+    criado_em timestamptz not null default now()
+);
+create index if not exists ix_lancamentos_pagos_inicio
+    on launchmetrics.lancamentos_pagos (data_inicio desc);
+
+create table if not exists launchmetrics.lancamentos_pagos_ofertas (
+    id uuid primary key default gen_random_uuid(),
+    lancamento_id uuid not null
+        references launchmetrics.lancamentos_pagos (id) on delete cascade,
+    produto text not null,
+    oferta_nome text,
+    oferta_codigo text,
+    categoria text not null check (categoria in (
+        'ingresso','order_bump_ingresso','principal',
+        'order_bump_principal','upsell','downsell'
+    )),
+    criado_em timestamptz not null default now()
+);
+create index if not exists ix_lancpag_ofertas_lancamento
+    on launchmetrics.lancamentos_pagos_ofertas (lancamento_id);
+create index if not exists ix_lancpag_ofertas_codigo
+    on launchmetrics.lancamentos_pagos_ofertas (oferta_codigo);
+
+-- ============================================================
 -- ROW LEVEL SECURITY — defesa em profundidade
 -- ============================================================
 -- Mesmo o schema estando fora das schemas expostas pelo PostgREST,
@@ -256,6 +292,8 @@ alter table launchmetrics.placar_lancamentos enable row level security;
 alter table launchmetrics.placar_ofertas     enable row level security;
 alter table launchmetrics.placar_vendedores  enable row level security;
 alter table launchmetrics.placar_contagens   enable row level security;
+alter table launchmetrics.lancamentos_pagos         enable row level security;
+alter table launchmetrics.lancamentos_pagos_ofertas enable row level security;
 
 -- ============================================================
 -- DADOS DE EXEMPLO (opcional — apague esta seção em produção)
