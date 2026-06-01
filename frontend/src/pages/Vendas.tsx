@@ -294,20 +294,13 @@ export function Vendas() {
         />
       </div>
 
-      <div style={{ marginBottom: '1.5rem', opacity: carregando ? 0.5 : 1 }}>
-        {porDiaFormatado.length > 0 ? (
-          <GraficoReceitaDia dados={porDiaFormatado} />
-        ) : (
-          <CardVazio titulo="Receita por dia" mensagem="Sem vendas no período selecionado." />
-        )}
-      </div>
-
       <div
         style={{
           background: '#111827',
           border: '1px solid #1F2937',
           borderRadius: 12,
           padding: '1.25rem',
+          marginBottom: '1.5rem',
           opacity: carregando ? 0.5 : 1,
         }}
       >
@@ -395,6 +388,14 @@ export function Vendas() {
               </button>
             ))}
           </div>
+        )}
+      </div>
+
+      <div style={{ marginBottom: '1.5rem', opacity: carregando ? 0.5 : 1 }}>
+        {porDiaFormatado.length > 0 ? (
+          <GraficoReceitaDia dados={porDiaFormatado} />
+        ) : (
+          <CardVazio titulo="Receita por dia" mensagem="Sem vendas no período selecionado." />
         )}
       </div>
 
