@@ -275,6 +275,21 @@ create index if not exists ix_lancpag_ofertas_lancamento
 create index if not exists ix_lancpag_ofertas_codigo
     on launchmetrics.lancamentos_pagos_ofertas (oferta_codigo);
 
+-- "Vendas manuais" do lançamento — apenas visual; NÃO entram em `vendas`.
+-- Servem pra contabilizar vendas que saíram fora da janela ou correções
+-- pontuais SÓ na visão do lançamento pago.
+create table if not exists launchmetrics.lancamentos_pagos_ajustes (
+    id uuid primary key default gen_random_uuid(),
+    lancamento_oferta_id uuid not null
+        references launchmetrics.lancamentos_pagos_ofertas (id) on delete cascade,
+    quantidade integer not null default 1 check (quantidade >= 1),
+    valor numeric(12, 2) not null,
+    descricao text,
+    criado_em timestamptz not null default now()
+);
+create index if not exists ix_lancpag_ajustes_oferta
+    on launchmetrics.lancamentos_pagos_ajustes (lancamento_oferta_id);
+
 -- ============================================================
 -- ROW LEVEL SECURITY — defesa em profundidade
 -- ============================================================
@@ -294,6 +309,7 @@ alter table launchmetrics.placar_vendedores  enable row level security;
 alter table launchmetrics.placar_contagens   enable row level security;
 alter table launchmetrics.lancamentos_pagos         enable row level security;
 alter table launchmetrics.lancamentos_pagos_ofertas enable row level security;
+alter table launchmetrics.lancamentos_pagos_ajustes enable row level security;
 
 -- ============================================================
 -- DADOS DE EXEMPLO (opcional — apague esta seção em produção)

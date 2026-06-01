@@ -16,11 +16,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
     LancamentoPago,
+    LancamentoPagoAjuste,
     LancamentoPagoOferta,
     OfertaPreco,
     Venda,
 )
 from app.schemas.lancamento_pago import (
+    AjusteResponse,
     LancamentoPagoCompleto,
     LancamentoPagoResponse,
     OfertaDetalhe,
@@ -30,6 +32,12 @@ from app.schemas.lancamento_pago import (
 JANELA_POS_CARRINHO_DIAS = 5
 """data_fim = data_abertura_carrinho + 5 dias (vendas continuam saindo por
 ~4-5 dias depois do pitch)."""
+
+CATEGORIAS_INGRESSO = {"ingresso", "order_bump_ingresso"}
+"""Conta vendas de data_inicio até data_abertura_carrinho - 1 dia."""
+
+CATEGORIAS_PRINCIPAL = {"principal", "order_bump_principal", "upsell", "downsell"}
+"""Conta vendas de data_abertura_carrinho até data_fim (= abertura + 5)."""
 
 
 def _calcular_fim(abertura: date) -> date:
@@ -160,82 +168,82 @@ async def _totais_por_categoria(
     lanc: LancamentoPago,
     ofertas: list[LancamentoPagoOferta],
 ) -> list[TotalCategoria]:
-    """Totais por categoria + breakdown por oferta (com métricas reais).
-    Ofertas sem código (digitadas à mão) entram com 0 vendas — mantém-se a
-    estrutura, mas elas não puxam dados das `vendas` reais."""
+    """Totais por categoria + breakdown por oferta (real + ajustes manuais).
+
+    Ingresso e Order Bump Ingresso usam a janela [data_inicio, abertura-1].
+    Principal/Bumps/Upsell/Downsell usam [abertura_carrinho, data_fim].
+    Ofertas sem código (digitadas à mão) ficam com 0 venda real, mas ajustes
+    manuais cadastrados nelas contam normalmente.
+    """
     if not ofertas:
         return []
 
-    # 1) Métricas por oferta_codigo, dentro da janela do lançamento.
-    codigo_metricas: dict[str, tuple[int, Decimal]] = {}
-    codigos_validos = [o.oferta_codigo for o in ofertas if o.oferta_codigo]
-    if codigos_validos:
-        inicio_dt = datetime.combine(
-            lanc.data_inicio, datetime.min.time(), tzinfo=timezone.utc
+    # 1) Métricas reais por oferta_codigo, com janela específica por grupo.
+    codigos_ingresso = [
+        o.oferta_codigo
+        for o in ofertas
+        if o.categoria in CATEGORIAS_INGRESSO and o.oferta_codigo
+    ]
+    codigos_principal = [
+        o.oferta_codigo
+        for o in ofertas
+        if o.categoria in CATEGORIAS_PRINCIPAL and o.oferta_codigo
+    ]
+    metricas = await _metricas_por_codigo(
+        db,
+        codigos_ingresso,
+        lanc.data_inicio,
+        lanc.data_abertura_carrinho - timedelta(days=1),
+    )
+    metricas.update(
+        await _metricas_por_codigo(
+            db, codigos_principal, lanc.data_abertura_carrinho, lanc.data_fim
         )
-        fim_dt = datetime.combine(
-            lanc.data_fim + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc
-        )
+    )
 
-        valor_efetivo = func.coalesce(OfertaPreco.valor, Venda.valor).label("v")
-        dedup_key = case(
-            (
-                and_(
-                    Venda.comprador_email.is_not(None),
-                    Venda.oferta_codigo.is_not(None),
-                ),
-                Venda.comprador_email + cast(Venda.oferta_codigo, String),
-            ),
-            else_=cast(Venda.id, String),
-        )
-        rn = (
-            func.row_number()
-            .over(partition_by=dedup_key, order_by=Venda.data_venda)
-            .label("rn")
-        )
-        base = (
-            select(Venda.oferta_codigo.label("codigo"), valor_efetivo, rn)
-            .select_from(Venda)
-            .outerjoin(OfertaPreco, OfertaPreco.oferta_codigo == Venda.oferta_codigo)
-            .where(
-                Venda.oferta_codigo.in_(codigos_validos),
-                Venda.status == "aprovada",
-                or_(Venda.recorrencia_seq.is_(None), Venda.recorrencia_seq == 1),
-                Venda.data_venda >= inicio_dt,
-                Venda.data_venda < fim_dt,
-            )
-            .subquery()
-        )
-        sub = select(base.c.codigo, base.c.v).where(base.c.rn == 1).subquery()
-        rows = (
+    # 2) Ajustes manuais por oferta (lancamento_pagos_ajustes).
+    ids = [o.id for o in ofertas]
+    ajustes_rows = list(
+        (
             await db.execute(
-                select(sub.c.codigo, func.count(), func.coalesce(func.sum(sub.c.v), 0))
-                .group_by(sub.c.codigo)
+                select(LancamentoPagoAjuste)
+                .where(LancamentoPagoAjuste.lancamento_oferta_id.in_(ids))
+                .order_by(LancamentoPagoAjuste.criado_em)
             )
-        ).all()
-        for codigo, qtd, receita in rows:
-            codigo_metricas[codigo] = (int(qtd), Decimal(receita))
+        )
+        .scalars()
+        .all()
+    )
+    ajustes_por_oferta: dict = defaultdict(list)
+    for aj in ajustes_rows:
+        ajustes_por_oferta[aj.lancamento_oferta_id].append(aj)
 
-    # 2) Agrupa ofertas por categoria, anexa métricas (ou 0).
+    # 3) Monta OfertaDetalhe (real + ajustes), agrupa por categoria.
     por_cat: dict[str, list[OfertaDetalhe]] = defaultdict(list)
     for o in ofertas:
-        qtd, receita = (
-            codigo_metricas.get(o.oferta_codigo, (0, Decimal("0")))
+        qtd_real, receita_real = (
+            metricas.get(o.oferta_codigo, (0, Decimal("0")))
             if o.oferta_codigo
             else (0, Decimal("0"))
         )
+        ajs = ajustes_por_oferta.get(o.id, [])
+        qtd_manual = sum(a.quantidade for a in ajs)
+        receita_manual = sum((Decimal(a.quantidade) * a.valor for a in ajs), Decimal("0"))
         por_cat[o.categoria].append(
             OfertaDetalhe(
                 id=o.id,
                 produto=o.produto,
                 oferta_nome=o.oferta_nome,
                 oferta_codigo=o.oferta_codigo,
-                quantidade=qtd,
-                receita=receita,
+                quantidade=qtd_real + qtd_manual,
+                receita=receita_real + receita_manual,
+                quantidade_manual=qtd_manual,
+                receita_manual=receita_manual,
+                ajustes=[AjusteResponse.model_validate(a) for a in ajs],
             )
         )
 
-    # 3) Monta TotalCategoria na ordem fixa, ordenando ofertas por receita desc.
+    # 4) Monta TotalCategoria na ordem fixa, ordenando ofertas por receita desc.
     ordem = [
         "ingresso",
         "order_bump_ingresso",
@@ -264,3 +272,90 @@ async def _totais_por_categoria(
             )
         )
     return result
+
+
+async def _metricas_por_codigo(
+    db: AsyncSession,
+    codigos: list[str],
+    inicio: date,
+    fim: date,
+) -> dict[str, tuple[int, Decimal]]:
+    """Retorna {oferta_codigo: (qtd, receita_efetiva)} para vendas reais
+    aprovadas com recorrência seq<=1, dedup por email+codigo, override do
+    ofertas_precos aplicado, na janela [inicio, fim] inclusive."""
+    if not codigos or fim < inicio:
+        return {}
+
+    inicio_dt = datetime.combine(inicio, datetime.min.time(), tzinfo=timezone.utc)
+    fim_dt = datetime.combine(fim + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
+
+    valor_efetivo = func.coalesce(OfertaPreco.valor, Venda.valor).label("v")
+    dedup_key = case(
+        (
+            and_(
+                Venda.comprador_email.is_not(None),
+                Venda.oferta_codigo.is_not(None),
+            ),
+            Venda.comprador_email + cast(Venda.oferta_codigo, String),
+        ),
+        else_=cast(Venda.id, String),
+    )
+    rn = (
+        func.row_number()
+        .over(partition_by=dedup_key, order_by=Venda.data_venda)
+        .label("rn")
+    )
+    base = (
+        select(Venda.oferta_codigo.label("codigo"), valor_efetivo, rn)
+        .select_from(Venda)
+        .outerjoin(OfertaPreco, OfertaPreco.oferta_codigo == Venda.oferta_codigo)
+        .where(
+            Venda.oferta_codigo.in_(codigos),
+            Venda.status == "aprovada",
+            or_(Venda.recorrencia_seq.is_(None), Venda.recorrencia_seq == 1),
+            Venda.data_venda >= inicio_dt,
+            Venda.data_venda < fim_dt,
+        )
+        .subquery()
+    )
+    sub = select(base.c.codigo, base.c.v).where(base.c.rn == 1).subquery()
+    rows = (
+        await db.execute(
+            select(sub.c.codigo, func.count(), func.coalesce(func.sum(sub.c.v), 0))
+            .group_by(sub.c.codigo)
+        )
+    ).all()
+    return {codigo: (int(qtd), Decimal(receita)) for codigo, qtd, receita in rows}
+
+
+# ============================================================
+# Ajustes manuais (vendas visuais — não tocam `vendas`)
+# ============================================================
+async def adicionar_ajuste(
+    db: AsyncSession,
+    oferta_id: UUID,
+    quantidade: int,
+    valor,
+    descricao: str | None,
+) -> LancamentoPagoAjuste | None:
+    if not await db.get(LancamentoPagoOferta, oferta_id):
+        return None
+    aj = LancamentoPagoAjuste(
+        lancamento_oferta_id=oferta_id,
+        quantidade=quantidade,
+        valor=valor,
+        descricao=descricao,
+    )
+    db.add(aj)
+    await db.commit()
+    await db.refresh(aj)
+    return aj
+
+
+async def remover_ajuste(db: AsyncSession, ajuste_id: UUID) -> bool:
+    aj = await db.get(LancamentoPagoAjuste, ajuste_id)
+    if not aj:
+        return False
+    await db.delete(aj)
+    await db.commit()
+    return True

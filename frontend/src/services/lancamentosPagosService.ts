@@ -2,6 +2,7 @@ import { api } from './api'
 import type {
   CategoriaLancPago,
   LancamentoPago,
+  LancamentoPagoAjuste,
   LancamentoPagoCompleto,
   LancamentoPagoOferta,
 } from '@/types'
@@ -17,6 +18,12 @@ export interface NovaOfertaPayload {
   oferta_nome?: string | null
   oferta_codigo?: string | null
   categoria: CategoriaLancPago
+}
+
+export interface NovoAjustePayload {
+  quantidade: number
+  valor: number
+  descricao?: string | null
 }
 
 export const lancamentosPagosService = {
@@ -52,5 +59,18 @@ export const lancamentosPagosService = {
   removerOferta: (ofertaId: string) =>
     api
       .delete(`/api/lancamentos-pagos/ofertas/${ofertaId}`)
+      .then(() => undefined),
+
+  adicionarAjuste: (ofertaId: string, dados: NovoAjustePayload) =>
+    api
+      .post<LancamentoPagoAjuste>(
+        `/api/lancamentos-pagos/ofertas/${ofertaId}/ajustes`,
+        dados,
+      )
+      .then((r) => r.data),
+
+  removerAjuste: (ajusteId: string) =>
+    api
+      .delete(`/api/lancamentos-pagos/ajustes/${ajusteId}`)
       .then(() => undefined),
 }

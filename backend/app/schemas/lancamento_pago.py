@@ -62,15 +62,37 @@ class OfertaResponse(BaseModel):
     categoria: Categoria
 
 
+class AjusteCreate(BaseModel):
+    """Adiciona uma venda manual (apenas visual) a uma oferta do lançamento."""
+
+    quantidade: int = Field(default=1, ge=1, le=200)
+    valor: Money = Field(..., gt=0)
+    descricao: str | None = Field(default=None, max_length=200)
+
+
+class AjusteResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    quantidade: int
+    valor: Money
+    descricao: str | None = None
+
+
 class OfertaDetalhe(BaseModel):
-    """Uma oferta configurada + métricas reais dela na janela do lançamento."""
+    """Uma oferta configurada + métricas (vendas reais + ajustes manuais)."""
 
     id: UUID
     produto: str
     oferta_nome: str | None = None
     oferta_codigo: str | None = None
     quantidade: int
+    """Total = vendas reais + soma dos ajustes manuais."""
     receita: Money
+    quantidade_manual: int = 0
+    """Só os ajustes manuais (subset do total)."""
+    receita_manual: Money = 0  # type: ignore[assignment]
+    ajustes: list[AjusteResponse] = []
 
 
 class TotalCategoria(BaseModel):

@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.middleware.auth import require_admin, verify_token
 from app.schemas.lancamento_pago import (
+    AjusteCreate,
+    AjusteResponse,
     LancamentoPagoCompleto,
     LancamentoPagoCreate,
     LancamentoPagoResponse,
@@ -119,3 +121,33 @@ async def remover_oferta(
 ):
     if not await svc.remover_oferta(db, oferta_id):
         raise HTTPException(status_code=404, detail="Oferta não encontrada.")
+
+
+@router.post(
+    "/ofertas/{oferta_id}/ajustes",
+    response_model=AjusteResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def adicionar_ajuste(
+    oferta_id: UUID,
+    dados: AjusteCreate,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_admin),
+):
+    """Adiciona uma venda manual (apenas visual) à oferta — não toca em `vendas`."""
+    aj = await svc.adicionar_ajuste(
+        db, oferta_id, dados.quantidade, dados.valor, dados.descricao
+    )
+    if not aj:
+        raise HTTPException(status_code=404, detail="Oferta não encontrada.")
+    return aj
+
+
+@router.delete("/ajustes/{ajuste_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remover_ajuste(
+    ajuste_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_admin),
+):
+    if not await svc.remover_ajuste(db, ajuste_id):
+        raise HTTPException(status_code=404, detail="Ajuste não encontrado.")

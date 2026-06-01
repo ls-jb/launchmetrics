@@ -4,7 +4,11 @@ services. Importe daqui em vez de cada arquivo individual.
 """
 from app.models.canal import Canal
 from app.models.lancamento import Lancamento
-from app.models.lancamento_pago import LancamentoPago, LancamentoPagoOferta
+from app.models.lancamento_pago import (
+    LancamentoPago,
+    LancamentoPagoAjuste,
+    LancamentoPagoOferta,
+)
 from app.models.lead import Lead
 from app.models.oferta_preco import OfertaPreco
 from app.models.perfil import Perfil
@@ -21,6 +25,7 @@ __all__ = [
     "Canal",
     "Lancamento",
     "LancamentoPago",
+    "LancamentoPagoAjuste",
     "LancamentoPagoOferta",
     "Lead",
     "OfertaPreco",

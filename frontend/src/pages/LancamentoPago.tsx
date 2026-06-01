@@ -169,6 +169,7 @@ function DetalheLancamento({
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [modalOferta, setModalOferta] = useState(false)
+  const [ajusteAlvo, setAjusteAlvo] = useState<LancamentoPagoOfertaDetalhe | null>(null)
 
   const carregar = useCallback(
     async (silencioso = false) => {
@@ -215,6 +216,16 @@ function DetalheLancamento({
     if (!confirm('Remover essa oferta do lançamento?')) return
     try {
       await lancamentosPagosService.removerOferta(id)
+      carregar(false)
+    } catch (e) {
+      alert(extrairErro(e))
+    }
+  }
+
+  const removerAjuste = async (id: string) => {
+    if (!confirm('Remover essa venda manual?')) return
+    try {
+      await lancamentosPagosService.removerAjuste(id)
       carregar(false)
     } catch (e) {
       alert(extrairErro(e))
@@ -346,6 +357,8 @@ function DetalheLancamento({
               ofertas={t.ofertas}
               isAdmin={isAdmin}
               onRemoverOferta={removerOferta}
+              onAdicionarAjuste={(o) => setAjusteAlvo(o)}
+              onRemoverAjuste={removerAjuste}
             />
           ))}
         </div>
@@ -365,6 +378,28 @@ function DetalheLancamento({
             carregar(false)
           }}
         />
+      </Modal>
+
+      <Modal
+        aberto={ajusteAlvo !== null}
+        titulo={
+          ajusteAlvo
+            ? `Adicionar venda manual — ${ajusteAlvo.produto}${ajusteAlvo.oferta_nome ? ' · ' + ajusteAlvo.oferta_nome : ''}`
+            : ''
+        }
+        onFechar={() => setAjusteAlvo(null)}
+        largura={520}
+      >
+        {ajusteAlvo && (
+          <FormAjusteManual
+            oferta={ajusteAlvo}
+            onCancelar={() => setAjusteAlvo(null)}
+            onCriou={() => {
+              setAjusteAlvo(null)
+              carregar(false)
+            }}
+          />
+        )}
       </Modal>
     </div>
   )
@@ -632,6 +667,100 @@ function FormNovaOferta({
   )
 }
 
+function FormAjusteManual({
+  oferta,
+  onCancelar,
+  onCriou,
+}: {
+  oferta: LancamentoPagoOfertaDetalhe
+  onCancelar: () => void
+  onCriou: () => void
+}) {
+  const [quantidade, setQuantidade] = useState('1')
+  const [valor, setValor] = useState('')
+  const [descricao, setDescricao] = useState('')
+  const [enviando, setEnviando] = useState(false)
+  const [erro, setErro] = useState('')
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setErro('')
+    setEnviando(true)
+    try {
+      await lancamentosPagosService.adicionarAjuste(oferta.id, {
+        quantidade: Math.max(1, Number(quantidade) || 1),
+        valor: Number(valor),
+        descricao: descricao.trim() || null,
+      })
+      onCriou()
+    } catch (e) {
+      setErro(extrairErro(e))
+      setEnviando(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 14 }}>
+      <p style={{ margin: 0, fontSize: 12, color: '#6B7280' }}>
+        Soma vendas só na visão deste lançamento — não toca o dashboard nem a
+        tabela de vendas reais. Útil pra incluir vendas que saíram fora da
+        janela do lançamento.
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: '0.6fr 1fr', gap: 12 }}>
+        <Campo label="Quantidade" required>
+          <input
+            type="number"
+            min={1}
+            max={200}
+            step={1}
+            value={quantidade}
+            onChange={(e) => setQuantidade(e.target.value)}
+            required
+            style={inputBase}
+          />
+        </Campo>
+        <Campo label="Valor unitário (R$)" required>
+          <input
+            type="number"
+            step="0.01"
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
+            placeholder="Ex: 47.00"
+            required
+            style={inputBase}
+          />
+        </Campo>
+      </div>
+      <Campo label="Descrição (opcional)">
+        <input
+          value={descricao}
+          onChange={(e) => setDescricao(e.target.value)}
+          placeholder="Ex: PIX que entrou em 16/06"
+          maxLength={200}
+          style={inputBase}
+        />
+      </Campo>
+      {erro && <Aviso texto={erro} />}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <button type="button" onClick={onCancelar} disabled={enviando} style={botaoSecundario}>
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          disabled={enviando || !valor || Number(valor) <= 0}
+          style={{
+            ...botaoPrimario,
+            opacity: enviando || !valor || Number(valor) <= 0 ? 0.6 : 1,
+            cursor: enviando || !valor || Number(valor) <= 0 ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {enviando ? 'Adicionando…' : 'Adicionar venda manual'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
 // ============================================================
 // Sub-componentes e estilos
 // ============================================================
@@ -642,6 +771,8 @@ function CardCategoria({
   ofertas,
   isAdmin,
   onRemoverOferta,
+  onAdicionarAjuste,
+  onRemoverAjuste,
 }: {
   categoria: CategoriaLancPago
   quantidade: number
@@ -649,6 +780,8 @@ function CardCategoria({
   ofertas: LancamentoPagoOfertaDetalhe[]
   isAdmin: boolean
   onRemoverOferta: (id: string) => void
+  onAdicionarAjuste: (o: LancamentoPagoOfertaDetalhe) => void
+  onRemoverAjuste: (id: string) => void
 }) {
   const cor = CAT_COR[categoria]
   return (
@@ -692,62 +825,146 @@ function CardCategoria({
         }}
       >
         {ofertas.map((o) => (
-          <div
-            key={o.id}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              padding: '6px 4px',
-              fontSize: 12,
-            }}
-          >
-            <span
+          <div key={o.id} style={{ display: 'grid', gap: 2 }}>
+            <div
               style={{
-                flex: 1,
-                minWidth: 0,
-                color: o.quantidade > 0 ? '#E5E7EB' : '#6B7280',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-              title={`${o.produto}${o.oferta_nome ? ' · ' + o.oferta_nome : ''}`}
-            >
-              {o.produto}
-              {o.oferta_nome ? ` · ${o.oferta_nome}` : ''}
-            </span>
-            <span
-              style={{
-                fontSize: 11,
-                color: '#6B7280',
-                whiteSpace: 'nowrap',
-                width: 60,
-                textAlign: 'right',
-              }}
-            >
-              {formatNum(o.quantidade)} {o.quantidade === 1 ? 'venda' : 'vendas'}
-            </span>
-            <span
-              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '6px 4px',
                 fontSize: 12,
-                fontWeight: 600,
-                color: o.quantidade > 0 ? '#F9FAFB' : '#4B5563',
-                whiteSpace: 'nowrap',
-                width: 90,
-                textAlign: 'right',
               }}
             >
-              {formatBRL(o.receita)}
-            </span>
-            {isAdmin && (
-              <button
-                onClick={() => onRemoverOferta(o.id)}
-                title="Remover oferta deste lançamento"
-                style={botaoXis}
+              <span
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  color: o.quantidade > 0 ? '#E5E7EB' : '#6B7280',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                title={`${o.produto}${o.oferta_nome ? ' · ' + o.oferta_nome : ''}`}
               >
-                ×
-              </button>
-            )}
+                {o.produto}
+                {o.oferta_nome ? ` · ${o.oferta_nome}` : ''}
+              </span>
+              <span
+                style={{
+                  fontSize: 11,
+                  color: '#6B7280',
+                  whiteSpace: 'nowrap',
+                  width: 60,
+                  textAlign: 'right',
+                }}
+              >
+                {formatNum(o.quantidade)} {o.quantidade === 1 ? 'venda' : 'vendas'}
+              </span>
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: o.quantidade > 0 ? '#F9FAFB' : '#4B5563',
+                  whiteSpace: 'nowrap',
+                  width: 90,
+                  textAlign: 'right',
+                }}
+              >
+                {formatBRL(o.receita)}
+              </span>
+              {isAdmin && (
+                <>
+                  <button
+                    onClick={() => onAdicionarAjuste(o)}
+                    title="Adicionar venda manual (apenas visual neste lançamento)"
+                    style={{
+                      ...botaoXis,
+                      color: '#3ECFB2',
+                      fontSize: 14,
+                    }}
+                  >
+                    +
+                  </button>
+                  <button
+                    onClick={() => onRemoverOferta(o.id)}
+                    title="Remover oferta deste lançamento"
+                    style={botaoXis}
+                  >
+                    ×
+                  </button>
+                </>
+              )}
+            </div>
+
+            {o.ajustes.map((aj) => (
+              <div
+                key={aj.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '2px 4px 2px 16px',
+                  fontSize: 11,
+                  color: '#9CA3AF',
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 600,
+                    color: '#3ECFB2',
+                    background: '#3ECFB222',
+                    padding: '1px 5px',
+                    borderRadius: 99,
+                  }}
+                >
+                  MANUAL
+                </span>
+                <span
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                  title={aj.descricao ?? ''}
+                >
+                  {aj.descricao || `${aj.quantidade}× ${formatBRL(aj.valor)}`}
+                </span>
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: '#6B7280',
+                    whiteSpace: 'nowrap',
+                    width: 60,
+                    textAlign: 'right',
+                  }}
+                >
+                  {aj.quantidade} {aj.quantidade === 1 ? 'venda' : 'vendas'}
+                </span>
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: '#E5E7EB',
+                    whiteSpace: 'nowrap',
+                    width: 90,
+                    textAlign: 'right',
+                  }}
+                >
+                  {formatBRL(aj.quantidade * aj.valor)}
+                </span>
+                {isAdmin && (
+                  <button
+                    onClick={() => onRemoverAjuste(aj.id)}
+                    title="Remover venda manual"
+                    style={botaoXis}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
         ))}
       </div>

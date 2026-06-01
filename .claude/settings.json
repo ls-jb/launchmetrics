@@ -22,10 +22,32 @@
       "Bash(curl -s -w ' HTTP %{http_code}\\\\n' --max-time 15 -H 'Authorization: Bearer __TRACKED_VAR__' https://lauchmetrics-ls.vercel.app/api/vendas/produtos)",
       "PowerShell($tmp = \"C:\\\\Users\\\\joao.boone\\\\Desktop\\\\DASHBOARD_CLAUDE\\\\backend\\\\venv_prodtest\"; if \\(Test-Path $tmp\\) { Remove-Item $tmp -Recurse -Force }; python -m venv $tmp; & \"$tmp\\\\Scripts\\\\python.exe\" -m pip install -q -r C:\\\\Users\\\\joao.boone\\\\Desktop\\\\DASHBOARD_CLAUDE\\\\backend\\\\requirements.txt 2>&1 | Select-Object -Last 5)",
       "PowerShell($sp = \"C:\\\\Users\\\\joao.boone\\\\Desktop\\\\DASHBOARD_CLAUDE\\\\backend\\\\venv_prodtest\\\\Lib\\\\site-packages\"; $size = \\(Get-ChildItem $sp -Recurse -File | Measure-Object -Property Length -Sum\\).Sum / 1MB; \"Tamanho total site-packages: $\\([math]::Round\\($size,1\\)\\) MB\"; Get-ChildItem $sp -Directory | ForEach-Object { $s = \\(Get-ChildItem $_.FullName -Recurse -File -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum\\).Sum / 1MB; [PSCustomObject]@{ Pacote = $_.Name; MB = [math]::Round\\($s,1\\) } } | Sort-Object MB -Descending | Select-Object -First 12)",
-      "PowerShell(\"venv de teste removido\")"
+      "PowerShell(\"venv de teste removido\")",
+      "Bash(curl -s -w '\\\\nHTTP %{http_code}\\\\n' --max-time 15 -H 'Authorization: Bearer __TRACKED_VAR__' https://lauchmetrics-ls.vercel.app/api/usuarios/me)",
+      "Bash(curl -s -w '\\\\nHTTP %{http_code}\\\\n' --max-time 15 -H 'Authorization: Bearer __TRACKED_VAR__' https://lauchmetrics-ls.vercel.app/api/usuarios)",
+      "Bash(curl -s --max-time 20 https://lauchmetrics-ls.vercel.app/health)",
+      "Bash(venv/Scripts/python.exe -c \"import app.main; print\\('IMPORT_OK', app.main.app.title\\)\")",
+      "Bash(venv/Scripts/python.exe import/_analise_csv.py)",
+      "Bash(venv/Scripts/python.exe import/_prep_insert.py)",
+      "Bash(venv/Scripts/python.exe import/_run_insert.py)",
+      "Bash(venv/Scripts/python.exe import/_analise_hotmart.py)",
+      "Bash(venv/Scripts/python.exe import/_prep_hotmart.py)",
+      "Bash(venv/Scripts/python.exe import/_run_insert.py _insert_hotmart.sql)",
+      "Bash(venv/Scripts/python.exe -c \"import app.main; print\\('IMPORT_OK'\\); print\\([r.path for r in app.main.app.routes if '/placar' in getattr\\(r,'path',''\\)]\\)\")",
+      "Bash(venv/Scripts/python.exe import/_smoke_placar.py)",
+      "Bash(venv/Scripts/python.exe -c \"import app.main; print\\('IMPORT_OK'\\)\")",
+      "Bash(venv/Scripts/python.exe -c \"import app.main; print\\('IMPORT_OK'\\); print\\([r.path for r in app.main.app.routes if '/lancamentos-pagos' in getattr\\(r,'path',''\\)]\\)\")",
+      "Bash(ls -t ~/.claude/projects/*/*.jsonl 2>/dev/null | head -50 > /tmp/lm_files.txt *)",
+      "Bash(python -)",
+      "Bash(venv/Scripts/python.exe import/_scan_perms.py)",
+      "Bash(curl -s *)",
+      "Bash(npm run build)",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__get_advisors"
     ],
     "additionalDirectories": [
-      "c:\\c\\Users\\joao.boone\\Desktop\\DASHBOARD_CLAUDE\\frontend\\src\\lib"
+      "c:\\c\\Users\\joao.boone\\Desktop\\DASHBOARD_CLAUDE\\frontend\\src\\lib",
+      "\\tmp"
     ]
   }
 }

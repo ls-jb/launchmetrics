@@ -203,6 +203,13 @@ export interface LancamentoPagoOferta {
   categoria: CategoriaLancPago
 }
 
+export interface LancamentoPagoAjuste {
+  id: string
+  quantidade: number
+  valor: number
+  descricao: string | null
+}
+
 export interface LancamentoPagoOfertaDetalhe {
   id: string
   produto: string
@@ -210,6 +217,9 @@ export interface LancamentoPagoOfertaDetalhe {
   oferta_codigo: string | null
   quantidade: number
   receita: number
+  quantidade_manual: number
+  receita_manual: number
+  ajustes: LancamentoPagoAjuste[]
 }
 
 export interface LancamentoPagoTotal {
