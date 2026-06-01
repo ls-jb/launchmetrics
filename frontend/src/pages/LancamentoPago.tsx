@@ -343,7 +343,6 @@ function DetalheLancamento({
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))',
             gap: 12,
             marginBottom: '1.5rem',
           }}
@@ -832,29 +831,45 @@ function CardCategoria({
                 alignItems: 'center',
                 gap: 10,
                 padding: '6px 4px',
-                fontSize: 12,
               }}
             >
-              <span
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  color: o.quantidade > 0 ? '#E5E7EB' : '#6B7280',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-                title={`${o.produto}${o.oferta_nome ? ' · ' + o.oferta_nome : ''}`}
-              >
-                {o.produto}
-                {o.oferta_nome ? ` · ${o.oferta_nome}` : ''}
-              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: o.quantidade > 0 ? '#F9FAFB' : '#9CA3AF',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                  title={o.produto}
+                >
+                  {o.produto}
+                </p>
+                {o.oferta_nome && (
+                  <p
+                    style={{
+                      margin: '2px 0 0',
+                      fontSize: 11,
+                      color: '#6B7280',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={o.oferta_nome}
+                  >
+                    {o.oferta_nome}
+                  </p>
+                )}
+              </div>
               <span
                 style={{
                   fontSize: 11,
                   color: '#6B7280',
                   whiteSpace: 'nowrap',
-                  width: 60,
+                  width: 70,
                   textAlign: 'right',
                 }}
               >
@@ -862,11 +877,11 @@ function CardCategoria({
               </span>
               <span
                 style={{
-                  fontSize: 12,
+                  fontSize: 13,
                   fontWeight: 600,
                   color: o.quantidade > 0 ? '#F9FAFB' : '#4B5563',
                   whiteSpace: 'nowrap',
-                  width: 90,
+                  width: 100,
                   textAlign: 'right',
                 }}
               >
