@@ -713,7 +713,8 @@ function CardCategoria({
               }}
               title={`${o.produto}${o.oferta_nome ? ' · ' + o.oferta_nome : ''}`}
             >
-              {o.oferta_nome ?? o.produto}
+              {o.produto}
+              {o.oferta_nome ? ` · ${o.oferta_nome}` : ''}
             </span>
             <span
               style={{
