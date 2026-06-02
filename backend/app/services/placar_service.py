@@ -237,7 +237,7 @@ async def obter_placar(db: AsyncSession, lancamento_id: UUID) -> PlacarCompleto 
         quantidade=sum(it.quantidade_total for it in ranking),
         receita=sum((it.receita_total for it in ranking), Decimal("0")),
     )
-    total_real = await _total_real(db, [o.oferta_codigo for o in ofertas if o.oferta_codigo])
+    total_real = await _total_real(db, ofertas)
 
     return PlacarCompleto(
         lancamento=LancamentoResponse.model_validate(lanc),
@@ -253,12 +253,26 @@ async def obter_placar(db: AsyncSession, lancamento_id: UUID) -> PlacarCompleto 
     )
 
 
-async def _total_real(db: AsyncSession, codigos: list[str]) -> TotalVendas:
-    """Total de vendas REAIS (plataformas) das ofertas configuradas, com a mesma
-    regra do dashboard: override de preço, recorrência seq<=1, dedup por
-    email+oferta_codigo, status aprovada."""
-    if not codigos:
+async def _total_real(
+    db: AsyncSession, ofertas: list[PlacarOferta]
+) -> TotalVendas:
+    """Total de vendas REAIS (plataformas) das ofertas configuradas.
+    Para cada placar_oferta:
+    - se tem oferta_codigo: matcha pelo código específico.
+    - se NÃO tem: matcha por produto (conta TODAS as ofertas daquele produto)
+      — útil pra alinhar o total com o dashboard que agrega por produto.
+    Aplica as mesmas regras do dashboard: override de preço, recorrência
+    seq<=1, dedup por email+oferta_codigo, status aprovada."""
+    codigos = [o.oferta_codigo for o in ofertas if o.oferta_codigo]
+    produtos_sem_codigo = [o.produto for o in ofertas if not o.oferta_codigo]
+    if not codigos and not produtos_sem_codigo:
         return TotalVendas(quantidade=0, receita=Decimal("0"))
+
+    criterios = []
+    if codigos:
+        criterios.append(Venda.oferta_codigo.in_(codigos))
+    if produtos_sem_codigo:
+        criterios.append(Venda.produto.in_(produtos_sem_codigo))
 
     valor_efetivo = func.coalesce(OfertaPreco.valor, Venda.valor).label("v")
     dedup_key = case(
@@ -274,7 +288,7 @@ async def _total_real(db: AsyncSession, codigos: list[str]) -> TotalVendas:
         .select_from(Venda)
         .outerjoin(OfertaPreco, OfertaPreco.oferta_codigo == Venda.oferta_codigo)
         .where(
-            Venda.oferta_codigo.in_(codigos),
+            or_(*criterios),
             Venda.status == "aprovada",
             or_(Venda.recorrencia_seq.is_(None), Venda.recorrencia_seq == 1),
         )

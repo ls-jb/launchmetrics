@@ -203,6 +203,7 @@ function SecaoPlacar() {
 
 function GerenciarLancamento({ lancamentoId }: { lancamentoId: string }) {
   const NOVO = '__novo__'
+  const TODOS = '__todos__'
   const [placar, setPlacar] = useState<PlacarCompleto | null>(null)
   const [erro, setErro] = useState('')
 
@@ -351,6 +352,9 @@ function GerenciarLancamento({ lancamentoId }: { lancamentoId: string }) {
                       ? 'Carregando ofertas…'
                       : 'Selecione a oferta…'}
                 </option>
+                {produtoSel && (
+                  <option value={TODOS}>📊 Todo o produto (soma todas as ofertas)</option>
+                )}
                 {ofertasReais.map((o, i) => (
                   <option key={o.oferta_codigo ?? i} value={String(i)}>
                     {(o.oferta_nome ?? 'Sem nome')} —{' '}
