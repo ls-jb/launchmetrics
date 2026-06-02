@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 
 import { useAuthStore } from '@/store/authStore'
+import { useSidebarStore } from '@/store/sidebarStore'
 
 type ItemMenu = {
   path: string
@@ -20,10 +21,41 @@ export function Sidebar() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
+  const colapsada = useSidebarStore((s) => s.colapsada)
+  const toggle = useSidebarStore((s) => s.toggle)
 
   const handleLogout = async () => {
     await logout()
     navigate('/login', { replace: true })
+  }
+
+  if (colapsada) {
+    return (
+      <aside
+        style={{
+          width: 28,
+          minHeight: '100vh',
+          background: 'var(--bg)',
+          borderRight: '1px solid var(--border)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          paddingTop: 18,
+          position: 'sticky',
+          top: 0,
+        }}
+      >
+        <button
+          onClick={toggle}
+          title="Expandir menu"
+          style={botaoToggle}
+          onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text)')}
+          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-faint)')}
+        >
+          ›
+        </button>
+      </aside>
+    )
   }
 
   return (
@@ -40,6 +72,15 @@ export function Sidebar() {
         top: 0,
       }}
     >
+      <button
+        onClick={toggle}
+        title="Recolher menu"
+        style={{ ...botaoToggle, position: 'absolute', top: 14, right: 8 }}
+        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text)')}
+        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-faint)')}
+      >
+        ‹
+      </button>
       <div style={{ padding: '0 0.75rem 1.5rem', display: 'flex', alignItems: 'center', gap: 10 }}>
         <div
           style={{
@@ -258,4 +299,16 @@ function IconeEngrenagem({ cor }: { cor: string }) {
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
     </svg>
   )
+}
+
+const botaoToggle: React.CSSProperties = {
+  background: 'transparent',
+  border: 'none',
+  color: 'var(--text-faint)',
+  cursor: 'pointer',
+  fontSize: 16,
+  lineHeight: 1,
+  padding: '4px 6px',
+  borderRadius: 6,
+  transition: 'color 0.15s',
 }
