@@ -89,12 +89,12 @@ export function LancamentoDetalhe() {
       >
         <div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 6 }}>
-            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#F9FAFB' }}>
+            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>
               {lancamento.nome}
             </h1>
             <BadgeStatus status={lancamento.status} />
           </div>
-          <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>
             {formatarData(lancamento.data_inicio)} → {formatarData(lancamento.data_fim)}
           </p>
         </div>
@@ -214,13 +214,13 @@ function EditorInvestimento({
   return (
     <div
       style={{
-        background: '#111827',
-        border: '1px solid #1F2937',
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
         borderRadius: 12,
         padding: '1.25rem',
       }}
     >
-      <p style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 600, color: '#E5E7EB' }}>
+      <p style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 600, color: 'var(--text-strong)' }}>
         Investimento por canal
       </p>
       <div style={{ display: 'grid', gap: 12 }}>
@@ -234,10 +234,10 @@ function EditorInvestimento({
               gap: 12,
             }}
           >
-            <span style={{ fontSize: 13, color: '#E5E7EB', flex: 1 }}>{c.nome}</span>
-            <span style={{ fontSize: 12, color: '#6B7280' }}>{formatNum(c.leads)} leads</span>
+            <span style={{ fontSize: 13, color: 'var(--text-strong)', flex: 1 }}>{c.nome}</span>
+            <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>{formatNum(c.leads)} leads</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 12, color: '#6B7280' }}>R$</span>
+              <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>R$</span>
               <input
                 type="number"
                 step="0.01"
@@ -250,11 +250,11 @@ function EditorInvestimento({
                 disabled={salvando === c.id}
                 style={{
                   width: 100,
-                  background: '#0F172A',
-                  border: '1px solid #374151',
+                  background: 'var(--surface-2)',
+                  border: '1px solid var(--border-strong)',
                   borderRadius: 6,
                   padding: '6px 10px',
-                  color: '#F9FAFB',
+                  color: 'var(--text)',
                   fontSize: 13,
                   textAlign: 'right',
                   opacity: salvando === c.id ? 0.5 : 1,
@@ -264,7 +264,7 @@ function EditorInvestimento({
           </div>
         ))}
       </div>
-      <p style={{ margin: '12px 0 0', fontSize: 11, color: '#6B7280' }}>
+      <p style={{ margin: '12px 0 0', fontSize: 11, color: 'var(--text-faint)' }}>
         Clique fora do campo ou pressione Enter para salvar.
       </p>
     </div>
@@ -283,8 +283,8 @@ function CardWebhook({
   return (
     <div
       style={{
-        background: '#111827',
-        border: '1px solid #1F2937',
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
         borderRadius: 12,
         padding: '1.25rem',
       }}
@@ -297,7 +297,7 @@ function CardWebhook({
           marginBottom: 12,
         }}
       >
-        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#E5E7EB' }}>
+        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--text-strong)' }}>
           Webhook do Go High Level
         </p>
         <span
@@ -314,18 +314,18 @@ function CardWebhook({
           ATIVO
         </span>
       </div>
-      <p style={{ margin: '0 0 10px', fontSize: 12, color: '#6B7280' }}>
+      <p style={{ margin: '0 0 10px', fontSize: 12, color: 'var(--text-faint)' }}>
         Configure esta URL no GHL como destino do webhook de Contact Created:
       </p>
       <div
         style={{
-          background: '#0F172A',
-          border: '1px solid #374151',
+          background: 'var(--surface-2)',
+          border: '1px solid var(--border-strong)',
           borderRadius: 8,
           padding: '10px 12px',
           fontFamily: 'monospace',
           fontSize: 12,
-          color: '#E5E7EB',
+          color: 'var(--text-strong)',
           wordBreak: 'break-all',
           marginBottom: 10,
         }}
@@ -335,9 +335,9 @@ function CardWebhook({
       <button
         onClick={onCopiar}
         style={{
-          background: copiado ? '#3ECFB2' : '#1F2937',
-          border: '1px solid #374151',
-          color: copiado ? '#0B0F19' : '#E5E7EB',
+          background: copiado ? '#3ECFB2' : 'var(--border)',
+          border: '1px solid var(--border-strong)',
+          color: copiado ? 'var(--bg)' : 'var(--text-strong)',
           padding: '8px 14px',
           borderRadius: 6,
           fontSize: 12,
@@ -356,8 +356,8 @@ function CardVazio({ titulo, mensagem }: { titulo: string; mensagem: string }) {
   return (
     <div
       style={{
-        background: '#111827',
-        border: '1px dashed #374151',
+        background: 'var(--surface)',
+        border: '1px dashed var(--border-strong)',
         borderRadius: 12,
         padding: '1.25rem',
         minHeight: 240,
@@ -365,13 +365,13 @@ function CardVazio({ titulo, mensagem }: { titulo: string; mensagem: string }) {
         flexDirection: 'column',
       }}
     >
-      <p style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 600, color: '#E5E7EB' }}>{titulo}</p>
+      <p style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 600, color: 'var(--text-strong)' }}>{titulo}</p>
       <div
         style={{
           flex: 1,
           display: 'grid',
           placeItems: 'center',
-          color: '#6B7280',
+          color: 'var(--text-faint)',
           fontSize: 13,
           textAlign: 'center',
           padding: '0 1rem',
@@ -387,12 +387,12 @@ function Mensagem({ texto, tipo = 'info' }: { texto: string; tipo?: 'info' | 'er
   return (
     <div
       style={{
-        background: tipo === 'erro' ? '#EF444411' : '#111827',
-        border: `1px solid ${tipo === 'erro' ? '#EF444444' : '#1F2937'}`,
+        background: tipo === 'erro' ? '#EF444411' : 'var(--surface)',
+        border: `1px solid ${tipo === 'erro' ? '#EF444444' : 'var(--border)'}`,
         borderRadius: 12,
         padding: '3rem 2rem',
         textAlign: 'center',
-        color: tipo === 'erro' ? '#FCA5A5' : '#6B7280',
+        color: tipo === 'erro' ? 'var(--text-error)' : 'var(--text-faint)',
         fontSize: 13,
       }}
     >

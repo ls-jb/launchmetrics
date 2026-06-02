@@ -19,8 +19,8 @@ function TelaCarregando() {
         display: 'grid',
         placeItems: 'center',
         minHeight: '100vh',
-        background: '#0B0F19',
-        color: '#6B7280',
+        background: 'var(--bg)',
+        color: 'var(--text-faint)',
         fontSize: 13,
       }}
     >

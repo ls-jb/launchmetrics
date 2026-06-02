@@ -31,8 +31,8 @@ export function Sidebar() {
       style={{
         width: 232,
         minHeight: '100vh',
-        background: '#0B0F19',
-        borderRight: '1px solid #1F2937',
+        background: 'var(--bg)',
+        borderRight: '1px solid var(--border)',
         padding: '1.5rem 0.75rem',
         display: 'flex',
         flexDirection: 'column',
@@ -57,10 +57,10 @@ export function Sidebar() {
           LM
         </div>
         <div>
-          <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#F9FAFB' }}>
+          <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
             LaunchMetrics
           </p>
-          <p style={{ margin: 0, fontSize: 10, color: '#6B7280', letterSpacing: '0.06em' }}>
+          <p style={{ margin: 0, fontSize: 10, color: 'var(--text-faint)', letterSpacing: '0.06em' }}>
             DASHBOARD INTERNO
           </p>
         </div>
@@ -81,15 +81,15 @@ export function Sidebar() {
                 borderRadius: 8,
                 fontSize: 13,
                 fontWeight: 500,
-                color: isActive ? '#F9FAFB' : '#9CA3AF',
-                background: isActive ? '#1F2937' : 'transparent',
+                color: isActive ? 'var(--text)' : 'var(--text-muted)',
+                background: isActive ? 'var(--border)' : 'transparent',
                 textDecoration: 'none',
                 transition: 'background 0.15s, color 0.15s',
               })}
             >
               {({ isActive }) => (
                 <>
-                  <Icone cor={isActive ? '#7C6AF7' : '#6B7280'} />
+                  <Icone cor={isActive ? '#7C6AF7' : 'var(--text-faint)'} />
                   <span style={{ flex: 1 }}>{item.label}</span>
                   {item.em_breve && (
                     <span
@@ -112,7 +112,7 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div style={{ marginTop: 'auto', borderTop: '1px solid #1F2937', paddingTop: 12 }}>
+      <div style={{ marginTop: 'auto', borderTop: '1px solid var(--border)', paddingTop: 12 }}>
         <NavLink
           to="/configuracoes"
           style={({ isActive }) => ({
@@ -123,15 +123,15 @@ export function Sidebar() {
             borderRadius: 8,
             fontSize: 13,
             fontWeight: 500,
-            color: isActive ? '#F9FAFB' : '#9CA3AF',
-            background: isActive ? '#1F2937' : 'transparent',
+            color: isActive ? 'var(--text)' : 'var(--text-muted)',
+            background: isActive ? 'var(--border)' : 'transparent',
             textDecoration: 'none',
             marginBottom: 8,
           })}
         >
           {({ isActive }) => (
             <>
-              <IconeEngrenagem cor={isActive ? '#7C6AF7' : '#6B7280'} />
+              <IconeEngrenagem cor={isActive ? '#7C6AF7' : 'var(--text-faint)'} />
               <span>Configurações</span>
             </>
           )}
@@ -143,7 +143,7 @@ export function Sidebar() {
               style={{
                 margin: 0,
                 fontSize: 10,
-                color: '#4B5563',
+                color: 'var(--text-dim)',
                 textTransform: 'uppercase',
                 letterSpacing: '0.06em',
               }}
@@ -154,7 +154,7 @@ export function Sidebar() {
               style={{
                 margin: '2px 0 0',
                 fontSize: 12,
-                color: '#9CA3AF',
+                color: 'var(--text-muted)',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
@@ -170,8 +170,8 @@ export function Sidebar() {
           style={{
             width: '100%',
             background: 'transparent',
-            border: '1px solid #374151',
-            color: '#9CA3AF',
+            border: '1px solid var(--border-strong)',
+            color: 'var(--text-muted)',
             padding: '8px 12px',
             borderRadius: 6,
             fontSize: 12,
@@ -184,12 +184,12 @@ export function Sidebar() {
             transition: 'all 0.15s',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#1F2937'
-            e.currentTarget.style.color = '#F9FAFB'
+            e.currentTarget.style.background = 'var(--border)'
+            e.currentTarget.style.color = 'var(--text)'
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.background = 'transparent'
-            e.currentTarget.style.color = '#9CA3AF'
+            e.currentTarget.style.color = 'var(--text-muted)'
           }}
         >
           Sair
@@ -199,7 +199,7 @@ export function Sidebar() {
             margin: '10px 0 0',
             padding: '0 0.75rem',
             fontSize: 10,
-            color: '#374151',
+            color: 'var(--border-strong)',
             textAlign: 'center',
           }}
         >

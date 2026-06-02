@@ -1,15 +1,15 @@
 export const cores = {
-  fundo: '#0B0F19',
-  card: '#111827',
-  borda: '#1F2937',
-  bordaHover: '#374151',
+  fundo: 'var(--bg)',
+  card: 'var(--surface)',
+  borda: 'var(--border)',
+  bordaHover: 'var(--border-strong)',
   primaria: '#7C6AF7',
   sucesso: '#3ECFB2',
   atencao: '#F59E0B',
   erro: '#EF4444',
-  textoPrimario: '#F9FAFB',
-  textoSecundario: '#6B7280',
-  textoMudo: '#4B5563',
+  textoPrimario: 'var(--text)',
+  textoSecundario: 'var(--text-faint)',
+  textoMudo: 'var(--text-dim)',
 } as const
 
 export const formatBRL = (valor: number) =>

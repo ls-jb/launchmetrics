@@ -32,7 +32,7 @@ export function Login() {
     <div
       style={{
         minHeight: '100vh',
-        background: '#0B0F19',
+        background: 'var(--bg)',
         display: 'grid',
         placeItems: 'center',
         padding: '1.5rem',
@@ -42,8 +42,8 @@ export function Login() {
         style={{
           width: '100%',
           maxWidth: 400,
-          background: '#111827',
-          border: '1px solid #1F2937',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
           borderRadius: 12,
           padding: '2rem',
         }}
@@ -65,10 +65,10 @@ export function Login() {
             LM
           </div>
           <div>
-            <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#F9FAFB' }}>
+            <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>
               LaunchMetrics
             </h1>
-            <p style={{ margin: 0, fontSize: 11, color: '#6B7280', letterSpacing: '0.06em' }}>
+            <p style={{ margin: 0, fontSize: 11, color: 'var(--text-faint)', letterSpacing: '0.06em' }}>
               ENTRAR NO DASHBOARD
             </p>
           </div>
@@ -96,7 +96,7 @@ export function Login() {
               style={{
                 background: '#EF444422',
                 border: '1px solid #EF444444',
-                color: '#FCA5A5',
+                color: 'var(--text-error)',
                 padding: '8px 12px',
                 borderRadius: 8,
                 fontSize: 12,
@@ -110,7 +110,7 @@ export function Login() {
             type="submit"
             disabled={enviando || !email || !senha}
             style={{
-              background: enviando ? '#4B5563' : '#7C6AF7',
+              background: enviando ? 'var(--text-dim)' : '#7C6AF7',
               border: 'none',
               color: '#fff',
               padding: '11px 16px',
@@ -152,7 +152,7 @@ function Campo({
         style={{
           display: 'block',
           fontSize: 11,
-          color: '#9CA3AF',
+          color: 'var(--text-muted)',
           marginBottom: 6,
           textTransform: 'uppercase',
           letterSpacing: '0.06em',
@@ -169,11 +169,11 @@ function Campo({
         required
         style={{
           width: '100%',
-          background: '#0F172A',
-          border: '1px solid #374151',
+          background: 'var(--surface-2)',
+          border: '1px solid var(--border-strong)',
           borderRadius: 8,
           padding: '10px 12px',
-          color: '#F9FAFB',
+          color: 'var(--text)',
           fontSize: 14,
           colorScheme: 'dark',
         }}

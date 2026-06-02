@@ -12,13 +12,13 @@ export function ChartTooltip({ active, payload, label, moeda = false }: ChartToo
   return (
     <div
       style={{
-        background: '#1F2937',
-        border: '1px solid #374151',
+        background: 'var(--border)',
+        border: '1px solid var(--border-strong)',
         borderRadius: 8,
         padding: '8px 14px',
       }}
     >
-      <p style={{ margin: '0 0 4px', fontSize: 12, color: '#9CA3AF' }}>{label}</p>
+      <p style={{ margin: '0 0 4px', fontSize: 12, color: 'var(--text-muted)' }}>{label}</p>
       {payload.map((p, i) => (
         <p
           key={i}

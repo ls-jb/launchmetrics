@@ -1,0 +1,62 @@
+/* ============================================================
+ * Tema do LaunchMetrics — 3 modos: Padrão (azul/navy), Escuro
+ * (preto neutro) e Claro (branco). Cores acentuadas (roxo, verde,
+ * âmbar, vermelho) permanecem fixas em todos os temas.
+ *
+ * Tokens nomeados pela função, NÃO pelo valor (--bg, --surface,
+ * --text...) pra evitar nomes tipo "--gray-900".
+ * ============================================================ */
+
+:root,
+[data-theme='padrao'] {
+  /* superfícies */
+  --bg: #0b0f19;
+  --surface: #111827;
+  --surface-2: #0f172a;
+
+  /* bordas */
+  --border: #1f2937;
+  --border-strong: #374151;
+
+  /* escala de texto (do menos visível ao mais visível) */
+  --text-dim: #4b5563;
+  --text-faint: #6b7280;
+  --text-muted: #9ca3af;
+  --text-strong: #e5e7eb;
+  --text: #f9fafb;
+  --text-error: #fca5a5;
+}
+
+[data-theme='escuro'] {
+  --bg: #000000;
+  --surface: #0a0a0a;
+  --surface-2: #141414;
+  --border: #1f1f1f;
+  --border-strong: #2e2e2e;
+  --text-dim: #3f3f3f;
+  --text-faint: #5f5f5f;
+  --text-muted: #909090;
+  --text-strong: #d4d4d4;
+  --text: #fafafa;
+  --text-error: #fca5a5;
+}
+
+[data-theme='claro'] {
+  --bg: #f3f4f6;
+  --surface: #ffffff;
+  --surface-2: #f9fafb;
+  --border: #e5e7eb;
+  --border-strong: #d1d5db;
+  --text-dim: #d1d5db;
+  --text-faint: #9ca3af;
+  --text-muted: #6b7280;
+  --text-strong: #1f2937;
+  --text: #030712;
+  --text-error: #b91c1c;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+}

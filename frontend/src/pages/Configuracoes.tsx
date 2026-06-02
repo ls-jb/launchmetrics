@@ -9,6 +9,7 @@ import {
 } from '@/services/usuariosService'
 import { vendasService } from '@/services/vendasService'
 import { useAuthStore } from '@/store/authStore'
+import { useThemeStore, type Tema } from '@/store/themeStore'
 import type {
   OfertaBreakdown,
   Papel,
@@ -23,10 +24,10 @@ export function Configuracoes() {
   return (
     <div>
       <header style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: '#F9FAFB' }}>
+        <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>
           Configurações
         </h1>
-        <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>
           Tema e gestão de usuários
         </p>
       </header>
@@ -40,7 +41,7 @@ export function Configuracoes() {
         </>
       ) : (
         <Card>
-          <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>
             Gestão de usuários e do placar disponível apenas para administradores.
           </p>
         </Card>
@@ -129,7 +130,7 @@ function SecaoPlacar() {
       </form>
 
       {carregando && <p style={textoMudo}>Carregando…</p>}
-      {erro && <p style={{ ...textoMudo, color: '#FCA5A5' }}>{erro}</p>}
+      {erro && <p style={{ ...textoMudo, color: 'var(--text-error)' }}>{erro}</p>}
 
       <div style={{ display: 'grid', gap: 8 }}>
         {!carregando && lancs.length === 0 && (
@@ -144,13 +145,13 @@ function SecaoPlacar() {
               alignItems: 'center',
               gap: 12,
               padding: '10px 12px',
-              background: '#0F172A',
-              border: '1px solid #1F2937',
+              background: 'var(--surface-2)',
+              border: '1px solid var(--border)',
               borderRadius: 8,
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-              <span style={{ fontSize: 13, color: '#F9FAFB', fontWeight: 500 }}>
+              <span style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500 }}>
                 {l.nome}
               </span>
               {l.ativo && (
@@ -454,19 +455,19 @@ function LinhaRemovivel({
         alignItems: 'center',
         gap: 12,
         padding: '8px 10px',
-        background: '#0F172A',
-        border: '1px solid #1F2937',
+        background: 'var(--surface-2)',
+        border: '1px solid var(--border)',
         borderRadius: 6,
       }}
     >
-      <span style={{ fontSize: 13, color: '#E5E7EB', minWidth: 0 }}>{texto}</span>
+      <span style={{ fontSize: 13, color: 'var(--text-strong)', minWidth: 0 }}>{texto}</span>
       <button
         onClick={onRemover}
         title="Remover"
         style={{
           background: 'transparent',
           border: 'none',
-          color: '#6B7280',
+          color: 'var(--text-faint)',
           cursor: 'pointer',
           fontSize: 16,
           lineHeight: 1,
@@ -480,13 +481,65 @@ function LinhaRemovivel({
 }
 
 function SecaoTema() {
+  const tema = useThemeStore((s) => s.tema)
+  const setTema = useThemeStore((s) => s.setTema)
+  const opcoes: { valor: Tema; label: string; preview: string[] }[] = [
+    { valor: 'padrao', label: 'Padrão', preview: ['#0b0f19', '#111827', '#7C6AF7'] },
+    { valor: 'escuro', label: 'Escuro', preview: ['#000000', '#0a0a0a', '#7C6AF7'] },
+    { valor: 'claro', label: 'Claro', preview: ['#f3f4f6', '#ffffff', '#7C6AF7'] },
+  ]
   return (
     <Card>
       <p style={titulo}>Tema</p>
-      <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
-        Em breve — escuro (atual), claro e azul. Por enquanto o sistema usa o
-        tema escuro.
+      <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--text-faint)' }}>
+        Escolha o visual da plataforma. A preferência fica salva no seu navegador.
       </p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+        {opcoes.map((o) => {
+          const ativo = tema === o.valor
+          return (
+            <button
+              key={o.valor}
+              onClick={() => setTema(o.valor)}
+              style={{
+                background: 'transparent',
+                border: ativo ? '2px solid #7C6AF7' : '1px solid var(--border-strong)',
+                borderRadius: 10,
+                padding: '12px',
+                cursor: 'pointer',
+                color: 'var(--text)',
+                fontSize: 13,
+                fontWeight: 600,
+                textAlign: 'left',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+              }}
+            >
+              <div style={{ display: 'flex', gap: 4 }}>
+                {o.preview.map((cor, i) => (
+                  <span
+                    key={i}
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: 6,
+                      background: cor,
+                      border: '1px solid var(--border)',
+                    }}
+                  />
+                ))}
+              </div>
+              <span>
+                {o.label}
+                {ativo && (
+                  <span style={{ color: '#7C6AF7', marginLeft: 6 }}>· ativo</span>
+                )}
+              </span>
+            </button>
+          )
+        })}
+      </div>
     </Card>
   )
 }
@@ -558,7 +611,7 @@ function SecaoUsuarios() {
       </div>
 
       {carregando && <p style={textoMudo}>Carregando…</p>}
-      {erro && <p style={{ ...textoMudo, color: '#FCA5A5' }}>{erro}</p>}
+      {erro && <p style={{ ...textoMudo, color: 'var(--text-error)' }}>{erro}</p>}
 
       {!carregando && (
         <div style={{ display: 'grid', gap: 8 }}>
@@ -571,16 +624,16 @@ function SecaoUsuarios() {
                 alignItems: 'center',
                 gap: 12,
                 padding: '10px 12px',
-                background: '#0F172A',
-                border: '1px solid #1F2937',
+                background: 'var(--surface-2)',
+                border: '1px solid var(--border)',
                 borderRadius: 8,
               }}
             >
               <div style={{ minWidth: 0 }}>
-                <p style={{ margin: 0, fontSize: 13, color: '#F9FAFB', fontWeight: 500 }}>
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--text)', fontWeight: 500 }}>
                   {u.nome || u.email}
                 </p>
-                <p style={{ margin: '2px 0 0', fontSize: 11, color: '#6B7280' }}>
+                <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--text-faint)' }}>
                   {u.email}
                 </p>
               </div>
@@ -595,11 +648,11 @@ function SecaoUsuarios() {
                       : ''
                   }
                   style={{
-                    background: '#111827',
-                    border: '1px solid #374151',
+                    background: 'var(--surface)',
+                    border: '1px solid var(--border-strong)',
                     borderRadius: 6,
                     padding: '5px 8px',
-                    color: '#E5E7EB',
+                    color: 'var(--text-strong)',
                     fontSize: 12,
                     colorScheme: 'dark',
                     opacity: u.user_id === meuUserId ? 0.5 : 1,
@@ -614,7 +667,7 @@ function SecaoUsuarios() {
                     title="Remover usuário"
                     style={{
                       background: 'transparent',
-                      border: '1px solid #374151',
+                      border: '1px solid var(--border-strong)',
                       color: '#EF4444',
                       borderRadius: 6,
                       padding: '5px 10px',
@@ -728,7 +781,7 @@ function FormUsuario({
           style={{
             background: '#EF444422',
             border: '1px solid #EF444444',
-            color: '#FCA5A5',
+            color: 'var(--text-error)',
             padding: '8px 12px',
             borderRadius: 8,
             fontSize: 12,
@@ -745,8 +798,8 @@ function FormUsuario({
           disabled={enviando}
           style={{
             background: 'transparent',
-            border: '1px solid #374151',
-            color: '#9CA3AF',
+            border: '1px solid var(--border-strong)',
+            color: 'var(--text-muted)',
             padding: '9px 16px',
             borderRadius: 8,
             fontSize: 13,
@@ -759,7 +812,7 @@ function FormUsuario({
           type="submit"
           disabled={enviando || !email || senha.length < 6}
           style={{
-            background: enviando ? '#4B5563' : '#7C6AF7',
+            background: enviando ? 'var(--text-dim)' : '#7C6AF7',
             border: 'none',
             color: '#fff',
             padding: '9px 18px',
@@ -784,8 +837,8 @@ function Card({ children }: { children: React.ReactNode }) {
   return (
     <div
       style={{
-        background: '#111827',
-        border: '1px solid #1F2937',
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
         borderRadius: 12,
         padding: '1.25rem',
         marginBottom: '1.25rem',
@@ -800,24 +853,24 @@ const titulo: React.CSSProperties = {
   margin: '0 0 12px',
   fontSize: 14,
   fontWeight: 600,
-  color: '#E5E7EB',
+  color: 'var(--text-strong)',
 }
 
-const textoMudo: React.CSSProperties = { margin: 0, fontSize: 13, color: '#6B7280' }
+const textoMudo: React.CSSProperties = { margin: 0, fontSize: 13, color: 'var(--text-faint)' }
 
 const inputBase: React.CSSProperties = {
   width: '100%',
-  background: '#0F172A',
-  border: '1px solid #374151',
+  background: 'var(--surface-2)',
+  border: '1px solid var(--border-strong)',
   borderRadius: 8,
   padding: '9px 12px',
-  color: '#F9FAFB',
+  color: 'var(--text)',
   fontSize: 13,
 }
 
 function botaoRoxo(desabilitado: boolean): React.CSSProperties {
   return {
-    background: desabilitado ? '#4B5563' : '#7C6AF7',
+    background: desabilitado ? 'var(--text-dim)' : '#7C6AF7',
     border: 'none',
     color: '#fff',
     padding: '9px 14px',
@@ -831,8 +884,8 @@ function botaoRoxo(desabilitado: boolean): React.CSSProperties {
 
 const botaoSecundario: React.CSSProperties = {
   background: 'transparent',
-  border: '1px solid #374151',
-  color: '#9CA3AF',
+  border: '1px solid var(--border-strong)',
+  color: 'var(--text-muted)',
   borderRadius: 6,
   padding: '5px 10px',
   fontSize: 12,
@@ -855,7 +908,7 @@ function Campo({
         style={{
           display: 'block',
           fontSize: 11,
-          color: '#9CA3AF',
+          color: 'var(--text-muted)',
           marginBottom: 6,
           textTransform: 'uppercase',
           letterSpacing: '0.06em',

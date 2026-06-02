@@ -105,10 +105,10 @@ export function Placar() {
     return (
       <div>
         <header style={{ marginBottom: '1.5rem' }}>
-          <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: '#F9FAFB' }}>
+          <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>
             Placar de Líderes
           </h1>
-          <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>
             Escolha o lançamento para ver o ranking
           </p>
         </header>
@@ -133,17 +133,17 @@ export function Placar() {
                 gap: 12,
                 width: '100%',
                 textAlign: 'left',
-                background: '#111827',
-                border: '1px solid #1F2937',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
                 borderRadius: 12,
                 padding: '16px 18px',
                 cursor: 'pointer',
                 transition: 'border-color 0.15s',
               }}
               onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#7C6AF7')}
-              onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#1F2937')}
+              onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
             >
-              <span style={{ flex: 1, fontSize: 16, fontWeight: 600, color: '#F9FAFB' }}>
+              <span style={{ flex: 1, fontSize: 16, fontWeight: 600, color: 'var(--text)' }}>
                 {l.nome}
               </span>
               {l.ativo && (
@@ -160,7 +160,7 @@ export function Placar() {
                   ATIVO
                 </span>
               )}
-              <span style={{ fontSize: 18, color: '#4B5563' }}>›</span>
+              <span style={{ fontSize: 18, color: 'var(--text-dim)' }}>›</span>
             </button>
           ))}
         </div>
@@ -180,7 +180,7 @@ export function Placar() {
         style={{
           background: 'transparent',
           border: 'none',
-          color: '#9CA3AF',
+          color: 'var(--text-muted)',
           fontSize: 13,
           cursor: 'pointer',
           padding: 0,
@@ -194,10 +194,10 @@ export function Placar() {
       </button>
 
       <header style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: '#F9FAFB' }}>
+        <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>
           {nomeLanc}
         </h1>
-        <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>
           Clique no seu nome e marque cada venda que fechar
         </p>
       </header>
@@ -246,35 +246,35 @@ export function Placar() {
                   gap: 14,
                   width: '100%',
                   textAlign: 'left',
-                  background: '#111827',
-                  border: '1px solid #1F2937',
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
                   borderRadius: 12,
                   padding: '14px 16px',
                   cursor: 'pointer',
                   transition: 'border-color 0.15s',
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#7C6AF7')}
-                onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#1F2937')}
+                onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
               >
                 <span
                   style={{
                     fontSize: 18,
                     width: 32,
                     textAlign: 'center',
-                    color: '#6B7280',
+                    color: 'var(--text-faint)',
                     fontWeight: 700,
                   }}
                 >
                   {MEDALHA[i] ?? `${i + 1}º`}
                 </span>
-                <span style={{ flex: 1, fontSize: 15, fontWeight: 600, color: '#F9FAFB' }}>
+                <span style={{ flex: 1, fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>
                   {r.nome}
                 </span>
                 <div style={{ textAlign: 'right' }}>
                   <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#3ECFB2' }}>
                     {formatBRL(r.receita_total)}
                   </p>
-                  <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6B7280' }}>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-faint)' }}>
                     {formatNum(r.quantidade_total)}{' '}
                     {r.quantidade_total === 1 ? 'venda' : 'vendas'}
                   </p>
@@ -317,7 +317,7 @@ function MarcacaoVendedor({
 }) {
   if (ofertas.length === 0) {
     return (
-      <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>
         Nenhuma oferta cadastrada neste lançamento. Cadastre as ofertas em
         Configurações.
       </p>
@@ -335,17 +335,17 @@ function MarcacaoVendedor({
               alignItems: 'center',
               gap: 12,
               padding: '10px 12px',
-              background: '#0F172A',
-              border: '1px solid #1F2937',
+              background: 'var(--surface-2)',
+              border: '1px solid var(--border)',
               borderRadius: 8,
             }}
           >
             <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ margin: 0, fontSize: 13, color: '#F9FAFB', fontWeight: 500 }}>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--text)', fontWeight: 500 }}>
                 {o.produto}
                 {o.oferta ? ` · ${o.oferta}` : ''}
               </p>
-              <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6B7280' }}>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-faint)' }}>
                 {formatBRL(o.valor)}
               </p>
             </div>
@@ -361,7 +361,7 @@ function MarcacaoVendedor({
                   textAlign: 'center',
                   fontSize: 16,
                   fontWeight: 700,
-                  color: q > 0 ? '#F9FAFB' : '#4B5563',
+                  color: q > 0 ? 'var(--text)' : 'var(--text-dim)',
                 }}
               >
                 {q}
@@ -392,9 +392,9 @@ function BotaoContador({
         width: 34,
         height: 34,
         borderRadius: 8,
-        border: '1px solid #374151',
-        background: desabilitado ? 'transparent' : '#1F2937',
-        color: desabilitado ? '#4B5563' : '#F9FAFB',
+        border: '1px solid var(--border-strong)',
+        background: desabilitado ? 'transparent' : 'var(--border)',
+        color: desabilitado ? 'var(--text-dim)' : 'var(--text)',
         fontSize: 20,
         fontWeight: 700,
         lineHeight: 1,
@@ -422,8 +422,8 @@ function CardTotal({
   return (
     <div
       style={{
-        background: '#111827',
-        border: '1px solid #1F2937',
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
         borderRadius: 12,
         padding: '1rem 1.25rem',
       }}
@@ -432,7 +432,7 @@ function CardTotal({
         style={{
           margin: '0 0 6px',
           fontSize: 11,
-          color: '#6B7280',
+          color: 'var(--text-faint)',
           textTransform: 'uppercase',
           letterSpacing: '0.06em',
         }}
@@ -442,7 +442,7 @@ function CardTotal({
       <p style={{ margin: 0, fontSize: 22, fontWeight: 700, color: cor }}>
         {formatBRL(receita)}
       </p>
-      <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6B7280' }}>
+      <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-faint)' }}>
         {formatNum(qtd)} {qtd === 1 ? 'venda' : 'vendas'}
       </p>
     </div>
@@ -453,17 +453,17 @@ function CardVazio({ titulo, mensagem }: { titulo: string; mensagem: string }) {
   return (
     <div
       style={{
-        background: '#111827',
-        border: '1px dashed #374151',
+        background: 'var(--surface)',
+        border: '1px dashed var(--border-strong)',
         borderRadius: 12,
         padding: '2rem 1.5rem',
         textAlign: 'center',
       }}
     >
-      <p style={{ margin: '0 0 8px', fontSize: 15, fontWeight: 600, color: '#E5E7EB' }}>
+      <p style={{ margin: '0 0 8px', fontSize: 15, fontWeight: 600, color: 'var(--text-strong)' }}>
         {titulo}
       </p>
-      <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>{mensagem}</p>
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>{mensagem}</p>
     </div>
   )
 }
@@ -476,7 +476,7 @@ function Aviso({ texto }: { texto: string }) {
         border: '1px solid #EF444444',
         borderRadius: 12,
         padding: '0.85rem 1.1rem',
-        color: '#FCA5A5',
+        color: 'var(--text-error)',
         fontSize: 13,
         marginBottom: '1.25rem',
       }}

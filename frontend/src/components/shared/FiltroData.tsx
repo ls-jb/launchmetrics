@@ -35,7 +35,7 @@ export function FiltroData({ onChange, inicioInicial, fimInicial }: FiltroDataPr
       }}
     >
       <div>
-        <label style={{ display: 'block', fontSize: 11, color: '#6B7280', marginBottom: 6 }}>
+        <label style={{ display: 'block', fontSize: 11, color: 'var(--text-faint)', marginBottom: 6 }}>
           Início
         </label>
         <input
@@ -43,18 +43,18 @@ export function FiltroData({ onChange, inicioInicial, fimInicial }: FiltroDataPr
           value={inicio}
           onChange={(e) => aplicar(e.target.value, fim)}
           style={{
-            background: '#0F172A',
-            border: '1px solid #374151',
+            background: 'var(--surface-2)',
+            border: '1px solid var(--border-strong)',
             borderRadius: 8,
             padding: '8px 12px',
-            color: '#F9FAFB',
+            color: 'var(--text)',
             fontSize: 13,
             colorScheme: 'dark',
           }}
         />
       </div>
       <div>
-        <label style={{ display: 'block', fontSize: 11, color: '#6B7280', marginBottom: 6 }}>
+        <label style={{ display: 'block', fontSize: 11, color: 'var(--text-faint)', marginBottom: 6 }}>
           Fim
         </label>
         <input
@@ -62,11 +62,11 @@ export function FiltroData({ onChange, inicioInicial, fimInicial }: FiltroDataPr
           value={fim}
           onChange={(e) => aplicar(inicio, e.target.value)}
           style={{
-            background: '#0F172A',
-            border: '1px solid #374151',
+            background: 'var(--surface-2)',
+            border: '1px solid var(--border-strong)',
             borderRadius: 8,
             padding: '8px 12px',
-            color: '#F9FAFB',
+            color: 'var(--text)',
             fontSize: 13,
             colorScheme: 'dark',
           }}
@@ -78,10 +78,10 @@ export function FiltroData({ onChange, inicioInicial, fimInicial }: FiltroDataPr
             key={a.label}
             onClick={() => aplicar(format(subDays(new Date(), a.dias), 'yyyy-MM-dd'), hoje)}
             style={{
-              background: '#1F2937',
-              border: '1px solid #374151',
+              background: 'var(--border)',
+              border: '1px solid var(--border-strong)',
               borderRadius: 6,
-              color: '#9CA3AF',
+              color: 'var(--text-muted)',
               fontSize: 12,
               padding: '8px 12px',
               cursor: 'pointer',

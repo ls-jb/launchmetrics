@@ -40,8 +40,8 @@ export function Modal({ aberto, titulo, onFechar, children, largura = 520 }: Mod
         style={{
           width: '100%',
           maxWidth: largura,
-          background: '#111827',
-          border: '1px solid #1F2937',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
           borderRadius: 12,
           padding: '1.5rem',
           maxHeight: '90vh',
@@ -49,14 +49,14 @@ export function Modal({ aberto, titulo, onFechar, children, largura = 520 }: Mod
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: '#F9FAFB' }}>{titulo}</h2>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: 'var(--text)' }}>{titulo}</h2>
           <button
             onClick={onFechar}
             aria-label="Fechar"
             style={{
               background: 'transparent',
               border: 'none',
-              color: '#6B7280',
+              color: 'var(--text-faint)',
               cursor: 'pointer',
               fontSize: 22,
               lineHeight: 1,

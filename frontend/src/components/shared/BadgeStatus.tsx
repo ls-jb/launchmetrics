@@ -4,7 +4,7 @@ const STATUS_CORES: Record<StatusLancamento, string> = {
   pre_lancamento: '#F59E0B',
   captacao: '#3ECFB2',
   carrinho: '#7C6AF7',
-  encerrado: '#6B7280',
+  encerrado: 'var(--text-faint)',
 }
 
 const STATUS_LABELS: Record<StatusLancamento, string> = {
@@ -15,7 +15,7 @@ const STATUS_LABELS: Record<StatusLancamento, string> = {
 }
 
 export function BadgeStatus({ status }: { status: StatusLancamento }) {
-  const cor = STATUS_CORES[status] ?? '#6B7280'
+  const cor = STATUS_CORES[status] ?? 'var(--text-faint)'
   return (
     <span
       style={{

@@ -127,17 +127,17 @@ export function Vendas() {
         }}
       >
         <div>
-          <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: '#F9FAFB' }}>
+          <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>
             Dashboard de Vendas
           </h1>
-          <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>
             Hotmart, Guru e vendas manuais (PIX, avulsas)
           </p>
           <p
             style={{
               margin: '4px 0 0',
               fontSize: 11,
-              color: '#4B5563',
+              color: 'var(--text-dim)',
               display: 'flex',
               alignItems: 'center',
               gap: 6,
@@ -162,8 +162,8 @@ export function Vendas() {
             title="Atualizar agora"
             style={{
               background: 'transparent',
-              border: '1px solid #374151',
-              color: '#9CA3AF',
+              border: '1px solid var(--border-strong)',
+              color: 'var(--text-muted)',
               padding: '10px 14px',
               borderRadius: 8,
               fontSize: 13,
@@ -183,8 +183,8 @@ export function Vendas() {
             title="Listar e remover vendas manuais do período"
             style={{
               background: 'transparent',
-              border: '1px solid #374151',
-              color: '#9CA3AF',
+              border: '1px solid var(--border-strong)',
+              color: 'var(--text-muted)',
               padding: '10px 14px',
               borderRadius: 8,
               fontSize: 13,
@@ -217,8 +217,8 @@ export function Vendas() {
 
       <div
         style={{
-          background: '#111827',
-          border: '1px solid #1F2937',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
           borderRadius: 12,
           padding: '1rem 1.25rem',
           marginBottom: '1.25rem',
@@ -259,7 +259,7 @@ export function Vendas() {
             border: '1px solid #EF444444',
             borderRadius: 12,
             padding: '1rem 1.25rem',
-            color: '#FCA5A5',
+            color: 'var(--text-error)',
             fontSize: 13,
             marginBottom: '1.25rem',
           }}
@@ -296,19 +296,19 @@ export function Vendas() {
 
       <div
         style={{
-          background: '#111827',
-          border: '1px solid #1F2937',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
           borderRadius: 12,
           padding: '1.25rem',
           marginBottom: '1.5rem',
           opacity: carregando ? 0.5 : 1,
         }}
       >
-        <p style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 600, color: '#E5E7EB' }}>
+        <p style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 600, color: 'var(--text-strong)' }}>
           Ranking por produto
         </p>
         {ranking.length === 0 ? (
-          <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>
             Nenhuma venda encontrada para os filtros selecionados.
           </p>
         ) : (
@@ -340,7 +340,7 @@ export function Vendas() {
                   transition: 'background 0.15s',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#1F2937'
+                  e.currentTarget.style.background = 'var(--border)'
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = 'transparent'
@@ -353,29 +353,29 @@ export function Vendas() {
                     marginBottom: 5,
                   }}
                 >
-                  <span style={{ fontSize: 13, color: '#E5E7EB', fontWeight: 500 }}>
-                    <span style={{ color: '#6B7280', marginRight: 8 }}>#{i + 1}</span>
+                  <span style={{ fontSize: 13, color: 'var(--text-strong)', fontWeight: 500 }}>
+                    <span style={{ color: 'var(--text-faint)', marginRight: 8 }}>#{i + 1}</span>
                     {r.produto}
                   </span>
                   <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, color: '#6B7280' }}>
+                    <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>
                       {formatNum(r.quantidade)} vendas
                     </span>
                     <span
                       style={{
                         fontSize: 13,
                         fontWeight: 600,
-                        color: '#F9FAFB',
+                        color: 'var(--text)',
                         minWidth: 100,
                         textAlign: 'right',
                       }}
                     >
                       {formatBRL(r.receita)}
                     </span>
-                    <span style={{ fontSize: 14, color: '#4B5563' }}>›</span>
+                    <span style={{ fontSize: 14, color: 'var(--text-dim)' }}>›</span>
                   </div>
                 </div>
-                <div style={{ height: 6, background: '#1F2937', borderRadius: 99 }}>
+                <div style={{ height: 6, background: 'var(--border)', borderRadius: 99 }}>
                   <div
                     style={{
                       height: 6,
@@ -685,7 +685,7 @@ function FormVendaManual({
           style={{
             background: '#EF444422',
             border: '1px solid #EF444444',
-            color: '#FCA5A5',
+            color: 'var(--text-error)',
             padding: '8px 12px',
             borderRadius: 8,
             fontSize: 12,
@@ -702,8 +702,8 @@ function FormVendaManual({
           disabled={enviando}
           style={{
             background: 'transparent',
-            border: '1px solid #374151',
-            color: '#9CA3AF',
+            border: '1px solid var(--border-strong)',
+            color: 'var(--text-muted)',
             padding: '9px 16px',
             borderRadius: 8,
             fontSize: 13,
@@ -716,7 +716,7 @@ function FormVendaManual({
           type="submit"
           disabled={enviando || !produtoFinal || !valor}
           style={{
-            background: enviando ? '#4B5563' : '#7C6AF7',
+            background: enviando ? 'var(--text-dim)' : '#7C6AF7',
             border: 'none',
             color: '#fff',
             padding: '9px 18px',
@@ -736,11 +736,11 @@ function FormVendaManual({
 
 const inputVenda: React.CSSProperties = {
   width: '100%',
-  background: '#0F172A',
-  border: '1px solid #374151',
+  background: 'var(--surface-2)',
+  border: '1px solid var(--border-strong)',
   borderRadius: 8,
   padding: '9px 12px',
-  color: '#F9FAFB',
+  color: 'var(--text)',
   fontSize: 13,
 }
 
@@ -759,7 +759,7 @@ function CampoVenda({
         style={{
           display: 'block',
           fontSize: 11,
-          color: '#9CA3AF',
+          color: 'var(--text-muted)',
           marginBottom: 6,
           textTransform: 'uppercase',
           letterSpacing: '0.06em',
@@ -782,11 +782,11 @@ function ModalOfertas({
   onSalvou: () => void
 }) {
   if (carregando) {
-    return <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>Carregando ofertas…</p>
+    return <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>Carregando ofertas…</p>
   }
   if (ofertas.length === 0) {
     return (
-      <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>
         Nenhuma oferta encontrada no período.
       </p>
     )
@@ -797,7 +797,7 @@ function ModalOfertas({
 
   return (
     <div>
-      <p style={{ margin: '0 0 12px', fontSize: 12, color: '#6B7280' }}>
+      <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-faint)' }}>
         Clique no lápis pra ajustar o valor da oferta (ex: boleto parcelado, onde
         a plataforma só manda a parcela). O valor cadastrado vale pra todas as
         vendas dessa oferta.
@@ -819,10 +819,10 @@ function ModalOfertas({
           justifyContent: 'space-between',
           marginTop: 12,
           paddingTop: 10,
-          borderTop: '1px solid #1F2937',
+          borderTop: '1px solid var(--border)',
           fontSize: 13,
           fontWeight: 700,
-          color: '#F9FAFB',
+          color: 'var(--text)',
         }}
       >
         <span>Total ({formatNum(totalQtd)} vendas)</span>
@@ -864,20 +864,20 @@ function LinhaOferta({
         alignItems: 'flex-start',
         gap: 16,
         paddingBottom: 10,
-        borderBottom: '1px solid #161E2E',
+        borderBottom: '1px solid var(--border)',
       }}
     >
       <div style={{ minWidth: 0, flex: 1 }}>
-        <p style={{ margin: 0, fontSize: 13, color: '#F9FAFB', fontWeight: 500 }}>
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--text)', fontWeight: 500 }}>
           {o.oferta_nome ?? 'Sem nome'}
         </p>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
-          <span style={{ fontSize: 11, color: '#6B7280', fontFamily: 'monospace' }}>
+          <span style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'monospace' }}>
             {o.oferta_codigo ?? '—'}
           </span>
           {editando ? (
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 12, color: '#6B7280' }}>R$</span>
+              <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>R$</span>
               <input
                 type="number"
                 step="0.01"
@@ -890,11 +890,11 @@ function LinhaOferta({
                 }}
                 style={{
                   width: 90,
-                  background: '#0F172A',
-                  border: '1px solid #374151',
+                  background: 'var(--surface-2)',
+                  border: '1px solid var(--border-strong)',
                   borderRadius: 6,
                   padding: '3px 8px',
-                  color: '#F9FAFB',
+                  color: 'var(--text)',
                   fontSize: 12,
                 }}
               />
@@ -904,7 +904,7 @@ function LinhaOferta({
                 style={{
                   background: '#3ECFB2',
                   border: 'none',
-                  color: '#0B0F19',
+                  color: 'var(--bg)',
                   borderRadius: 6,
                   padding: '3px 10px',
                   fontSize: 11,
@@ -919,7 +919,7 @@ function LinhaOferta({
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: '#6B7280',
+                  color: 'var(--text-faint)',
                   fontSize: 11,
                   cursor: 'pointer',
                 }}
@@ -929,7 +929,7 @@ function LinhaOferta({
             </span>
           ) : (
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 11, color: '#9CA3AF' }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                 {formatBRLPreciso(o.valor_oferta)}
               </span>
               {o.valor_override != null && (
@@ -957,7 +957,7 @@ function LinhaOferta({
                   style={{
                     background: 'transparent',
                     border: 'none',
-                    color: '#6B7280',
+                    color: 'var(--text-faint)',
                     cursor: 'pointer',
                     fontSize: 12,
                     padding: 0,
@@ -972,10 +972,10 @@ function LinhaOferta({
         </div>
       </div>
       <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-        <p style={{ margin: 0, fontSize: 13, color: '#F9FAFB', fontWeight: 600 }}>
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--text)', fontWeight: 600 }}>
           {formatBRL(o.receita)}
         </p>
-        <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6B7280' }}>
+        <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-faint)' }}>
           {formatNum(o.quantidade)} {o.quantidade === 1 ? 'venda' : 'vendas'}
         </p>
       </div>
@@ -1025,18 +1025,18 @@ function MultiSelect({
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <label style={{ display: 'block', fontSize: 11, color: '#6B7280', marginBottom: 6 }}>
+      <label style={{ display: 'block', fontSize: 11, color: 'var(--text-faint)', marginBottom: 6 }}>
         {label}
       </label>
       <button
         type="button"
         onClick={() => setAberto((v) => !v)}
         style={{
-          background: '#0F172A',
-          border: '1px solid #374151',
+          background: 'var(--surface-2)',
+          border: '1px solid var(--border-strong)',
           borderRadius: 8,
           padding: '8px 12px',
-          color: selecionados.length ? '#F9FAFB' : '#6B7280',
+          color: selecionados.length ? 'var(--text)' : 'var(--text-faint)',
           fontSize: 13,
           minWidth: 200,
           maxWidth: 260,
@@ -1052,7 +1052,7 @@ function MultiSelect({
         >
           {resumo}
         </span>
-        <span style={{ fontSize: 10, color: '#6B7280' }}>▼</span>
+        <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>▼</span>
       </button>
 
       {aberto && (
@@ -1065,8 +1065,8 @@ function MultiSelect({
             width: 280,
             maxHeight: 300,
             overflowY: 'auto',
-            background: '#111827',
-            border: '1px solid #374151',
+            background: 'var(--surface)',
+            border: '1px solid var(--border-strong)',
             borderRadius: 8,
             padding: 6,
             boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
@@ -1091,7 +1091,7 @@ function MultiSelect({
             </button>
           )}
           {opcoes.length === 0 && (
-            <p style={{ margin: 0, padding: '8px', fontSize: 12, color: '#6B7280' }}>
+            <p style={{ margin: 0, padding: '8px', fontSize: 12, color: 'var(--text-faint)' }}>
               Sem produtos.
             </p>
           )}
@@ -1108,8 +1108,8 @@ function MultiSelect({
                   borderRadius: 6,
                   cursor: 'pointer',
                   fontSize: 13,
-                  color: '#E5E7EB',
-                  background: marcado ? '#1F2937' : 'transparent',
+                  color: 'var(--text-strong)',
+                  background: marcado ? 'var(--border)' : 'transparent',
                 }}
               >
                 <input
@@ -1151,18 +1151,18 @@ function Dropdown({
 }) {
   return (
     <div>
-      <label style={{ display: 'block', fontSize: 11, color: '#6B7280', marginBottom: 6 }}>
+      <label style={{ display: 'block', fontSize: 11, color: 'var(--text-faint)', marginBottom: 6 }}>
         {label}
       </label>
       <select
         value={valor}
         onChange={(e) => onChange(e.target.value)}
         style={{
-          background: '#0F172A',
-          border: '1px solid #374151',
+          background: 'var(--surface-2)',
+          border: '1px solid var(--border-strong)',
           borderRadius: 8,
           padding: '8px 12px',
-          color: '#F9FAFB',
+          color: 'var(--text)',
           fontSize: 13,
           minWidth: 180,
           colorScheme: 'dark',
@@ -1183,8 +1183,8 @@ function CardVazio({ titulo, mensagem }: { titulo: string; mensagem: string }) {
   return (
     <div
       style={{
-        background: '#111827',
-        border: '1px dashed #374151',
+        background: 'var(--surface)',
+        border: '1px dashed var(--border-strong)',
         borderRadius: 12,
         padding: '1.25rem',
         minHeight: 200,
@@ -1192,7 +1192,7 @@ function CardVazio({ titulo, mensagem }: { titulo: string; mensagem: string }) {
         flexDirection: 'column',
       }}
     >
-      <p style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 600, color: '#E5E7EB' }}>
+      <p style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 600, color: 'var(--text-strong)' }}>
         {titulo}
       </p>
       <div
@@ -1200,7 +1200,7 @@ function CardVazio({ titulo, mensagem }: { titulo: string; mensagem: string }) {
           flex: 1,
           display: 'grid',
           placeItems: 'center',
-          color: '#6B7280',
+          color: 'var(--text-faint)',
           fontSize: 13,
           textAlign: 'center',
         }}
@@ -1247,16 +1247,16 @@ function RemoverVendasManuais({
   }
 
   if (carregando) {
-    return <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>Carregando…</p>
+    return <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>Carregando…</p>
   }
   if (erro) {
     return (
-      <p style={{ margin: 0, fontSize: 13, color: '#FCA5A5' }}>{erro}</p>
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--text-error)' }}>{erro}</p>
     )
   }
   if (vendas.length === 0) {
     return (
-      <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>
         Nenhuma venda manual no período/filtros selecionados.
       </p>
     )
@@ -1264,7 +1264,7 @@ function RemoverVendasManuais({
 
   return (
     <div>
-      <p style={{ margin: '0 0 12px', fontSize: 12, color: '#6B7280' }}>
+      <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-faint)' }}>
         Mostra só vendas cadastradas manualmente (PIX e afins) no período do
         dashboard. Vendas das plataformas devem ser estornadas na origem — o
         webhook de reembolso atualiza o status automaticamente.
@@ -1278,26 +1278,26 @@ function RemoverVendasManuais({
               alignItems: 'center',
               gap: 12,
               padding: '8px 10px',
-              background: '#0F172A',
-              border: '1px solid #1F2937',
+              background: 'var(--surface-2)',
+              border: '1px solid var(--border)',
               borderRadius: 6,
             }}
           >
             <span
               style={{
                 fontSize: 11,
-                color: '#9CA3AF',
+                color: 'var(--text-muted)',
                 fontFamily: 'monospace',
                 width: 50,
               }}
             >
               {v.data_venda.slice(8, 10)}/{v.data_venda.slice(5, 7)}
             </span>
-            <span style={{ flex: 1, fontSize: 13, color: '#F9FAFB', minWidth: 0 }}>
+            <span style={{ flex: 1, fontSize: 13, color: 'var(--text)', minWidth: 0 }}>
               {v.produto}
               {v.oferta_nome ? ` · ${v.oferta_nome}` : ''}
               {v.comprador_email ? (
-                <span style={{ color: '#6B7280', fontSize: 11, marginLeft: 8 }}>
+                <span style={{ color: 'var(--text-faint)', fontSize: 11, marginLeft: 8 }}>
                   ({v.comprador_email})
                 </span>
               ) : null}
@@ -1306,7 +1306,7 @@ function RemoverVendasManuais({
               style={{
                 fontSize: 13,
                 fontWeight: 600,
-                color: '#F9FAFB',
+                color: 'var(--text)',
                 minWidth: 90,
                 textAlign: 'right',
               }}
@@ -1318,7 +1318,7 @@ function RemoverVendasManuais({
               title="Remover esta venda"
               style={{
                 background: 'transparent',
-                border: '1px solid #374151',
+                border: '1px solid var(--border-strong)',
                 color: '#EF4444',
                 borderRadius: 6,
                 padding: '4px 10px',

@@ -41,10 +41,10 @@ export function Lancamentos() {
         }}
       >
         <div>
-          <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: '#F9FAFB' }}>
+          <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>
             Lançamentos
           </h1>
-          <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>
             Acompanhe a captação de leads e métricas por canal
           </p>
         </div>
@@ -111,8 +111,8 @@ function CardLancamento({ lancamento: l }: { lancamento: Lancamento }) {
     <Link
       to={`/lancamentos/${l.id}`}
       style={{
-        background: '#111827',
-        border: '1px solid #1F2937',
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
         borderRadius: 12,
         padding: '1.25rem',
         textDecoration: 'none',
@@ -121,10 +121,10 @@ function CardLancamento({ lancamento: l }: { lancamento: Lancamento }) {
         transition: 'border-color 0.2s',
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = '#374151'
+        e.currentTarget.style.borderColor = 'var(--border-strong)'
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = '#1F2937'
+        e.currentTarget.style.borderColor = 'var(--border)'
       }}
     >
       <div
@@ -135,7 +135,7 @@ function CardLancamento({ lancamento: l }: { lancamento: Lancamento }) {
           marginBottom: 12,
         }}
       >
-        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: '#F9FAFB', maxWidth: '70%' }}>
+        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--text)', maxWidth: '70%' }}>
           {l.nome}
         </h3>
         <BadgeStatus status={l.status} />
@@ -146,7 +146,7 @@ function CardLancamento({ lancamento: l }: { lancamento: Lancamento }) {
           <span
             style={{
               fontSize: 11,
-              color: '#6B7280',
+              color: 'var(--text-faint)',
               textTransform: 'uppercase',
               letterSpacing: '0.06em',
             }}
@@ -156,14 +156,14 @@ function CardLancamento({ lancamento: l }: { lancamento: Lancamento }) {
           <span style={{ fontSize: 12, fontWeight: 600, color: '#3ECFB2' }}>{pctLeads}%</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 6 }}>
-          <span style={{ fontSize: 20, fontWeight: 700, color: '#F9FAFB' }}>
+          <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)' }}>
             {formatNum(l.total_leads)}
           </span>
           {l.meta_leads ? (
-            <span style={{ fontSize: 12, color: '#6B7280' }}>de {formatNum(l.meta_leads)}</span>
+            <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>de {formatNum(l.meta_leads)}</span>
           ) : null}
         </div>
-        <div style={{ height: 4, background: '#1F2937', borderRadius: 99 }}>
+        <div style={{ height: 4, background: 'var(--border)', borderRadius: 99 }}>
           <div
             style={{ height: 4, width: `${pctLeads}%`, background: '#3ECFB2', borderRadius: 99 }}
           />
@@ -176,7 +176,7 @@ function CardLancamento({ lancamento: l }: { lancamento: Lancamento }) {
           gridTemplateColumns: 'repeat(3, 1fr)',
           gap: 10,
           paddingTop: 12,
-          borderTop: '1px solid #1F2937',
+          borderTop: '1px solid var(--border)',
         }}
       >
         <MetricaInline label="Investimento" valor={formatBRL(l.investimento_total)} />
@@ -202,14 +202,14 @@ function MetricaInline({
         style={{
           margin: '0 0 3px',
           fontSize: 10,
-          color: '#6B7280',
+          color: 'var(--text-faint)',
           textTransform: 'uppercase',
           letterSpacing: '0.06em',
         }}
       >
         {label}
       </p>
-      <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: destaque ? '#3ECFB2' : '#F9FAFB' }}>
+      <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: destaque ? '#3ECFB2' : 'var(--text)' }}>
         {valor}
       </p>
     </div>
@@ -220,12 +220,12 @@ function EstadoVazio({ texto }: { texto: string }) {
   return (
     <div
       style={{
-        background: '#111827',
-        border: '1px dashed #374151',
+        background: 'var(--surface)',
+        border: '1px dashed var(--border-strong)',
         borderRadius: 12,
         padding: '3rem 2rem',
         textAlign: 'center',
-        color: '#6B7280',
+        color: 'var(--text-faint)',
         fontSize: 13,
       }}
     >
@@ -242,7 +242,7 @@ function EstadoErro({ texto }: { texto: string }) {
         border: '1px solid #EF444444',
         borderRadius: 12,
         padding: '1rem 1.25rem',
-        color: '#FCA5A5',
+        color: 'var(--text-error)',
         fontSize: 13,
       }}
     >
@@ -333,7 +333,7 @@ function FormNovoLancamento({
           style={{
             background: '#EF444422',
             border: '1px solid #EF444444',
-            color: '#FCA5A5',
+            color: 'var(--text-error)',
             padding: '8px 12px',
             borderRadius: 8,
             fontSize: 12,
@@ -350,8 +350,8 @@ function FormNovoLancamento({
           disabled={enviando}
           style={{
             background: 'transparent',
-            border: '1px solid #374151',
-            color: '#9CA3AF',
+            border: '1px solid var(--border-strong)',
+            color: 'var(--text-muted)',
             padding: '9px 16px',
             borderRadius: 8,
             fontSize: 13,
@@ -364,7 +364,7 @@ function FormNovoLancamento({
           type="submit"
           disabled={enviando || !nome}
           style={{
-            background: enviando ? '#4B5563' : '#7C6AF7',
+            background: enviando ? 'var(--text-dim)' : '#7C6AF7',
             border: 'none',
             color: '#fff',
             padding: '9px 18px',
@@ -385,7 +385,7 @@ function FormNovoLancamento({
 const rotulo: React.CSSProperties = {
   display: 'block',
   fontSize: 11,
-  color: '#9CA3AF',
+  color: 'var(--text-muted)',
   marginBottom: 6,
   textTransform: 'uppercase',
   letterSpacing: '0.06em',
@@ -393,11 +393,11 @@ const rotulo: React.CSSProperties = {
 
 const inputBase: React.CSSProperties = {
   width: '100%',
-  background: '#0F172A',
-  border: '1px solid #374151',
+  background: 'var(--surface-2)',
+  border: '1px solid var(--border-strong)',
   borderRadius: 8,
   padding: '9px 12px',
-  color: '#F9FAFB',
+  color: 'var(--text)',
   fontSize: 13,
   colorScheme: 'dark',
 }

@@ -23,7 +23,7 @@ const CATEGORIAS: { valor: CategoriaLancPago; label: string; cor: string }[] = [
   { valor: 'principal', label: 'Principal', cor: '#7C6AF7' },
   { valor: 'order_bump_principal', label: 'Order Bump (Principal)', cor: '#F59E0B' },
   { valor: 'upsell', label: 'Upsell', cor: '#60A5FA' },
-  { valor: 'downsell', label: 'Downsell', cor: '#9CA3AF' },
+  { valor: 'downsell', label: 'Downsell', cor: 'var(--text-muted)' },
 ]
 const CAT_LABEL = Object.fromEntries(CATEGORIAS.map((c) => [c.valor, c.label]))
 const CAT_COR = Object.fromEntries(CATEGORIAS.map((c) => [c.valor, c.cor]))
@@ -69,10 +69,10 @@ export function LancamentoPago() {
           }}
         >
           <div>
-            <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: '#F9FAFB' }}>
+            <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>
               Lançamento Pago
             </h1>
-            <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>
               Lançamentos com vendas de ingresso + carrinho do produto principal
             </p>
           </div>
@@ -106,18 +106,18 @@ export function LancamentoPago() {
               onClick={() => setLancId(l.id)}
               style={cardClicavel}
               onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#7C6AF7')}
-              onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#1F2937')}
+              onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
             >
               <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: '#F9FAFB' }}>
+                <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>
                   {l.nome}
                 </p>
-                <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6B7280' }}>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-faint)' }}>
                   Ingresso: {fmtData(l.ingresso_inicio)}–{fmtData(l.ingresso_fim)} ·
                   Principal: {fmtData(l.principal_inicio)}–{fmtData(l.principal_fim)}
                 </p>
               </div>
-              <span style={{ fontSize: 18, color: '#4B5563' }}>›</span>
+              <span style={{ fontSize: 18, color: 'var(--text-dim)' }}>›</span>
             </button>
           ))}
         </div>
@@ -266,10 +266,10 @@ function DetalheLancamento({
         }}
       >
         <div>
-          <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: '#F9FAFB' }}>
+          <h1 style={{ margin: '0 0 4px', fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>
             {placar.lancamento.nome}
           </h1>
-          <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>
             Ingresso: {fmtData(placar.lancamento.ingresso_inicio)}–
             {fmtData(placar.lancamento.ingresso_fim)} · Principal:{' '}
             {fmtData(placar.lancamento.principal_inicio)}–
@@ -291,8 +291,8 @@ function DetalheLancamento({
       {/* Card de total geral */}
       <div
         style={{
-          background: '#111827',
-          border: '1px solid #1F2937',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
           borderRadius: 12,
           padding: '1.25rem 1.5rem',
           marginBottom: '1.5rem',
@@ -308,7 +308,7 @@ function DetalheLancamento({
             style={{
               margin: 0,
               fontSize: 11,
-              color: '#6B7280',
+              color: 'var(--text-faint)',
               textTransform: 'uppercase',
               letterSpacing: '0.06em',
             }}
@@ -320,15 +320,15 @@ function DetalheLancamento({
           </p>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <p style={{ margin: 0, fontSize: 11, color: '#6B7280' }}>Vendas</p>
-          <p style={{ margin: '4px 0 0', fontSize: 22, fontWeight: 700, color: '#F9FAFB' }}>
+          <p style={{ margin: 0, fontSize: 11, color: 'var(--text-faint)' }}>Vendas</p>
+          <p style={{ margin: '4px 0 0', fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>
             {formatNum(totalGeralQtd)}
           </p>
         </div>
       </div>
 
       {/* Cards por categoria */}
-      <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600, color: '#E5E7EB' }}>
+      <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600, color: 'var(--text-strong)' }}>
         Por categoria
       </h3>
       {placar.totais_por_categoria.length === 0 ? (
@@ -523,7 +523,7 @@ function FormNovoLancamento({
         </div>
       </div>
 
-      <p style={{ margin: 0, fontSize: 11, color: '#6B7280' }}>
+      <p style={{ margin: 0, fontSize: 11, color: 'var(--text-faint)' }}>
         Ingresso e Principal contam só as vendas dentro do próprio intervalo. Pode
         haver um gap entre eles (ex: dias de aula).
       </p>
@@ -757,7 +757,7 @@ function FormAjusteManual({
 
   return (
     <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 14 }}>
-      <p style={{ margin: 0, fontSize: 12, color: '#6B7280' }}>
+      <p style={{ margin: 0, fontSize: 12, color: 'var(--text-faint)' }}>
         Soma vendas só na visão deste lançamento — não toca o dashboard nem a
         tabela de vendas reais. Útil pra incluir vendas que saíram fora da
         janela do lançamento.
@@ -843,8 +843,8 @@ function CardCategoria({
   return (
     <div
       style={{
-        background: '#111827',
-        border: '1px solid #1F2937',
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
         borderRadius: 12,
         padding: '1rem 1.25rem',
         display: 'flex',
@@ -859,7 +859,7 @@ function CardCategoria({
           style={{
             margin: '0 0 6px',
             fontSize: 11,
-            color: '#6B7280',
+            color: 'var(--text-faint)',
             textTransform: 'uppercase',
             letterSpacing: '0.06em',
           }}
@@ -869,7 +869,7 @@ function CardCategoria({
         <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: cor }}>
           {formatBRL(receita)}
         </p>
-        <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6B7280' }}>
+        <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-faint)' }}>
           {formatNum(quantidade)} {quantidade === 1 ? 'venda' : 'vendas'}
         </p>
       </div>
@@ -878,7 +878,7 @@ function CardCategoria({
         style={{
           display: 'grid',
           gap: 4,
-          borderTop: '1px solid #1F2937',
+          borderTop: '1px solid var(--border)',
           paddingTop: 10,
         }}
       >
@@ -899,7 +899,7 @@ function CardCategoria({
                     margin: 0,
                     fontSize: 13,
                     fontWeight: 500,
-                    color: o.quantidade > 0 ? '#F9FAFB' : '#9CA3AF',
+                    color: o.quantidade > 0 ? 'var(--text)' : 'var(--text-muted)',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
@@ -913,7 +913,7 @@ function CardCategoria({
                     style={{
                       margin: '2px 0 0',
                       fontSize: 11,
-                      color: '#6B7280',
+                      color: 'var(--text-faint)',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
@@ -927,7 +927,7 @@ function CardCategoria({
               <span
                 style={{
                   fontSize: 11,
-                  color: '#6B7280',
+                  color: 'var(--text-faint)',
                   whiteSpace: 'nowrap',
                   width: 70,
                   textAlign: 'right',
@@ -939,7 +939,7 @@ function CardCategoria({
                 style={{
                   fontSize: 13,
                   fontWeight: 600,
-                  color: o.quantidade > 0 ? '#F9FAFB' : '#4B5563',
+                  color: o.quantidade > 0 ? 'var(--text)' : 'var(--text-dim)',
                   whiteSpace: 'nowrap',
                   width: 100,
                   textAlign: 'right',
@@ -980,7 +980,7 @@ function CardCategoria({
                   gap: 10,
                   padding: '2px 4px 2px 16px',
                   fontSize: 11,
-                  color: '#9CA3AF',
+                  color: 'var(--text-muted)',
                   minWidth: 0,
                 }}
               >
@@ -1011,7 +1011,7 @@ function CardCategoria({
                 <span
                   style={{
                     fontSize: 11,
-                    color: '#6B7280',
+                    color: 'var(--text-faint)',
                     whiteSpace: 'nowrap',
                     width: 60,
                     textAlign: 'right',
@@ -1022,7 +1022,7 @@ function CardCategoria({
                 <span
                   style={{
                     fontSize: 11,
-                    color: '#E5E7EB',
+                    color: 'var(--text-strong)',
                     whiteSpace: 'nowrap',
                     width: 90,
                     textAlign: 'right',
@@ -1052,17 +1052,17 @@ function CardVazio({ titulo, mensagem }: { titulo: string; mensagem: string }) {
   return (
     <div
       style={{
-        background: '#111827',
-        border: '1px dashed #374151',
+        background: 'var(--surface)',
+        border: '1px dashed var(--border-strong)',
         borderRadius: 12,
         padding: '2rem 1.5rem',
         textAlign: 'center',
       }}
     >
-      <p style={{ margin: '0 0 8px', fontSize: 15, fontWeight: 600, color: '#E5E7EB' }}>
+      <p style={{ margin: '0 0 8px', fontSize: 15, fontWeight: 600, color: 'var(--text-strong)' }}>
         {titulo}
       </p>
-      <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>{mensagem}</p>
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>{mensagem}</p>
     </div>
   )
 }
@@ -1075,7 +1075,7 @@ function Aviso({ texto }: { texto: string }) {
         border: '1px solid #EF444444',
         borderRadius: 8,
         padding: '0.75rem 1rem',
-        color: '#FCA5A5',
+        color: 'var(--text-error)',
         fontSize: 13,
         marginBottom: '1rem',
       }}
@@ -1100,7 +1100,7 @@ function Campo({
         style={{
           display: 'block',
           fontSize: 11,
-          color: '#9CA3AF',
+          color: 'var(--text-muted)',
           marginBottom: 6,
           textTransform: 'uppercase',
           letterSpacing: '0.06em',
@@ -1129,11 +1129,11 @@ function extrairErro(err: unknown): string {
 
 const inputBase: React.CSSProperties = {
   width: '100%',
-  background: '#0F172A',
-  border: '1px solid #374151',
+  background: 'var(--surface-2)',
+  border: '1px solid var(--border-strong)',
   borderRadius: 8,
   padding: '9px 12px',
-  color: '#F9FAFB',
+  color: 'var(--text)',
   fontSize: 13,
 }
 
@@ -1153,8 +1153,8 @@ const botaoPrimario: React.CSSProperties = {
 
 const botaoSecundario: React.CSSProperties = {
   background: 'transparent',
-  border: '1px solid #374151',
-  color: '#9CA3AF',
+  border: '1px solid var(--border-strong)',
+  color: 'var(--text-muted)',
   padding: '10px 14px',
   borderRadius: 8,
   fontSize: 13,
@@ -1164,7 +1164,7 @@ const botaoSecundario: React.CSSProperties = {
 const botaoVoltar: React.CSSProperties = {
   background: 'transparent',
   border: 'none',
-  color: '#9CA3AF',
+  color: 'var(--text-muted)',
   fontSize: 13,
   cursor: 'pointer',
   padding: 0,
@@ -1177,14 +1177,14 @@ const botaoVoltar: React.CSSProperties = {
 const botaoXis: React.CSSProperties = {
   background: 'transparent',
   border: 'none',
-  color: '#6B7280',
+  color: 'var(--text-faint)',
   cursor: 'pointer',
   fontSize: 16,
   lineHeight: 1,
   padding: 0,
 }
 
-const textoMudo: React.CSSProperties = { margin: 0, fontSize: 13, color: '#6B7280' }
+const textoMudo: React.CSSProperties = { margin: 0, fontSize: 13, color: 'var(--text-faint)' }
 
 const cardClicavel: React.CSSProperties = {
   display: 'flex',
@@ -1192,8 +1192,8 @@ const cardClicavel: React.CSSProperties = {
   gap: 12,
   width: '100%',
   textAlign: 'left',
-  background: '#111827',
-  border: '1px solid #1F2937',
+  background: 'var(--surface)',
+  border: '1px solid var(--border)',
   borderRadius: 12,
   padding: '16px 18px',
   cursor: 'pointer',

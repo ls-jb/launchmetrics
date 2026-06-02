@@ -10,8 +10,8 @@ export function KPICard({ label, valor, sub, progresso, cor = '#7C6AF7' }: KPICa
   return (
     <div
       style={{
-        background: '#111827',
-        border: '1px solid #1F2937',
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
         borderRadius: 12,
         padding: '1rem 1.25rem',
       }}
@@ -19,7 +19,7 @@ export function KPICard({ label, valor, sub, progresso, cor = '#7C6AF7' }: KPICa
       <p
         style={{
           fontSize: 11,
-          color: '#6B7280',
+          color: 'var(--text-faint)',
           margin: '0 0 6px',
           textTransform: 'uppercase',
           letterSpacing: '0.08em',
@@ -27,17 +27,17 @@ export function KPICard({ label, valor, sub, progresso, cor = '#7C6AF7' }: KPICa
       >
         {label}
       </p>
-      <p style={{ fontSize: 22, fontWeight: 700, margin: '0 0 4px', color: '#F9FAFB' }}>
+      <p style={{ fontSize: 22, fontWeight: 700, margin: '0 0 4px', color: 'var(--text)' }}>
         {valor}
       </p>
-      {sub && <p style={{ fontSize: 12, color: '#6B7280', margin: 0 }}>{sub}</p>}
+      {sub && <p style={{ fontSize: 12, color: 'var(--text-faint)', margin: 0 }}>{sub}</p>}
       {progresso !== undefined && (
         <div style={{ marginTop: 10 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-            <span style={{ fontSize: 11, color: '#6B7280' }}>Meta</span>
+            <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>Meta</span>
             <span style={{ fontSize: 11, color: cor, fontWeight: 600 }}>{progresso}%</span>
           </div>
-          <div style={{ height: 4, background: '#1F2937', borderRadius: 99 }}>
+          <div style={{ height: 4, background: 'var(--border)', borderRadius: 99 }}>
             <div
               style={{
                 height: 4,
