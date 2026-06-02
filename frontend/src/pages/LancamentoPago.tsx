@@ -113,8 +113,8 @@ export function LancamentoPago() {
                   {l.nome}
                 </p>
                 <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6B7280' }}>
-                  Vendas: {fmtData(l.data_inicio)} · Carrinho: {fmtData(l.data_abertura_carrinho)} ·
-                  Fim: {fmtData(l.data_fim)}
+                  Ingresso: {fmtData(l.ingresso_inicio)}–{fmtData(l.ingresso_fim)} ·
+                  Principal: {fmtData(l.principal_inicio)}–{fmtData(l.principal_fim)}
                 </p>
               </div>
               <span style={{ fontSize: 18, color: '#4B5563' }}>›</span>
@@ -270,9 +270,10 @@ function DetalheLancamento({
             {placar.lancamento.nome}
           </h1>
           <p style={{ margin: 0, fontSize: 13, color: '#6B7280' }}>
-            Vendas: {fmtData(placar.lancamento.data_inicio)} · Carrinho:{' '}
-            {fmtData(placar.lancamento.data_abertura_carrinho)} · Fim:{' '}
-            {fmtData(placar.lancamento.data_fim)}
+            Ingresso: {fmtData(placar.lancamento.ingresso_inicio)}–
+            {fmtData(placar.lancamento.ingresso_fim)} · Principal:{' '}
+            {fmtData(placar.lancamento.principal_inicio)}–
+            {fmtData(placar.lancamento.principal_fim)}
           </p>
         </div>
         {isAdmin && (
@@ -414,8 +415,10 @@ function FormNovoLancamento({
 }) {
   const hoje = format(new Date(), 'yyyy-MM-dd')
   const [nome, setNome] = useState('')
-  const [dataInicio, setDataInicio] = useState(hoje)
-  const [dataAbertura, setDataAbertura] = useState(hoje)
+  const [ingressoInicio, setIngressoInicio] = useState(hoje)
+  const [ingressoFim, setIngressoFim] = useState(hoje)
+  const [principalInicio, setPrincipalInicio] = useState(hoje)
+  const [principalFim, setPrincipalFim] = useState(hoje)
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState('')
 
@@ -426,8 +429,10 @@ function FormNovoLancamento({
     try {
       const l = await lancamentosPagosService.criar({
         nome: nome.trim(),
-        data_inicio: dataInicio,
-        data_abertura_carrinho: dataAbertura,
+        ingresso_inicio: ingressoInicio,
+        ingresso_fim: ingressoFim,
+        principal_inicio: principalInicio,
+        principal_fim: principalFim,
       })
       onCriou(l)
     } catch (e) {
@@ -447,29 +452,80 @@ function FormNovoLancamento({
           style={inputBase}
         />
       </Campo>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <Campo label="Início das vendas de ingresso" required>
-          <input
-            type="date"
-            value={dataInicio}
-            onChange={(e) => setDataInicio(e.target.value)}
-            required
-            style={{ ...inputBase, colorScheme: 'dark' }}
-          />
-        </Campo>
-        <Campo label="Abertura do carrinho (pitch)" required>
-          <input
-            type="date"
-            value={dataAbertura}
-            onChange={(e) => setDataAbertura(e.target.value)}
-            required
-            style={{ ...inputBase, colorScheme: 'dark' }}
-          />
-        </Campo>
+
+      <div>
+        <p
+          style={{
+            margin: '0 0 6px',
+            fontSize: 11,
+            color: '#3ECFB2',
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            fontWeight: 600,
+          }}
+        >
+          Período de venda do ingresso
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Campo label="Início" required>
+            <input
+              type="date"
+              value={ingressoInicio}
+              onChange={(e) => setIngressoInicio(e.target.value)}
+              required
+              style={{ ...inputBase, colorScheme: 'dark' }}
+            />
+          </Campo>
+          <Campo label="Fim" required>
+            <input
+              type="date"
+              value={ingressoFim}
+              onChange={(e) => setIngressoFim(e.target.value)}
+              required
+              style={{ ...inputBase, colorScheme: 'dark' }}
+            />
+          </Campo>
+        </div>
       </div>
+
+      <div>
+        <p
+          style={{
+            margin: '0 0 6px',
+            fontSize: 11,
+            color: '#7C6AF7',
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            fontWeight: 600,
+          }}
+        >
+          Período de venda do produto principal
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Campo label="Início (abertura do carrinho)" required>
+            <input
+              type="date"
+              value={principalInicio}
+              onChange={(e) => setPrincipalInicio(e.target.value)}
+              required
+              style={{ ...inputBase, colorScheme: 'dark' }}
+            />
+          </Campo>
+          <Campo label="Fim" required>
+            <input
+              type="date"
+              value={principalFim}
+              onChange={(e) => setPrincipalFim(e.target.value)}
+              required
+              style={{ ...inputBase, colorScheme: 'dark' }}
+            />
+          </Campo>
+        </div>
+      </div>
+
       <p style={{ margin: 0, fontSize: 11, color: '#6B7280' }}>
-        A data fim do lançamento é calculada automaticamente: abertura do carrinho + 5 dias
-        (período em que ainda saem vendas).
+        Ingresso e Principal contam só as vendas dentro do próprio intervalo. Pode
+        haver um gap entre eles (ex: dias de aula).
       </p>
       {erro && <Aviso texto={erro} />}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>

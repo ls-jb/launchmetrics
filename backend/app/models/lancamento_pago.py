@@ -22,13 +22,14 @@ class LancamentoPago(Base):
 
     id: Mapped[UUIDType] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     nome: Mapped[str] = mapped_column(String, nullable=False)
-    data_inicio: Mapped[date] = mapped_column(Date, nullable=False)
-    """Quando começam as vendas de ingresso."""
-    data_abertura_carrinho: Mapped[date] = mapped_column(Date, nullable=False)
-    """Dia do pitch (carrinho do produto principal abre)."""
-    data_fim: Mapped[date] = mapped_column(Date, nullable=False)
-    """Quando para de atribuir vendas a este lançamento.
-    Default = data_abertura_carrinho + 5 dias."""
+    ingresso_inicio: Mapped[date] = mapped_column(Date, nullable=False)
+    """Primeiro dia de venda do ingresso."""
+    ingresso_fim: Mapped[date] = mapped_column(Date, nullable=False)
+    """Último dia em que venda de ingresso conta neste lançamento."""
+    principal_inicio: Mapped[date] = mapped_column(Date, nullable=False)
+    """Dia em que o carrinho do principal abre (pitch)."""
+    principal_fim: Mapped[date] = mapped_column(Date, nullable=False)
+    """Último dia em que venda do principal/bumps/upsell conta."""
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

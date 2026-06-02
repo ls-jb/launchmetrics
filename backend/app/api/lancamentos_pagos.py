@@ -57,7 +57,14 @@ async def criar(
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_admin),
 ):
-    return await svc.criar(db, dados.nome, dados.data_inicio, dados.data_abertura_carrinho)
+    return await svc.criar(
+        db,
+        dados.nome,
+        dados.ingresso_inicio,
+        dados.ingresso_fim,
+        dados.principal_inicio,
+        dados.principal_fim,
+    )
 
 
 @router.patch("/{lancamento_id}", response_model=LancamentoPagoResponse)
@@ -71,8 +78,10 @@ async def atualizar(
         db,
         lancamento_id,
         dados.nome,
-        dados.data_inicio,
-        dados.data_abertura_carrinho,
+        dados.ingresso_inicio,
+        dados.ingresso_fim,
+        dados.principal_inicio,
+        dados.principal_fim,
     )
     if not lanc:
         raise HTTPException(status_code=404, detail="Lançamento não encontrado.")

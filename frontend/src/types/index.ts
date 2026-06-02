@@ -190,9 +190,10 @@ export type CategoriaLancPago =
 export interface LancamentoPago {
   id: string
   nome: string
-  data_inicio: string // YYYY-MM-DD
-  data_abertura_carrinho: string
-  data_fim: string
+  ingresso_inicio: string // YYYY-MM-DD
+  ingresso_fim: string
+  principal_inicio: string
+  principal_fim: string
 }
 
 export interface LancamentoPagoOferta {

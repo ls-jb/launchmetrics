@@ -22,14 +22,18 @@ Categoria = Literal[
 # ============================================================
 class LancamentoPagoCreate(BaseModel):
     nome: str = Field(..., min_length=1, max_length=200)
-    data_inicio: date
-    data_abertura_carrinho: date
+    ingresso_inicio: date
+    ingresso_fim: date
+    principal_inicio: date
+    principal_fim: date
 
 
 class LancamentoPagoUpdate(BaseModel):
     nome: str | None = Field(default=None, min_length=1, max_length=200)
-    data_inicio: date | None = None
-    data_abertura_carrinho: date | None = None
+    ingresso_inicio: date | None = None
+    ingresso_fim: date | None = None
+    principal_inicio: date | None = None
+    principal_fim: date | None = None
 
 
 class OfertaCreate(BaseModel):
@@ -47,9 +51,10 @@ class LancamentoPagoResponse(BaseModel):
 
     id: UUID
     nome: str
-    data_inicio: date
-    data_abertura_carrinho: date
-    data_fim: date
+    ingresso_inicio: date
+    ingresso_fim: date
+    principal_inicio: date
+    principal_fim: date
 
 
 class OfertaResponse(BaseModel):

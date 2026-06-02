@@ -29,37 +29,35 @@ from app.schemas.lancamento_pago import (
     TotalCategoria,
 )
 
-JANELA_POS_CARRINHO_DIAS = 5
-"""data_fim = data_abertura_carrinho + 5 dias (vendas continuam saindo por
-~4-5 dias depois do pitch)."""
-
 CATEGORIAS_INGRESSO = {"ingresso", "order_bump_ingresso"}
-"""Conta vendas de data_inicio até data_abertura_carrinho - 1 dia."""
+"""Conta vendas no intervalo ingresso_inicio..ingresso_fim do lançamento."""
 
 CATEGORIAS_PRINCIPAL = {"principal", "order_bump_principal", "upsell", "downsell"}
-"""Conta vendas de data_abertura_carrinho até data_fim (= abertura + 5)."""
-
-
-def _calcular_fim(abertura: date) -> date:
-    return abertura + timedelta(days=JANELA_POS_CARRINHO_DIAS)
+"""Conta vendas no intervalo principal_inicio..principal_fim do lançamento."""
 
 
 # ============================================================
 # Lançamentos
 # ============================================================
 async def listar(db: AsyncSession) -> list[LancamentoPago]:
-    stmt = select(LancamentoPago).order_by(LancamentoPago.data_inicio.desc())
+    stmt = select(LancamentoPago).order_by(LancamentoPago.ingresso_inicio.desc())
     return list((await db.execute(stmt)).scalars().all())
 
 
 async def criar(
-    db: AsyncSession, nome: str, data_inicio: date, data_abertura_carrinho: date
+    db: AsyncSession,
+    nome: str,
+    ingresso_inicio: date,
+    ingresso_fim: date,
+    principal_inicio: date,
+    principal_fim: date,
 ) -> LancamentoPago:
     lanc = LancamentoPago(
         nome=nome,
-        data_inicio=data_inicio,
-        data_abertura_carrinho=data_abertura_carrinho,
-        data_fim=_calcular_fim(data_abertura_carrinho),
+        ingresso_inicio=ingresso_inicio,
+        ingresso_fim=ingresso_fim,
+        principal_inicio=principal_inicio,
+        principal_fim=principal_fim,
     )
     db.add(lanc)
     await db.commit()
@@ -71,19 +69,24 @@ async def atualizar(
     db: AsyncSession,
     lancamento_id: UUID,
     nome: str | None,
-    data_inicio: date | None,
-    data_abertura_carrinho: date | None,
+    ingresso_inicio: date | None,
+    ingresso_fim: date | None,
+    principal_inicio: date | None,
+    principal_fim: date | None,
 ) -> LancamentoPago | None:
     lanc = await db.get(LancamentoPago, lancamento_id)
     if not lanc:
         return None
     if nome is not None:
         lanc.nome = nome
-    if data_inicio is not None:
-        lanc.data_inicio = data_inicio
-    if data_abertura_carrinho is not None:
-        lanc.data_abertura_carrinho = data_abertura_carrinho
-        lanc.data_fim = _calcular_fim(data_abertura_carrinho)
+    if ingresso_inicio is not None:
+        lanc.ingresso_inicio = ingresso_inicio
+    if ingresso_fim is not None:
+        lanc.ingresso_fim = ingresso_fim
+    if principal_inicio is not None:
+        lanc.principal_inicio = principal_inicio
+    if principal_fim is not None:
+        lanc.principal_fim = principal_fim
     await db.commit()
     await db.refresh(lanc)
     return lanc
@@ -190,14 +193,11 @@ async def _totais_por_categoria(
         if o.categoria in CATEGORIAS_PRINCIPAL and o.oferta_codigo
     ]
     metricas = await _metricas_por_codigo(
-        db,
-        codigos_ingresso,
-        lanc.data_inicio,
-        lanc.data_abertura_carrinho - timedelta(days=1),
+        db, codigos_ingresso, lanc.ingresso_inicio, lanc.ingresso_fim
     )
     metricas.update(
         await _metricas_por_codigo(
-            db, codigos_principal, lanc.data_abertura_carrinho, lanc.data_fim
+            db, codigos_principal, lanc.principal_inicio, lanc.principal_fim
         )
     )
 

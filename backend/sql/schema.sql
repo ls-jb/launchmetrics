@@ -249,13 +249,15 @@ create index if not exists ix_placar_contagens_oferta on launchmetrics.placar_co
 create table if not exists launchmetrics.lancamentos_pagos (
     id uuid primary key default gen_random_uuid(),
     nome text not null,
-    data_inicio date not null,            -- início das vendas de ingresso
-    data_abertura_carrinho date not null, -- dia do pitch (carrinho do principal)
-    data_fim date not null,               -- default = abertura_carrinho + 5 dias
+    -- Janelas independentes (pode existir gap entre elas, ex: dias de aula).
+    ingresso_inicio date not null,    -- 1º dia de venda do ingresso
+    ingresso_fim date not null,       -- último dia em que ingresso conta
+    principal_inicio date not null,   -- abertura do carrinho do principal (pitch)
+    principal_fim date not null,      -- último dia em que principal/bumps/up/down contam
     criado_em timestamptz not null default now()
 );
 create index if not exists ix_lancamentos_pagos_inicio
-    on launchmetrics.lancamentos_pagos (data_inicio desc);
+    on launchmetrics.lancamentos_pagos (ingresso_inicio desc);
 
 create table if not exists launchmetrics.lancamentos_pagos_ofertas (
     id uuid primary key default gen_random_uuid(),
