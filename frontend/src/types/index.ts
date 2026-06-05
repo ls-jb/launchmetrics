@@ -109,6 +109,7 @@ export interface ResumoVendas {
 export interface PontoReceita {
   data: string
   receita: number
+  quantidade: number
 }
 
 export interface ProdutoRanking {

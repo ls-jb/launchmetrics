@@ -139,13 +139,20 @@ async def por_dia(
     sub = _vendas_efetivas(inicio, fim, produtos, oferta)
     dia = cast(sub.c.data_venda, Date).label("dia")
     stmt = (
-        select(dia, func.sum(sub.c.valor_efetivo).label("receita"))
+        select(
+            dia,
+            func.sum(sub.c.valor_efetivo).label("receita"),
+            func.count().label("quantidade"),
+        )
         .select_from(sub)
         .group_by(dia)
         .order_by(dia)
     )
     rows = (await db.execute(stmt)).all()
-    return [PontoReceita(data=r.dia, receita=r.receita) for r in rows]
+    return [
+        PontoReceita(data=r.dia, receita=r.receita, quantidade=r.quantidade)
+        for r in rows
+    ]
 
 
 async def por_produto(

@@ -109,6 +109,7 @@ export function Vendas() {
       porDia.map((p) => ({
         data: p.data.slice(8, 10) + '/' + p.data.slice(5, 7),
         receita: p.receita,
+        quantidade: p.quantidade,
       })),
     [porDia],
   )

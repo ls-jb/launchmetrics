@@ -87,6 +87,7 @@ class PontoReceita(BaseModel):
 
     data: date
     receita: Money
+    quantidade: int
 
 
 class ProdutoRanking(BaseModel):
