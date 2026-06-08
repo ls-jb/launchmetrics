@@ -33,6 +33,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def sem_cache_no_api(request, call_next):
+    """Impede que o navegador (ou proxy) sirva resposta de /api/* em cache.
+    Sem isso, o botão "Atualizar" e o auto-refresh de 30s podem devolver
+    dados velhos do cache local em vez de buscar fresco no backend."""
+    response = await call_next(request)
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
 app.include_router(lancamentos.router, prefix="/api")
 app.include_router(lancamentos_pagos.router, prefix="/api")
 app.include_router(vendas.router, prefix="/api")
