@@ -10,6 +10,9 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import UUID
+from zoneinfo import ZoneInfo
+
+BR_TZ = ZoneInfo("America/Sao_Paulo")
 
 from sqlalchemy import String, and_, case, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -286,8 +289,13 @@ async def _metricas_por_codigo(
     if not codigos or fim < inicio:
         return {}
 
-    inicio_dt = datetime.combine(inicio, datetime.min.time(), tzinfo=timezone.utc)
-    fim_dt = datetime.combine(fim + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
+    # Janela em horário de Brasília — o usuário (e a Hotmart/Guru) pensam o
+    # dia em BRT. Sem isso, vendas de 21h-23h59 BRT do dia anterior caíam
+    # neste dia em UTC (00h-03h UTC), inflando o número.
+    inicio_dt = datetime.combine(inicio, datetime.min.time(), tzinfo=BR_TZ).astimezone(timezone.utc)
+    fim_dt = datetime.combine(
+        fim + timedelta(days=1), datetime.min.time(), tzinfo=BR_TZ
+    ).astimezone(timezone.utc)
 
     valor_efetivo = func.coalesce(OfertaPreco.valor, Venda.valor).label("v")
     dedup_key = case(

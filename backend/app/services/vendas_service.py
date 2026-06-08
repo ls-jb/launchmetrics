@@ -16,6 +16,11 @@ REGRAS DE NEGÓCIO (alinhadas com o usuário):
 """
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
+from zoneinfo import ZoneInfo
+
+BR_TZ = ZoneInfo("America/Sao_Paulo")
+"""Fuso usado nos filtros de data do dashboard/LP — usuários (e Hotmart/Guru)
+pensam o dia em horário de Brasília."""
 
 from sqlalchemy import (
     Date,
@@ -341,7 +346,12 @@ async def remover_preco_oferta(db: AsyncSession, oferta_codigo: str) -> bool:
 # Helpers
 # ============================================================
 def _range_utc(inicio: date, fim: date) -> tuple[datetime, datetime]:
-    """Converte YYYY-MM-DD em range [inicio_00, fim+1_00) UTC."""
-    inicio_dt = datetime.combine(inicio, time.min, tzinfo=timezone.utc)
-    fim_dt = datetime.combine(fim + timedelta(days=1), time.min, tzinfo=timezone.utc)
+    """Converte YYYY-MM-DD em range [inicio_00_BRT, fim+1_00_BRT) e devolve em
+    UTC. O usuário pensa em dias no fuso de Brasília (UTC-3); usar UTC puro
+    fazia vendas de 21h-23h59 BRT do dia anterior caírem no "dia seguinte"
+    porque viram 00h-03h UTC."""
+    inicio_dt = datetime.combine(inicio, time.min, tzinfo=BR_TZ).astimezone(timezone.utc)
+    fim_dt = datetime.combine(
+        fim + timedelta(days=1), time.min, tzinfo=BR_TZ
+    ).astimezone(timezone.utc)
     return inicio_dt, fim_dt
