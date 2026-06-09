@@ -5,7 +5,7 @@ SEMPRE responde 200 (o GHL não faz retry bem).
 """
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Canal, Lancamento, Lead
@@ -33,10 +33,29 @@ async def processar_lead_ghl(db: AsyncSession, token: str, payload: dict) -> Non
     """
     Recebe o payload do GHL e grava um lead. Levanta ValueError se o token
     for inválido — o caller (router) decide o que fazer com o erro.
+
+    Dedup por email (case-insensitive): se já existe lead com o mesmo email
+    no mesmo lançamento, ignora silenciosamente. Lead sem email passa direto
+    (não tem como dedup).
     """
     lancamento = await _buscar_por_token(db, token)
     if not lancamento:
         raise ValueError(f"Lançamento não encontrado para token: {token}")
+
+    email = (_primeiro(payload, "email", "Email") or "").strip()
+    if email:
+        ja = (
+            await db.execute(
+                select(Lead.id)
+                .where(
+                    Lead.lancamento_id == lancamento.id,
+                    func.lower(Lead.email) == email.lower(),
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if ja is not None:
+            return  # duplicado — silencia
 
     canal_nome = _normalizar(_extrair_canal_bruto(payload))
     canal_id = await _obter_ou_criar_canal(db, lancamento.id, canal_nome)
@@ -45,8 +64,8 @@ async def processar_lead_ghl(db: AsyncSession, token: str, payload: dict) -> Non
         lancamento_id=lancamento.id,
         canal_id=canal_id,
         nome=_extrair_nome(payload),
-        email=_primeiro(payload, "email", "Email") or "",
-        telefone=_primeiro(payload, "phone", "Phone", "telefone") or "",
+        email=email,
+        telefone=_primeiro(payload, "phone", "Phone", "telefone", "Telefone") or "",
         origem=canal_nome,
     )
     db.add(lead)
@@ -57,7 +76,7 @@ async def processar_lead_ghl(db: AsyncSession, token: str, payload: dict) -> Non
 # Extração de campos do payload do GHL
 # ============================================================
 def _extrair_nome(payload: dict) -> str:
-    completo = _primeiro(payload, "fullName", "name", "full_name")
+    completo = _primeiro(payload, "Nome", "nome", "fullName", "name", "full_name")
     if completo:
         return completo
     first = _primeiro(payload, "firstName", "first_name") or ""
