@@ -3,12 +3,16 @@ Processa o payload recebido do Go High Level e grava um lead no banco.
 Deve ser tolerante a falhas — qualquer erro é logado mas o endpoint do webhook
 SEMPRE responde 200 (o GHL não faz retry bem).
 """
+from datetime import datetime
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Canal, Lancamento, Lead
+
+BR_TZ = ZoneInfo("America/Sao_Paulo")
 
 # Mapeamento de valores que chegam do GHL → nome canônico do canal
 NORMALIZACAO_CANAL = {
@@ -68,6 +72,12 @@ async def processar_lead_ghl(db: AsyncSession, token: str, payload: dict) -> Non
         telefone=_primeiro(payload, "phone", "Phone", "telefone", "Telefone") or "",
         origem=canal_nome,
     )
+    # Data do GHL (campo "Data"/"DATA") tem precedência sobre NOW() do banco
+    # — assim o gráfico de velocidade reflete o momento exato da inscrição,
+    # não o instante em que o webhook chegou.
+    data_inscricao = _extrair_data(payload)
+    if data_inscricao is not None:
+        lead.criado_em = data_inscricao
     db.add(lead)
     await db.commit()
 
@@ -114,6 +124,35 @@ def _primeiro(payload: dict, *chaves: str) -> str | None:
         valor = payload.get(chave)
         if valor:
             return str(valor)
+    return None
+
+
+# Formatos aceitos para o campo "Data" enviado pelo GHL
+# (right_now.little_endian_date + hora/minuto/segundo).
+_FORMATOS_DATA = (
+    "%d-%m-%Y %H:%M:%S",
+    "%d-%m-%Y %H:%M",
+    "%d/%m/%Y %H:%M:%S",
+    "%d/%m/%Y %H:%M",
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%d %H:%M:%S",
+)
+
+
+def _extrair_data(payload: dict) -> datetime | None:
+    """Lê o campo "Data" (ou variantes) do payload e devolve datetime
+    timezone-aware em BRT. Retorna None se não tiver ou se não conseguir
+    parsear — o caller cai no NOW() do banco."""
+    bruto = _primeiro(payload, "Data", "DATA", "data", "data_inscricao")
+    if not bruto:
+        return None
+    bruto = bruto.strip()
+    for fmt in _FORMATOS_DATA:
+        try:
+            dt = datetime.strptime(bruto, fmt)
+            return dt.replace(tzinfo=BR_TZ)
+        except ValueError:
+            continue
     return None
 
 
