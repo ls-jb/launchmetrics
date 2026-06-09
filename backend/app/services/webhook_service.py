@@ -14,15 +14,20 @@ from app.models import Canal, Lancamento, Lead
 
 BR_TZ = ZoneInfo("America/Sao_Paulo")
 
-# Mapeamento de valores que chegam do GHL → nome canônico do canal
+# Mapeamento de valores que chegam do GHL → nome canônico do canal.
+# Variações de capitalização/espaçamento caem todas no mesmo bucket.
 NORMALIZACAO_CANAL = {
     "facebook": "Meta Ads",
     "meta": "Meta Ads",
+    "meta ads": "Meta Ads",
     "meta-ads": "Meta Ads",
+    "metaads": "Meta Ads",
     "instagram": "Meta Ads",
+    "ig": "Meta Ads",
     "google": "Google Ads",
     "google-ads": "Google Ads",
     "googleads": "Google Ads",
+    "google ads": "Google Ads",
     "whatsapp": "WhatsApp",
     "wpp": "WhatsApp",
     "email": "Email",
@@ -110,12 +115,15 @@ def _extrair_canal_bruto(payload: dict) -> str:
     if isinstance(tags, list) and tags:
         return str(tags[0])
 
-    return "Orgânico"
+    # Sem nenhuma origem identificável → "Sem Utm".
+    return ""
 
 
 def _normalizar(valor: str) -> str:
     chave = valor.strip().lower()
-    return NORMALIZACAO_CANAL.get(chave, valor.strip() or "Orgânico")
+    if chave in NORMALIZACAO_CANAL:
+        return NORMALIZACAO_CANAL[chave]
+    return valor.strip() or "Sem Utm"
 
 
 def _primeiro(payload: dict, *chaves: str) -> str | None:
