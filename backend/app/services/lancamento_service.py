@@ -52,23 +52,12 @@ async def obter(db: AsyncSession, id: UUID) -> LancamentoResponse | None:
 async def velocidade_leads(
     db: AsyncSession, lancamento_id: UUID
 ) -> list[PontoVelocidade]:
-    """Leads agregados por dia — alimenta o gráfico de linha do detalhe."""
-    dia = cast(Lead.criado_em, Date).label("dia")
-    stmt = (
-        select(dia, func.count(Lead.id).label("leads"))
-        .where(Lead.lancamento_id == lancamento_id)
-        .group_by(dia)
-        .order_by(dia)
-    )
-    rows = (await db.execute(stmt)).all()
-    return [PontoVelocidade(dia=r.dia, leads=r.leads) for r in rows]
-
-
-async def velocidade_leads(
-    db: AsyncSession, lancamento_id: UUID
-) -> list[PontoVelocidade]:
-    """Leads agregados por dia — alimenta o gráfico de linha do detalhe."""
-    dia = cast(Lead.criado_em, Date).label("dia")
+    """Leads agregados por dia (horário de Brasília) — alimenta o gráfico
+    de linha do detalhe. Sem o AT TIME ZONE, o Postgres agrupa em UTC e
+    leads das 21h-23h59 BRT acabam no "dia seguinte"."""
+    dia = cast(
+        func.timezone("America/Sao_Paulo", Lead.criado_em), Date
+    ).label("dia")
     stmt = (
         select(dia, func.count(Lead.id).label("leads"))
         .where(Lead.lancamento_id == lancamento_id)
