@@ -18,6 +18,7 @@ export interface Lancamento {
   data_inicio: string | null
   data_fim: string | null
   meta_leads: number | null
+  teto_investimento: number | null
   meta_roas: number | null
   meta_receita: number | null
   webhook_token: string
@@ -28,6 +29,19 @@ export interface Lancamento {
   cpl: number
   roas: number
   canais: Canal[]
+}
+
+export interface NovoLancamentoPayload {
+  nome: string
+  data_inicio?: string | null
+  data_fim?: string | null
+  meta_leads?: number | null
+  teto_investimento?: number | null
+}
+
+export interface LeadsPorUtmContent {
+  utm_content: string
+  quantidade: number
 }
 
 export interface PontoVelocidade {

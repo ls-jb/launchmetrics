@@ -5,9 +5,10 @@ import { BadgeStatus } from '@/components/shared/BadgeStatus'
 import { BarraCanal } from '@/components/shared/BarraCanal'
 import { GraficoVelocidade } from '@/components/shared/GraficoVelocidade'
 import { KPICard } from '@/components/shared/KPICard'
+import { Modal } from '@/components/shared/Modal'
 import { formatBRL, formatNum, formatPct } from '@/lib/tokens'
 import { lancamentosService } from '@/services/lancamentosService'
-import type { Canal, Lancamento, PontoVelocidade } from '@/types'
+import type { Canal, Lancamento, LeadsPorUtmContent, PontoVelocidade } from '@/types'
 
 export function LancamentoDetalhe() {
   const { id } = useParams<{ id: string }>()
@@ -16,6 +17,7 @@ export function LancamentoDetalhe() {
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [tokenCopiado, setTokenCopiado] = useState(false)
+  const [canalSel, setCanalSel] = useState<Canal | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -64,6 +66,15 @@ export function LancamentoDetalhe() {
     setLancamento(atualizado)
   }
 
+  const salvarMeta = async (
+    campo: 'meta_leads' | 'teto_investimento',
+    valor: number | null,
+  ) => {
+    if (!id) return
+    const atualizado = await lancamentosService.atualizar(id, { [campo]: valor })
+    setLancamento(atualizado)
+  }
+
   return (
     <div>
       <Link
@@ -102,6 +113,30 @@ export function LancamentoDetalhe() {
 
       <div
         style={{
+          display: 'flex',
+          gap: 16,
+          marginBottom: '1rem',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+        }}
+      >
+        <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>Editar metas:</span>
+        <EditavelInline
+          label="Meta de leads"
+          valor={lancamento.meta_leads}
+          formatar={(v) => formatNum(v)}
+          aoSalvar={(v) => salvarMeta('meta_leads', v)}
+        />
+        <EditavelInline
+          label="Teto de investimento"
+          valor={lancamento.teto_investimento}
+          formatar={(v) => formatBRL(v)}
+          aoSalvar={(v) => salvarMeta('teto_investimento', v)}
+        />
+      </div>
+
+      <div
+        style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
           gap: 12,
@@ -119,19 +154,25 @@ export function LancamentoDetalhe() {
           }
           cor="#3ECFB2"
         />
-        <KPICard label="Investimento total" valor={formatBRL(lancamento.investimento_total)} />
-        <KPICard label="CPL médio" valor={`R$ ${lancamento.cpl.toFixed(2)}`} cor="#3ECFB2" />
         <KPICard
-          label="ROAS"
-          valor={`${lancamento.roas.toFixed(2)}x`}
-          sub={lancamento.meta_roas ? `Meta: ${lancamento.meta_roas.toFixed(1)}x` : 'Sem meta'}
+          label="Investimento total"
+          valor={formatBRL(lancamento.investimento_total)}
+          sub={
+            lancamento.teto_investimento
+              ? `Teto: ${formatBRL(lancamento.teto_investimento)}`
+              : 'Sem teto'
+          }
           progresso={
-            lancamento.meta_roas
-              ? formatPct(lancamento.roas, lancamento.meta_roas)
+            lancamento.teto_investimento
+              ? formatPct(
+                  lancamento.investimento_total,
+                  lancamento.teto_investimento,
+                )
               : undefined
           }
           cor="#F59E0B"
         />
+        <KPICard label="CPL médio" valor={`R$ ${lancamento.cpl.toFixed(2)}`} cor="#3ECFB2" />
       </div>
 
       <div
@@ -150,8 +191,19 @@ export function LancamentoDetalhe() {
             mensagem="Ainda não chegaram leads pelo webhook. Configure o GHL com a URL ao lado."
           />
         )}
-        <BarraCanal canais={lancamento.canais} />
+        <BarraCanal canais={lancamento.canais} onSelecionar={setCanalSel} />
       </div>
+
+      <Modal
+        aberto={canalSel !== null}
+        titulo={canalSel ? `Leads por anúncio — ${canalSel.nome}` : ''}
+        onFechar={() => setCanalSel(null)}
+        largura={640}
+      >
+        {canalSel && lancamento && (
+          <DrillUtmContent lancamentoId={lancamento.id} canal={canalSel} />
+        )}
+      </Modal>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         <EditorInvestimento
@@ -404,6 +456,210 @@ function Mensagem({ texto, tipo = 'info' }: { texto: string; tipo?: 'info' | 'er
 function formatarData(data: string | null): string {
   if (!data) return '—'
   return data.slice(8, 10) + '/' + data.slice(5, 7) + '/' + data.slice(0, 4)
+}
+
+function DrillUtmContent({
+  lancamentoId,
+  canal,
+}: {
+  lancamentoId: string
+  canal: Canal
+}) {
+  const [dados, setDados] = useState<LeadsPorUtmContent[] | null>(null)
+  const [erro, setErro] = useState('')
+
+  useEffect(() => {
+    setDados(null)
+    setErro('')
+    lancamentosService
+      .leadsPorUtmContent(lancamentoId, canal.id)
+      .then(setDados)
+      .catch((e) => setErro(extrairErro(e)))
+  }, [lancamentoId, canal.id])
+
+  if (erro) {
+    return (
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--text-error)' }}>{erro}</p>
+    )
+  }
+  if (!dados) {
+    return (
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>Carregando…</p>
+    )
+  }
+  if (dados.length === 0) {
+    return (
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>
+        Nenhum lead deste canal ainda.
+      </p>
+    )
+  }
+
+  const total = dados.reduce((a, d) => a + d.quantidade, 0)
+  const max = dados[0].quantidade
+
+  return (
+    <div>
+      <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-faint)' }}>
+        Total: {formatNum(total)} leads — agrupado por <code>utm_content</code>.
+      </p>
+      <div style={{ display: 'grid', gap: 8 }}>
+        {dados.map((d) => (
+          <div key={d.utm_content}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span
+                style={{
+                  fontSize: 12,
+                  color: 'var(--text)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  maxWidth: '70%',
+                }}
+                title={d.utm_content}
+              >
+                {d.utm_content}
+              </span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
+                {formatNum(d.quantidade)} leads
+              </span>
+            </div>
+            <div style={{ height: 4, background: 'var(--border)', borderRadius: 99 }}>
+              <div
+                style={{
+                  height: 4,
+                  width: `${Math.round((d.quantidade / max) * 100)}%`,
+                  background: '#7C6AF7',
+                  borderRadius: 99,
+                }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function EditavelInline({
+  label,
+  valor,
+  formatar,
+  aoSalvar,
+}: {
+  label: string
+  valor: number | null
+  formatar: (v: number) => string
+  aoSalvar: (v: number | null) => Promise<void>
+}) {
+  const [editando, setEditando] = useState(false)
+  const [texto, setTexto] = useState(valor != null ? String(valor) : '')
+  const [salvando, setSalvando] = useState(false)
+
+  const iniciar = () => {
+    setTexto(valor != null ? String(valor) : '')
+    setEditando(true)
+  }
+
+  const cancelar = () => setEditando(false)
+
+  const salvar = async () => {
+    const t = texto.trim()
+    const novo = t === '' ? null : Number(t)
+    if (novo !== null && (Number.isNaN(novo) || novo < 0)) return
+    if (novo === (valor ?? null)) {
+      setEditando(false)
+      return
+    }
+    setSalvando(true)
+    try {
+      await aoSalvar(novo)
+      setEditando(false)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  if (!editando) {
+    return (
+      <button
+        onClick={iniciar}
+        title={`Editar ${label.toLowerCase()}`}
+        style={{
+          background: 'transparent',
+          border: '1px dashed var(--border-strong)',
+          borderRadius: 8,
+          padding: '6px 10px',
+          fontSize: 12,
+          color: 'var(--text-muted)',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+        }}
+      >
+        <span style={{ color: 'var(--text-faint)' }}>{label}:</span>
+        <span style={{ color: valor != null ? 'var(--text)' : 'var(--text-dim)', fontWeight: 600 }}>
+          {valor != null ? formatar(valor) : 'não definido'}
+        </span>
+        <span style={{ color: 'var(--text-dim)', fontSize: 11 }}>✎</span>
+      </button>
+    )
+  }
+
+  return (
+    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>{label}:</span>
+      <input
+        autoFocus
+        type="number"
+        step="0.01"
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') salvar()
+          if (e.key === 'Escape') cancelar()
+        }}
+        disabled={salvando}
+        style={{
+          width: 120,
+          background: 'var(--surface-2)',
+          border: '1px solid var(--border-strong)',
+          borderRadius: 6,
+          padding: '4px 8px',
+          color: 'var(--text)',
+          fontSize: 12,
+        }}
+      />
+      <button onClick={salvar} disabled={salvando} style={botaoOk}>
+        {salvando ? '…' : 'Salvar'}
+      </button>
+      <button onClick={cancelar} disabled={salvando} style={botaoCancelar}>
+        ×
+      </button>
+    </span>
+  )
+}
+
+const botaoOk: React.CSSProperties = {
+  background: '#7C6AF7',
+  border: 'none',
+  color: '#fff',
+  borderRadius: 6,
+  padding: '4px 10px',
+  fontSize: 11,
+  fontWeight: 600,
+  cursor: 'pointer',
+}
+
+const botaoCancelar: React.CSSProperties = {
+  background: 'transparent',
+  border: '1px solid var(--border-strong)',
+  color: 'var(--text-muted)',
+  borderRadius: 6,
+  padding: '3px 8px',
+  fontSize: 12,
+  cursor: 'pointer',
 }
 
 function extrairErro(err: unknown): string {

@@ -10,6 +10,7 @@ from app.schemas.lancamento import (
     LancamentoCreate,
     LancamentoResponse,
     LancamentoUpdate,
+    LeadsPorUtmContent,
     PontoVelocidade,
 )
 from app.services import lancamento_service
@@ -77,6 +78,20 @@ async def deletar_lancamento(
     sucesso = await lancamento_service.deletar(db, id)
     if not sucesso:
         raise HTTPException(status_code=404, detail="Lançamento não encontrado")
+
+
+@router.get(
+    "/{id}/canais/{canal_id}/utm-content",
+    response_model=list[LeadsPorUtmContent],
+)
+async def leads_por_utm_content(
+    id: UUID,
+    canal_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(verify_token),
+):
+    """Drill-down: leads agrupados por utm_content dentro do canal."""
+    return await lancamento_service.leads_por_utm_content(db, id, canal_id)
 
 
 @router.patch("/{id}/canais", response_model=LancamentoResponse)

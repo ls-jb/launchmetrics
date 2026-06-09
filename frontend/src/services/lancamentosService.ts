@@ -1,12 +1,21 @@
 import { api } from './api'
-import type { Lancamento, PontoVelocidade, StatusLancamento } from '@/types'
+import type {
+  Lancamento,
+  LeadsPorUtmContent,
+  NovoLancamentoPayload,
+  PontoVelocidade,
+  StatusLancamento,
+} from '@/types'
 
-export interface LancamentoCreatePayload {
-  nome: string
+export type LancamentoCreatePayload = NovoLancamentoPayload
+
+export interface LancamentoUpdatePayload {
+  nome?: string
   status?: StatusLancamento
   data_inicio?: string | null
   data_fim?: string | null
   meta_leads?: number | null
+  teto_investimento?: number | null
   meta_roas?: number | null
   meta_receita?: number | null
 }
@@ -26,7 +35,7 @@ export const lancamentosService = {
   criar: (dados: LancamentoCreatePayload) =>
     api.post<Lancamento>('/api/lancamentos', dados).then((r) => r.data),
 
-  atualizar: (id: string, dados: Partial<LancamentoCreatePayload>) =>
+  atualizar: (id: string, dados: LancamentoUpdatePayload) =>
     api.patch<Lancamento>(`/api/lancamentos/${id}`, dados).then((r) => r.data),
 
   deletar: (id: string) =>
@@ -40,5 +49,12 @@ export const lancamentosService = {
   velocidadeLeads: (id: string) =>
     api
       .get<PontoVelocidade[]>(`/api/lancamentos/${id}/velocidade-leads`)
+      .then((r) => r.data),
+
+  leadsPorUtmContent: (id: string, canalId: string) =>
+    api
+      .get<LeadsPorUtmContent[]>(
+        `/api/lancamentos/${id}/canais/${canalId}/utm-content`,
+      )
       .then((r) => r.data),
 }

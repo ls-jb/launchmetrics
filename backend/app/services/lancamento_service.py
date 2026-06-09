@@ -49,6 +49,26 @@ async def obter(db: AsyncSession, id: UUID) -> LancamentoResponse | None:
     return _montar_response(lancamento, leads_por_canal_global)
 
 
+async def leads_por_utm_content(
+    db: AsyncSession, lancamento_id: UUID, canal_id: UUID
+) -> list:
+    """Drill-down: quantos leads em cada utm_content dentro de um canal.
+    Leads sem utm_content viram bucket "Sem utm_content"."""
+    from app.schemas.lancamento import LeadsPorUtmContent
+
+    utm = func.coalesce(
+        func.nullif(func.trim(Lead.utm_content), ""), "Sem utm_content"
+    ).label("utm")
+    stmt = (
+        select(utm, func.count(Lead.id).label("qtd"))
+        .where(Lead.lancamento_id == lancamento_id, Lead.canal_id == canal_id)
+        .group_by(utm)
+        .order_by(func.count(Lead.id).desc())
+    )
+    rows = (await db.execute(stmt)).all()
+    return [LeadsPorUtmContent(utm_content=r.utm, quantidade=r.qtd) for r in rows]
+
+
 async def velocidade_leads(
     db: AsyncSession, lancamento_id: UUID
 ) -> list[PontoVelocidade]:
@@ -72,7 +92,11 @@ async def velocidade_leads(
 # Operações de escrita
 # ============================================================
 async def criar(db: AsyncSession, dados: LancamentoCreate) -> LancamentoResponse:
-    lancamento = Lancamento(**dados.model_dump(), webhook_token=uuid4().hex)
+    # status começa em 'captacao' (mais comum quando se cadastra). Pode mudar
+    # depois via PATCH (lancamento detalhe).
+    lancamento = Lancamento(
+        **dados.model_dump(), status="captacao", webhook_token=uuid4().hex
+    )
     db.add(lancamento)
     await db.commit()
     await db.refresh(lancamento, attribute_names=["canais"])

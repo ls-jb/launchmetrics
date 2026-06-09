@@ -76,6 +76,7 @@ async def processar_lead_ghl(db: AsyncSession, token: str, payload: dict) -> Non
         email=email,
         telefone=_primeiro(payload, "phone", "Phone", "telefone", "Telefone") or "",
         origem=canal_nome,
+        utm_content=_primeiro(payload, "utm_content", "utmContent") or None,
     )
     # Data do GHL (campo "Data"/"DATA") tem precedência sobre NOW() do banco
     # — assim o gráfico de velocidade reflete o momento exato da inscrição,

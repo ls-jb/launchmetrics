@@ -21,6 +21,8 @@ class Lancamento(Base):
     meta_leads: Mapped[int | None] = mapped_column(Integer)
     meta_roas: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     meta_receita: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    teto_investimento: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    """Teto de investimento estimado pra todo o lançamento (admin define)."""
     webhook_token: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

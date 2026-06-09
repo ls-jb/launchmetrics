@@ -8,7 +8,7 @@ import {
   lancamentosService,
   type LancamentoCreatePayload,
 } from '@/services/lancamentosService'
-import type { Lancamento, StatusLancamento } from '@/types'
+import type { Lancamento } from '@/types'
 
 export function Lancamentos() {
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([])
@@ -259,12 +259,10 @@ function FormNovoLancamento({
   onCriado: () => void
 }) {
   const [nome, setNome] = useState('')
-  const [status, setStatus] = useState<StatusLancamento>('pre_lancamento')
   const [dataInicio, setDataInicio] = useState('')
   const [dataFim, setDataFim] = useState('')
   const [metaLeads, setMetaLeads] = useState('')
-  const [metaRoas, setMetaRoas] = useState('')
-  const [metaReceita, setMetaReceita] = useState('')
+  const [tetoInvestimento, setTetoInvestimento] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState('')
 
@@ -274,12 +272,10 @@ function FormNovoLancamento({
     setEnviando(true)
     const payload: LancamentoCreatePayload = {
       nome,
-      status,
       data_inicio: dataInicio || null,
       data_fim: dataFim || null,
       meta_leads: metaLeads ? Number(metaLeads) : null,
-      meta_roas: metaRoas ? Number(metaRoas) : null,
-      meta_receita: metaReceita ? Number(metaReceita) : null,
+      teto_investimento: tetoInvestimento ? Number(tetoInvestimento) : null,
     }
     try {
       await lancamentosService.criar(payload)
@@ -304,27 +300,15 @@ function FormNovoLancamento({
         <Campo label="Data de início" tipo="date" valor={dataInicio} onChange={setDataInicio} />
         <Campo label="Data de fim" tipo="date" valor={dataFim} onChange={setDataFim} />
       </div>
-      <div>
-        <label style={rotulo}>Status inicial</label>
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value as StatusLancamento)}
-          style={inputBase}
-        >
-          <option value="pre_lancamento">Pré-lançamento</option>
-          <option value="captacao">Captação</option>
-          <option value="carrinho">Carrinho aberto</option>
-        </select>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <Campo label="Meta de leads" tipo="number" valor={metaLeads} onChange={setMetaLeads} placeholder="5000" />
-        <Campo label="Meta de ROAS" tipo="number" valor={metaRoas} onChange={setMetaRoas} placeholder="4.0" step="0.1" />
         <Campo
-          label="Meta de receita"
+          label="Teto de investimento (R$)"
           tipo="number"
-          valor={metaReceita}
-          onChange={setMetaReceita}
-          placeholder="300000"
+          valor={tetoInvestimento}
+          onChange={setTetoInvestimento}
+          placeholder="50000"
+          step="0.01"
         />
       </div>
 

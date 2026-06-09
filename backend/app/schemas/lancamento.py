@@ -41,6 +41,13 @@ class CanalUpdate(BaseModel):
     investimento: Decimal = Field(..., ge=0)
 
 
+class LeadsPorUtmContent(BaseModel):
+    """Drill-down de um canal: quantos leads por utm_content."""
+
+    utm_content: str
+    quantidade: int
+
+
 # ============================================================
 # LANCAMENTO
 # ============================================================
@@ -50,12 +57,20 @@ class LancamentoBase(BaseModel):
     data_inicio: date | None = None
     data_fim: date | None = None
     meta_leads: int | None = Field(default=None, ge=0)
+    teto_investimento: Money | None = Field(default=None, ge=0)
     meta_roas: Money | None = Field(default=None, ge=0)
     meta_receita: Money | None = Field(default=None, ge=0)
 
 
-class LancamentoCreate(LancamentoBase):
-    pass
+class LancamentoCreate(BaseModel):
+    """Form simplificado: só os 5 campos essenciais. status fica em
+    'captacao' por default; os demais (ROAS/receita) caíram fora."""
+
+    nome: str = Field(..., min_length=1, max_length=200)
+    data_inicio: date | None = None
+    data_fim: date | None = None
+    meta_leads: int | None = Field(default=None, ge=0)
+    teto_investimento: Money | None = Field(default=None, ge=0)
 
 
 class LancamentoUpdate(BaseModel):
@@ -66,6 +81,7 @@ class LancamentoUpdate(BaseModel):
     data_inicio: date | None = None
     data_fim: date | None = None
     meta_leads: int | None = Field(default=None, ge=0)
+    teto_investimento: Decimal | None = Field(default=None, ge=0)
     meta_roas: Decimal | None = Field(default=None, ge=0)
     meta_receita: Decimal | None = Field(default=None, ge=0)
 

@@ -26,6 +26,8 @@ class Lead(Base):
     email: Mapped[str | None] = mapped_column(String)
     telefone: Mapped[str | None] = mapped_column(String)
     origem: Mapped[str | None] = mapped_column(String)
+    utm_content: Mapped[str | None] = mapped_column(String)
+    """Conteúdo do anúncio (ex: criativo/banner). Usado pro drill-down do canal."""
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
