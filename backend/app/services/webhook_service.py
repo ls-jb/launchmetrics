@@ -55,7 +55,14 @@ async def processar_lead_ghl(db: AsyncSession, token: str, payload: dict) -> Non
     if not lancamento:
         raise ValueError(f"Lançamento não encontrado para token: {token}")
 
-    email = (_primeiro(payload, "email", "Email") or "").strip()
+    # O GHL manda dois conjuntos no payload: TOPO = dados do contato
+    # (persistidos, ex. utm_source antigo de uma campanha anterior) e
+    # customData = o que o workflow injetou da submissão atual via
+    # {{inboundWebhookRequest.fields.X.value}}. customData é o que reflete
+    # a inscrição de AGORA, então sempre prefere ele.
+    fontes = _fontes(payload)
+
+    email = (_pegar(fontes, "email", "Email") or "").strip()
     if email:
         ja = (
             await db.execute(
@@ -70,22 +77,22 @@ async def processar_lead_ghl(db: AsyncSession, token: str, payload: dict) -> Non
         if ja is not None:
             return  # duplicado — silencia
 
-    canal_nome = _normalizar(_extrair_canal_bruto(payload))
+    canal_nome = _normalizar(_extrair_canal_bruto(fontes))
     canal_id = await _obter_ou_criar_canal(db, lancamento.id, canal_nome)
 
     lead = Lead(
         lancamento_id=lancamento.id,
         canal_id=canal_id,
-        nome=_extrair_nome(payload),
+        nome=_extrair_nome(fontes),
         email=email,
-        telefone=_primeiro(payload, "phone", "Phone", "telefone", "Telefone") or "",
+        telefone=_pegar(fontes, "phone", "Phone", "telefone", "Telefone") or "",
         origem=canal_nome,
-        utm_content=_primeiro(payload, "utm_content", "utmContent") or None,
+        utm_content=_pegar(fontes, "utm_content", "utmContent") or None,
     )
     # Data do GHL (campo "Data"/"DATA") tem precedência sobre NOW() do banco
     # — assim o gráfico de velocidade reflete o momento exato da inscrição,
     # não o instante em que o webhook chegou.
-    data_inscricao = _extrair_data(payload)
+    data_inscricao = _extrair_data(fontes)
     if data_inscricao is not None:
         lead.criado_em = data_inscricao
     db.add(lead)
@@ -95,32 +102,55 @@ async def processar_lead_ghl(db: AsyncSession, token: str, payload: dict) -> Non
 # ============================================================
 # Extração de campos do payload do GHL
 # ============================================================
-def _extrair_nome(payload: dict) -> str:
-    completo = _primeiro(payload, "Nome", "nome", "fullName", "name", "full_name")
+def _fontes(payload: dict) -> list[dict]:
+    """Devolve as camadas do payload em ordem de prioridade: primeiro o
+    customData (submissão atual, populado pelo workflow do GHL via
+    {{inboundWebhookRequest.fields.X.value}}), depois o topo (dados do
+    contato persistido — pode ter utm_source antigo de campanha anterior)."""
+    custom = payload.get("customData")
+    if not isinstance(custom, dict):
+        custom = {}
+    return [custom, payload]
+
+
+def _pegar(fontes: list[dict], *chaves: str) -> str | None:
+    """Procura nas camadas (customData → topo) o primeiro valor não-vazio
+    dentre as chaves passadas. customData sempre ganha."""
+    for fonte in fontes:
+        for chave in chaves:
+            valor = fonte.get(chave)
+            if valor:
+                return str(valor)
+    return None
+
+
+def _extrair_nome(fontes: list[dict]) -> str:
+    completo = _pegar(fontes, "Nome", "nome", "fullName", "name", "full_name")
     if completo:
         return completo
-    first = _primeiro(payload, "firstName", "first_name") or ""
-    last = _primeiro(payload, "lastName", "last_name") or ""
+    first = _pegar(fontes, "firstName", "first_name") or ""
+    last = _pegar(fontes, "lastName", "last_name") or ""
     composto = f"{first} {last}".strip()
     return composto or "Sem nome"
 
 
-def _extrair_canal_bruto(payload: dict) -> str:
-    custom = payload.get("customField") or payload.get("custom_field") or {}
-    if isinstance(custom, dict):
-        candidato = custom.get("canal") or custom.get("source")
-        if candidato:
-            return str(candidato)
-
-    utm = _primeiro(payload, "utm_source", "utmSource")
+def _extrair_canal_bruto(fontes: list[dict]) -> str:
+    # 1) utm_source da submissão atual (customData) — fonte mais confiável.
+    # 2) utm_source do topo (contato GHL) — pode estar com valor antigo.
+    # 3) vk_source como último recurso, antes de tags.
+    utm = _pegar(fontes, "utm_source", "utmSource")
     if utm:
         return utm
 
-    tags = payload.get("tags") or []
+    vk = _pegar(fontes, "vk_source", "vkSource")
+    if vk:
+        return vk
+
+    # tags só existem no topo (contato), mas é o último fallback mesmo.
+    tags = (fontes[-1].get("tags") if fontes else None) or []
     if isinstance(tags, list) and tags:
         return str(tags[0])
 
-    # Sem nenhuma origem identificável → "Sem Utm".
     return ""
 
 
@@ -129,15 +159,6 @@ def _normalizar(valor: str) -> str:
     if chave in NORMALIZACAO_CANAL:
         return NORMALIZACAO_CANAL[chave]
     return valor.strip() or "Sem Utm"
-
-
-def _primeiro(payload: dict, *chaves: str) -> str | None:
-    """Retorna o primeiro valor não-vazio encontrado dentre as chaves passadas."""
-    for chave in chaves:
-        valor = payload.get(chave)
-        if valor:
-            return str(valor)
-    return None
 
 
 # Formatos aceitos para o campo "Data" enviado pelo GHL
@@ -152,11 +173,12 @@ _FORMATOS_DATA = (
 )
 
 
-def _extrair_data(payload: dict) -> datetime | None:
-    """Lê o campo "Data" (ou variantes) do payload e devolve datetime
-    timezone-aware em BRT. Retorna None se não tiver ou se não conseguir
-    parsear — o caller cai no NOW() do banco."""
-    bruto = _primeiro(payload, "Data", "DATA", "data", "data_inscricao")
+def _extrair_data(fontes: list[dict]) -> datetime | None:
+    """Lê o campo "Data" (ou variantes) e devolve datetime timezone-aware
+    em BRT. Procura primeiro no customData (data injetada pelo workflow
+    com {{right_now}}), depois no topo. Retorna None se não tiver ou se
+    não conseguir parsear — o caller cai no NOW() do banco."""
+    bruto = _pegar(fontes, "Data", "DATA", "data", "data_inscricao")
     if not bruto:
         return None
     bruto = bruto.strip()
