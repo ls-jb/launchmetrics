@@ -269,6 +269,10 @@ function DetalheLancamento({
     (acc, t) => acc + t.quantidade,
     0,
   )
+  // Ingresso + Order Bump Ingresso = "fase de captação paga"
+  const receitaIngressos = placar.totais_por_categoria
+    .filter((t) => t.categoria === 'ingresso' || t.categoria === 'order_bump_ingresso')
+    .reduce((acc, t) => acc + Number(t.receita), 0)
 
   return (
     <div>
@@ -351,13 +355,13 @@ function DetalheLancamento({
         </div>
       </div>
 
-      {/* Investimento — editável, com ROAS calculado */}
+      {/* Investimento — editável, com ROAS total e ROAS ingressos */}
       <div
         style={{
           background: 'var(--surface)',
           border: '1px solid var(--border)',
           borderRadius: 12,
-          padding: '1rem 1.5rem',
+          padding: '1.25rem 1.5rem',
           marginBottom: '1.5rem',
           display: 'flex',
           justifyContent: 'space-between',
@@ -366,7 +370,7 @@ function DetalheLancamento({
           gap: 16,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div>
           <p
             style={{
               margin: 0,
@@ -378,33 +382,54 @@ function DetalheLancamento({
           >
             Investimento
           </p>
-          {isAdmin ? (
-            <EditavelInline
-              label="Valor"
-              valor={placar.lancamento.investimento || null}
-              formatar={formatBRL}
-              aoSalvar={salvarInvestimento}
-            />
-          ) : (
-            <p style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>
-              {formatBRL(placar.lancamento.investimento)}
-            </p>
-          )}
+          <div style={{ marginTop: 4 }}>
+            {isAdmin ? (
+              <EditavelInline
+                label="Investimento"
+                valor={placar.lancamento.investimento || null}
+                formatar={formatBRL}
+                aoSalvar={salvarInvestimento}
+                destaque
+                cor="#F59E0B"
+              />
+            ) : (
+              <p style={{ margin: 0, fontSize: 28, fontWeight: 700, color: '#F59E0B' }}>
+                {formatBRL(placar.lancamento.investimento)}
+              </p>
+            )}
+          </div>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <p style={{ margin: 0, fontSize: 11, color: 'var(--text-faint)' }}>ROAS</p>
-          <p
-            style={{
-              margin: '4px 0 0',
-              fontSize: 18,
-              fontWeight: 700,
-              color: placar.lancamento.investimento > 0 ? '#7C6AF7' : 'var(--text-dim)',
-            }}
-          >
-            {placar.lancamento.investimento > 0
-              ? `${(totalGeralReceita / Number(placar.lancamento.investimento)).toFixed(2)}x`
-              : '—'}
-          </p>
+        <div style={{ display: 'flex', gap: 36, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ margin: 0, fontSize: 11, color: 'var(--text-faint)' }}>ROAS total</p>
+            <p
+              style={{
+                margin: '4px 0 0',
+                fontSize: 22,
+                fontWeight: 700,
+                color: placar.lancamento.investimento > 0 ? '#7C6AF7' : 'var(--text-dim)',
+              }}
+            >
+              {placar.lancamento.investimento > 0
+                ? `${(totalGeralReceita / Number(placar.lancamento.investimento)).toFixed(2)}x`
+                : '—'}
+            </p>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ margin: 0, fontSize: 11, color: 'var(--text-faint)' }}>ROAS ingressos</p>
+            <p
+              style={{
+                margin: '4px 0 0',
+                fontSize: 22,
+                fontWeight: 700,
+                color: placar.lancamento.investimento > 0 ? '#3ECFB2' : 'var(--text-dim)',
+              }}
+            >
+              {placar.lancamento.investimento > 0
+                ? `${(receitaIngressos / Number(placar.lancamento.investimento)).toFixed(2)}x`
+                : '—'}
+            </p>
+          </div>
         </div>
       </div>
 
