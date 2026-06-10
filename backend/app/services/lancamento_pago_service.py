@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 
 BR_TZ = ZoneInfo("America/Sao_Paulo")
 
-from sqlalchemy import String, and_, case, cast, func, or_, select
+from sqlalchemy import Date, String, and_, case, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -29,6 +29,7 @@ from app.schemas.lancamento_pago import (
     LancamentoPagoCompleto,
     LancamentoPagoResponse,
     OfertaDetalhe,
+    PontoVendaCategoria,
     TotalCategoria,
 )
 
@@ -76,6 +77,7 @@ async def atualizar(
     ingresso_fim: date | None,
     principal_inicio: date | None,
     principal_fim: date | None,
+    investimento: Decimal | None = None,
 ) -> LancamentoPago | None:
     lanc = await db.get(LancamentoPago, lancamento_id)
     if not lanc:
@@ -90,6 +92,8 @@ async def atualizar(
         lanc.principal_inicio = principal_inicio
     if principal_fim is not None:
         lanc.principal_fim = principal_fim
+    if investimento is not None:
+        lanc.investimento = investimento
     await db.commit()
     await db.refresh(lanc)
     return lanc
@@ -334,6 +338,152 @@ async def _metricas_por_codigo(
         )
     ).all()
     return {codigo: (int(qtd), Decimal(receita)) for codigo, qtd, receita in rows}
+
+
+# ============================================================
+# Vendas diárias por categoria (alimenta o gráfico com checkboxes)
+# ============================================================
+async def vendas_por_dia_categoria(
+    db: AsyncSession, lancamento_id: UUID
+) -> list[PontoVendaCategoria]:
+    """Retorna [{ dia, categoria, quantidade, receita }] — uma linha por
+    (dia BRT × categoria), considerando todas as ofertas cadastradas no
+    lançamento. O front cruza com os checkboxes para somar só o que está
+    marcado. Aplica a mesma regra de venda real do dashboard."""
+    ofertas = list(
+        (
+            await db.execute(
+                select(LancamentoPagoOferta).where(
+                    LancamentoPagoOferta.lancamento_id == lancamento_id,
+                    LancamentoPagoOferta.oferta_codigo.is_not(None),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not ofertas:
+        return []
+
+    lanc = await db.get(LancamentoPago, lancamento_id)
+    if not lanc:
+        return []
+
+    pontos: list[PontoVendaCategoria] = []
+
+    # Ingressos e Principais usam janelas diferentes — processo cada bloco
+    # com sua janela e merge no fim.
+    blocos = [
+        (
+            CATEGORIAS_INGRESSO,
+            lanc.ingresso_inicio,
+            lanc.ingresso_fim,
+        ),
+        (
+            CATEGORIAS_PRINCIPAL,
+            lanc.principal_inicio,
+            lanc.principal_fim,
+        ),
+    ]
+    for cats_bloco, inicio, fim in blocos:
+        ofertas_bloco = [o for o in ofertas if o.categoria in cats_bloco]
+        if not ofertas_bloco:
+            continue
+        codigo_para_cat = {o.oferta_codigo: o.categoria for o in ofertas_bloco}
+        pontos.extend(
+            await _vendas_por_dia_codigos(
+                db, codigo_para_cat, inicio, fim
+            )
+        )
+    return pontos
+
+
+async def _vendas_por_dia_codigos(
+    db: AsyncSession,
+    codigo_para_cat: dict[str, str],
+    inicio: date,
+    fim: date,
+) -> list[PontoVendaCategoria]:
+    """Conta venda real (dedup + recorrência seq<=1 + override + aprovada),
+    agrupando por dia BRT × oferta_codigo, e depois somando por categoria."""
+    if not codigo_para_cat or fim < inicio:
+        return []
+
+    inicio_dt = datetime.combine(
+        inicio, datetime.min.time(), tzinfo=BR_TZ
+    ).astimezone(timezone.utc)
+    fim_dt = datetime.combine(
+        fim + timedelta(days=1), datetime.min.time(), tzinfo=BR_TZ
+    ).astimezone(timezone.utc)
+
+    valor_efetivo = func.coalesce(OfertaPreco.valor, Venda.valor).label("v")
+    dia_brt = cast(
+        func.timezone("America/Sao_Paulo", Venda.data_venda), Date
+    ).label("dia")
+    dedup_key = case(
+        (
+            and_(
+                Venda.comprador_email.is_not(None),
+                Venda.oferta_codigo.is_not(None),
+            ),
+            Venda.comprador_email + cast(Venda.oferta_codigo, String),
+        ),
+        else_=cast(Venda.id, String),
+    )
+    rn = (
+        func.row_number()
+        .over(partition_by=dedup_key, order_by=Venda.data_venda)
+        .label("rn")
+    )
+    base = (
+        select(
+            Venda.oferta_codigo.label("codigo"),
+            dia_brt,
+            valor_efetivo,
+            rn,
+        )
+        .select_from(Venda)
+        .outerjoin(OfertaPreco, OfertaPreco.oferta_codigo == Venda.oferta_codigo)
+        .where(
+            Venda.oferta_codigo.in_(list(codigo_para_cat.keys())),
+            Venda.status == "aprovada",
+            or_(Venda.recorrencia_seq.is_(None), Venda.recorrencia_seq == 1),
+            Venda.data_venda >= inicio_dt,
+            Venda.data_venda < fim_dt,
+        )
+        .subquery()
+    )
+    sub = select(base.c.codigo, base.c.dia, base.c.v).where(base.c.rn == 1).subquery()
+    rows = (
+        await db.execute(
+            select(
+                sub.c.codigo,
+                sub.c.dia,
+                func.count(),
+                func.coalesce(func.sum(sub.c.v), 0),
+            ).group_by(sub.c.codigo, sub.c.dia)
+        )
+    ).all()
+
+    # Soma por (dia, categoria): vários códigos podem pertencer à mesma
+    # categoria — agrega aqui.
+    agregado: dict[tuple[date, str], tuple[int, Decimal]] = defaultdict(
+        lambda: (0, Decimal("0"))
+    )
+    for codigo, dia, qtd, receita in rows:
+        cat = codigo_para_cat[codigo]
+        ant_qtd, ant_rec = agregado[(dia, cat)]
+        agregado[(dia, cat)] = (ant_qtd + int(qtd), ant_rec + Decimal(receita))
+
+    return [
+        PontoVendaCategoria(
+            dia=dia,
+            categoria=cat,  # type: ignore[arg-type]
+            quantidade=qtd,
+            receita=receita,
+        )
+        for (dia, cat), (qtd, receita) in sorted(agregado.items())
+    ]
 
 
 # ============================================================

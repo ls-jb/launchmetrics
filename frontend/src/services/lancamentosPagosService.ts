@@ -5,6 +5,7 @@ import type {
   LancamentoPagoAjuste,
   LancamentoPagoCompleto,
   LancamentoPagoOferta,
+  PontoVendaCategoria,
 } from '@/types'
 
 export interface NovoLancamentoPayload {
@@ -13,6 +14,15 @@ export interface NovoLancamentoPayload {
   ingresso_fim: string
   principal_inicio: string
   principal_fim: string
+}
+
+export interface AtualizarLancamentoPayload {
+  nome?: string
+  ingresso_inicio?: string
+  ingresso_fim?: string
+  principal_inicio?: string
+  principal_fim?: string
+  investimento?: number | null
 }
 
 export interface NovaOfertaPayload {
@@ -42,9 +52,16 @@ export const lancamentosPagosService = {
       .post<LancamentoPago>('/api/lancamentos-pagos', dados)
       .then((r) => r.data),
 
-  atualizar: (id: string, dados: Partial<NovoLancamentoPayload>) =>
+  atualizar: (id: string, dados: AtualizarLancamentoPayload) =>
     api
       .patch<LancamentoPago>(`/api/lancamentos-pagos/${id}`, dados)
+      .then((r) => r.data),
+
+  vendasPorDia: (id: string) =>
+    api
+      .get<PontoVendaCategoria[]>(
+        `/api/lancamentos-pagos/${id}/vendas-por-dia`,
+      )
       .then((r) => r.data),
 
   remover: (id: string) =>

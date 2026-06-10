@@ -34,6 +34,7 @@ class LancamentoPagoUpdate(BaseModel):
     ingresso_fim: date | None = None
     principal_inicio: date | None = None
     principal_fim: date | None = None
+    investimento: Money | None = Field(default=None, ge=0)
 
 
 class OfertaCreate(BaseModel):
@@ -55,6 +56,7 @@ class LancamentoPagoResponse(BaseModel):
     ingresso_fim: date
     principal_inicio: date
     principal_fim: date
+    investimento: Money = 0  # type: ignore[assignment]
 
 
 class OfertaResponse(BaseModel):
@@ -117,3 +119,14 @@ class LancamentoPagoCompleto(BaseModel):
     """Categorias que têm pelo menos uma oferta configurada. Receita usa a
     mesma regra do dashboard (override + dedup + recorrência seq<=1 +
     aprovada), restrita à janela do lançamento."""
+
+
+class PontoVendaCategoria(BaseModel):
+    """Um ponto do gráfico de vendas diárias do Lançamento Pago.
+    quantidade/receita já vêm somadas por dia × categoria — o front filtra
+    pelas categorias marcadas nos checkboxes."""
+
+    dia: date
+    categoria: Categoria
+    quantidade: int
+    receita: Money

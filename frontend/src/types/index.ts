@@ -209,6 +209,14 @@ export interface LancamentoPago {
   ingresso_fim: string
   principal_inicio: string
   principal_fim: string
+  investimento: number
+}
+
+export interface PontoVendaCategoria {
+  dia: string // YYYY-MM-DD
+  categoria: CategoriaLancPago
+  quantidade: number
+  receita: number
 }
 
 export interface LancamentoPagoOferta {

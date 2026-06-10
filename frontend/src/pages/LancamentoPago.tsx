@@ -2,6 +2,8 @@ import { format } from 'date-fns'
 import { useCallback, useEffect, useState } from 'react'
 
 import { BotaoAtualizar } from '@/components/shared/BotaoAtualizar'
+import { EditavelInline } from '@/components/shared/EditavelInline'
+import { GraficoVendasCategoria } from '@/components/shared/GraficoVendasCategoria'
 import { Modal } from '@/components/shared/Modal'
 import { formatBRL, formatNum } from '@/lib/tokens'
 import {
@@ -16,6 +18,7 @@ import type {
   LancamentoPagoCompleto,
   LancamentoPagoOfertaDetalhe,
   OfertaBreakdown,
+  PontoVendaCategoria,
 } from '@/types'
 
 const CATEGORIAS: { valor: CategoriaLancPago; label: string; cor: string }[] = [
@@ -167,6 +170,7 @@ function DetalheLancamento({
   onVoltar: () => void
 }) {
   const [placar, setPlacar] = useState<LancamentoPagoCompleto | null>(null)
+  const [vendasDia, setVendasDia] = useState<PontoVendaCategoria[]>([])
   const [carregando, setCarregando] = useState(true)
   const [atualizando, setAtualizando] = useState(false)
   const [erro, setErro] = useState('')
@@ -178,8 +182,12 @@ function DetalheLancamento({
       if (!silencioso) setCarregando(true)
       else setAtualizando(true)
       try {
-        const p = await lancamentosPagosService.obter(lancamentoId)
+        const [p, v] = await Promise.all([
+          lancamentosPagosService.obter(lancamentoId),
+          lancamentosPagosService.vendasPorDia(lancamentoId),
+        ])
         setPlacar(p)
+        setVendasDia(v)
       } catch (e) {
         if (!silencioso) setErro(extrairErro(e))
       } finally {
@@ -189,6 +197,15 @@ function DetalheLancamento({
     },
     [lancamentoId],
   )
+
+  const salvarInvestimento = async (valor: number | null) => {
+    const atualizado = await lancamentosPagosService.atualizar(lancamentoId, {
+      investimento: valor ?? 0,
+    })
+    setPlacar((prev) =>
+      prev ? { ...prev, lancamento: { ...prev.lancamento, investimento: atualizado.investimento } } : prev,
+    )
+  }
 
   useEffect(() => {
     carregar(false)
@@ -302,7 +319,7 @@ function DetalheLancamento({
           border: '1px solid var(--border)',
           borderRadius: 12,
           padding: '1.25rem 1.5rem',
-          marginBottom: '1.5rem',
+          marginBottom: '0.75rem',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -330,6 +347,63 @@ function DetalheLancamento({
           <p style={{ margin: 0, fontSize: 11, color: 'var(--text-faint)' }}>Vendas</p>
           <p style={{ margin: '4px 0 0', fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>
             {formatNum(totalGeralQtd)}
+          </p>
+        </div>
+      </div>
+
+      {/* Investimento — editável, com ROAS calculado */}
+      <div
+        style={{
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 12,
+          padding: '1rem 1.5rem',
+          marginBottom: '1.5rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 16,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <p
+            style={{
+              margin: 0,
+              fontSize: 11,
+              color: 'var(--text-faint)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+            }}
+          >
+            Investimento
+          </p>
+          {isAdmin ? (
+            <EditavelInline
+              label="Valor"
+              valor={placar.lancamento.investimento || null}
+              formatar={formatBRL}
+              aoSalvar={salvarInvestimento}
+            />
+          ) : (
+            <p style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>
+              {formatBRL(placar.lancamento.investimento)}
+            </p>
+          )}
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <p style={{ margin: 0, fontSize: 11, color: 'var(--text-faint)' }}>ROAS</p>
+          <p
+            style={{
+              margin: '4px 0 0',
+              fontSize: 18,
+              fontWeight: 700,
+              color: placar.lancamento.investimento > 0 ? '#7C6AF7' : 'var(--text-dim)',
+            }}
+          >
+            {placar.lancamento.investimento > 0
+              ? `${(totalGeralReceita / Number(placar.lancamento.investimento)).toFixed(2)}x`
+              : '—'}
           </p>
         </div>
       </div>
@@ -371,6 +445,14 @@ function DetalheLancamento({
           ))}
         </div>
       )}
+
+      {/* Gráfico de vendas diárias com checkboxes por categoria */}
+      <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600, color: 'var(--text-strong)' }}>
+        Vendas por dia
+      </h3>
+      <div style={{ marginBottom: '1.5rem' }}>
+        <GraficoVendasCategoria dados={vendasDia} />
+      </div>
 
       <Modal
         aberto={modalOferta}

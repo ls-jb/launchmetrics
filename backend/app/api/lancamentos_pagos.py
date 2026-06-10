@@ -15,6 +15,7 @@ from app.schemas.lancamento_pago import (
     LancamentoPagoUpdate,
     OfertaCreate,
     OfertaResponse,
+    PontoVendaCategoria,
 )
 from app.services import lancamento_pago_service as svc
 
@@ -42,6 +43,21 @@ async def obter(
     if not lanc:
         raise HTTPException(status_code=404, detail="Lançamento não encontrado.")
     return lanc
+
+
+@router.get(
+    "/{lancamento_id}/vendas-por-dia",
+    response_model=list[PontoVendaCategoria],
+)
+async def vendas_por_dia(
+    lancamento_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(verify_token),
+):
+    """Pontos diários por categoria (ingresso / order_bump_ingresso /
+    principal / order_bump_principal / upsell / downsell). O front decide
+    quais categorias plotar via checkboxes."""
+    return await svc.vendas_por_dia_categoria(db, lancamento_id)
 
 
 # ============================================================
@@ -82,6 +98,7 @@ async def atualizar(
         dados.ingresso_fim,
         dados.principal_inicio,
         dados.principal_fim,
+        dados.investimento,
     )
     if not lanc:
         raise HTTPException(status_code=404, detail="Lançamento não encontrado.")

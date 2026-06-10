@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
 import { BadgeStatus } from '@/components/shared/BadgeStatus'
 import { BarraCanal } from '@/components/shared/BarraCanal'
 import { BotaoAtualizar } from '@/components/shared/BotaoAtualizar'
+import { EditavelInline } from '@/components/shared/EditavelInline'
 import { GraficoVelocidade } from '@/components/shared/GraficoVelocidade'
 import { KPICard } from '@/components/shared/KPICard'
 import { Modal } from '@/components/shared/Modal'
@@ -13,6 +14,7 @@ import type { Canal, Lancamento, LeadsPorUtmContent, PontoVelocidade } from '@/t
 
 export function LancamentoDetalhe() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const [lancamento, setLancamento] = useState<Lancamento | null>(null)
   const [velocidade, setVelocidade] = useState<PontoVelocidade[]>([])
   const [carregando, setCarregando] = useState(true)
@@ -88,6 +90,22 @@ export function LancamentoDetalhe() {
     setLancamento(atualizado)
   }
 
+  const excluirLancamento = async () => {
+    if (!id || !lancamento) return
+    const ok = confirm(
+      `Excluir o lançamento "${lancamento.nome}"?\n\n` +
+        `Isso apaga TUDO: canais, leads (${formatNum(lancamento.total_leads)}), ` +
+        `investimentos e o token do webhook. Não dá pra desfazer.`,
+    )
+    if (!ok) return
+    try {
+      await lancamentosService.deletar(id)
+      navigate('/lancamentos')
+    } catch (e) {
+      alert(`Erro ao excluir: ${extrairErro(e)}`)
+    }
+  }
+
   return (
     <div>
       <Link
@@ -122,7 +140,28 @@ export function LancamentoDetalhe() {
             {formatarData(lancamento.data_inicio)} → {formatarData(lancamento.data_fim)}
           </p>
         </div>
-        <BotaoAtualizar onClick={() => carregar(true)} atualizando={atualizando} />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <BotaoAtualizar onClick={() => carregar(true)} atualizando={atualizando} />
+          <button
+            onClick={excluirLancamento}
+            title="Excluir este lançamento"
+            style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border-strong)',
+              color: '#EF4444',
+              padding: '8px 14px',
+              borderRadius: 8,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'border-color 0.15s',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#EF4444')}
+            onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border-strong)')}
+          >
+            Excluir
+          </button>
+        </div>
       </div>
 
       <div
@@ -553,127 +592,6 @@ function DrillUtmContent({
       </div>
     </div>
   )
-}
-
-function EditavelInline({
-  label,
-  valor,
-  formatar,
-  aoSalvar,
-}: {
-  label: string
-  valor: number | null
-  formatar: (v: number) => string
-  aoSalvar: (v: number | null) => Promise<void>
-}) {
-  const [editando, setEditando] = useState(false)
-  const [texto, setTexto] = useState(valor != null ? String(valor) : '')
-  const [salvando, setSalvando] = useState(false)
-
-  const iniciar = () => {
-    setTexto(valor != null ? String(valor) : '')
-    setEditando(true)
-  }
-
-  const cancelar = () => setEditando(false)
-
-  const salvar = async () => {
-    const t = texto.trim()
-    const novo = t === '' ? null : Number(t)
-    if (novo !== null && (Number.isNaN(novo) || novo < 0)) return
-    if (novo === (valor ?? null)) {
-      setEditando(false)
-      return
-    }
-    setSalvando(true)
-    try {
-      await aoSalvar(novo)
-      setEditando(false)
-    } finally {
-      setSalvando(false)
-    }
-  }
-
-  if (!editando) {
-    return (
-      <button
-        onClick={iniciar}
-        title={`Editar ${label.toLowerCase()}`}
-        style={{
-          background: 'transparent',
-          border: '1px dashed var(--border-strong)',
-          borderRadius: 8,
-          padding: '6px 10px',
-          fontSize: 12,
-          color: 'var(--text-muted)',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-        }}
-      >
-        <span style={{ color: 'var(--text-faint)' }}>{label}:</span>
-        <span style={{ color: valor != null ? 'var(--text)' : 'var(--text-dim)', fontWeight: 600 }}>
-          {valor != null ? formatar(valor) : 'não definido'}
-        </span>
-        <span style={{ color: 'var(--text-dim)', fontSize: 11 }}>✎</span>
-      </button>
-    )
-  }
-
-  return (
-    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>{label}:</span>
-      <input
-        autoFocus
-        type="number"
-        step="0.01"
-        value={texto}
-        onChange={(e) => setTexto(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') salvar()
-          if (e.key === 'Escape') cancelar()
-        }}
-        disabled={salvando}
-        style={{
-          width: 120,
-          background: 'var(--surface-2)',
-          border: '1px solid var(--border-strong)',
-          borderRadius: 6,
-          padding: '4px 8px',
-          color: 'var(--text)',
-          fontSize: 12,
-        }}
-      />
-      <button onClick={salvar} disabled={salvando} style={botaoOk}>
-        {salvando ? '…' : 'Salvar'}
-      </button>
-      <button onClick={cancelar} disabled={salvando} style={botaoCancelar}>
-        ×
-      </button>
-    </span>
-  )
-}
-
-const botaoOk: React.CSSProperties = {
-  background: '#7C6AF7',
-  border: 'none',
-  color: '#fff',
-  borderRadius: 6,
-  padding: '4px 10px',
-  fontSize: 11,
-  fontWeight: 600,
-  cursor: 'pointer',
-}
-
-const botaoCancelar: React.CSSProperties = {
-  background: 'transparent',
-  border: '1px solid var(--border-strong)',
-  color: 'var(--text-muted)',
-  borderRadius: 6,
-  padding: '3px 8px',
-  fontSize: 12,
-  cursor: 'pointer',
 }
 
 function extrairErro(err: unknown): string {

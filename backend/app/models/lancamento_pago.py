@@ -30,6 +30,10 @@ class LancamentoPago(Base):
     """Dia em que o carrinho do principal abre (pitch)."""
     principal_fim: Mapped[date] = mapped_column(Date, nullable=False)
     """Último dia em que venda do principal/bumps/upsell conta."""
+    investimento: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, default=0
+    )
+    """Investimento em mídia para esse lançamento pago — edita inline na tela."""
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
