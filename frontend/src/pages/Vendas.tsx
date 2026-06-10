@@ -106,15 +106,18 @@ export function Vendas() {
 
   const porDiaFormatado = useMemo(
     () =>
-      porDia.map((p) => ({
-        data: p.data.slice(8, 10) + '/' + p.data.slice(5, 7),
-        receita: p.receita,
-        quantidade: p.quantidade,
-      })),
+      porDia
+        .filter((p) => typeof p.data === 'string' && p.data.length >= 10)
+        .map((p) => ({
+          data: p.data.slice(8, 10) + '/' + p.data.slice(5, 7),
+          receita: Number(p.receita) || 0,
+          quantidade: Number(p.quantidade) || 0,
+        })),
     [porDia],
   )
 
-  const maxRanking = ranking[0]?.receita ?? 1
+  // Evita NaN/divisão por zero no width das barras do ranking.
+  const maxRanking = Math.max(Number(ranking[0]?.receita) || 0, 1)
 
   return (
     <div>
