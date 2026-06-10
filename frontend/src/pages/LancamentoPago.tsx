@@ -1,6 +1,7 @@
 import { format } from 'date-fns'
 import { useCallback, useEffect, useState } from 'react'
 
+import { BotaoAtualizar } from '@/components/shared/BotaoAtualizar'
 import { Modal } from '@/components/shared/Modal'
 import { formatBRL, formatNum } from '@/lib/tokens'
 import {
@@ -167,6 +168,7 @@ function DetalheLancamento({
 }) {
   const [placar, setPlacar] = useState<LancamentoPagoCompleto | null>(null)
   const [carregando, setCarregando] = useState(true)
+  const [atualizando, setAtualizando] = useState(false)
   const [erro, setErro] = useState('')
   const [modalOferta, setModalOferta] = useState(false)
   const [ajusteAlvo, setAjusteAlvo] = useState<LancamentoPagoOfertaDetalhe | null>(null)
@@ -174,6 +176,7 @@ function DetalheLancamento({
   const carregar = useCallback(
     async (silencioso = false) => {
       if (!silencioso) setCarregando(true)
+      else setAtualizando(true)
       try {
         const p = await lancamentosPagosService.obter(lancamentoId)
         setPlacar(p)
@@ -181,6 +184,7 @@ function DetalheLancamento({
         if (!silencioso) setErro(extrairErro(e))
       } finally {
         if (!silencioso) setCarregando(false)
+        else setAtualizando(false)
       }
     },
     [lancamentoId],
@@ -276,16 +280,19 @@ function DetalheLancamento({
             {fmtData(placar.lancamento.principal_fim)}
           </p>
         </div>
-        {isAdmin && (
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setModalOferta(true)} style={botaoSecundario}>
-              + Adicionar oferta
-            </button>
-            <button onClick={removerLancamento} style={{ ...botaoSecundario, color: '#EF4444' }}>
-              Remover lançamento
-            </button>
-          </div>
-        )}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <BotaoAtualizar onClick={() => carregar(true)} atualizando={atualizando} />
+          {isAdmin && (
+            <>
+              <button onClick={() => setModalOferta(true)} style={botaoSecundario}>
+                + Adicionar oferta
+              </button>
+              <button onClick={removerLancamento} style={{ ...botaoSecundario, color: '#EF4444' }}>
+                Remover lançamento
+              </button>
+            </>
+          )}
+        </div>
       </header>
 
       {/* Card de total geral */}

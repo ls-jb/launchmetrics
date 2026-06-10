@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { BadgeStatus } from '@/components/shared/BadgeStatus'
 import { BarraCanal } from '@/components/shared/BarraCanal'
+import { BotaoAtualizar } from '@/components/shared/BotaoAtualizar'
 import { GraficoVelocidade } from '@/components/shared/GraficoVelocidade'
 import { KPICard } from '@/components/shared/KPICard'
 import { Modal } from '@/components/shared/Modal'
@@ -18,22 +19,34 @@ export function LancamentoDetalhe() {
   const [erro, setErro] = useState('')
   const [tokenCopiado, setTokenCopiado] = useState(false)
   const [canalSel, setCanalSel] = useState<Canal | null>(null)
+  const [atualizando, setAtualizando] = useState(false)
 
-  useEffect(() => {
-    if (!id) return
-    setCarregando(true)
-    setErro('')
-    Promise.all([
-      lancamentosService.obter(id),
-      lancamentosService.velocidadeLeads(id),
-    ])
-      .then(([l, v]) => {
+  const carregar = useCallback(
+    async (silencioso = false) => {
+      if (!id) return
+      if (!silencioso) setCarregando(true)
+      else setAtualizando(true)
+      setErro('')
+      try {
+        const [l, v] = await Promise.all([
+          lancamentosService.obter(id),
+          lancamentosService.velocidadeLeads(id),
+        ])
         setLancamento(l)
         setVelocidade(v)
-      })
-      .catch((e) => setErro(extrairErro(e)))
-      .finally(() => setCarregando(false))
-  }, [id])
+      } catch (e) {
+        setErro(extrairErro(e))
+      } finally {
+        setCarregando(false)
+        setAtualizando(false)
+      }
+    },
+    [id],
+  )
+
+  useEffect(() => {
+    carregar(false)
+  }, [carregar])
 
   const velocidadeFormatada = useMemo(
     () =>
@@ -109,6 +122,7 @@ export function LancamentoDetalhe() {
             {formatarData(lancamento.data_inicio)} → {formatarData(lancamento.data_fim)}
           </p>
         </div>
+        <BotaoAtualizar onClick={() => carregar(true)} atualizando={atualizando} />
       </div>
 
       <div
