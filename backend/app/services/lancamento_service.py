@@ -194,6 +194,7 @@ def _montar_response(
         data_inicio=lancamento.data_inicio,
         data_fim=lancamento.data_fim,
         meta_leads=lancamento.meta_leads,
+        teto_investimento=lancamento.teto_investimento,
         meta_roas=lancamento.meta_roas,
         meta_receita=lancamento.meta_receita,
         webhook_token=lancamento.webhook_token,
