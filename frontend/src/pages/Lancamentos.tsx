@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 
 import { BadgeStatus } from '@/components/shared/BadgeStatus'
 import { Modal } from '@/components/shared/Modal'
+import { extrairErro } from '@/lib/erro'
 import { formatBRL, formatNum, formatPct } from '@/lib/tokens'
 import {
   lancamentosService,
@@ -419,11 +420,3 @@ function Campo({
   )
 }
 
-function extrairErro(err: unknown): string {
-  if (typeof err === 'object' && err !== null && 'response' in err) {
-    const resp = (err as { response?: { data?: { detail?: string } } }).response
-    if (resp?.data?.detail) return resp.data.detail
-  }
-  if (err instanceof Error) return err.message
-  return 'Erro desconhecido'
-}

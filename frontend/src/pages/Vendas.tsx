@@ -5,6 +5,7 @@ import { FiltroData } from '@/components/shared/FiltroData'
 import { GraficoReceitaDia } from '@/components/shared/GraficoReceitaDia'
 import { KPICard } from '@/components/shared/KPICard'
 import { Modal } from '@/components/shared/Modal'
+import { extrairErro } from '@/lib/erro'
 import { formatBRL, formatBRLPreciso, formatNum } from '@/lib/tokens'
 import { vendasService, type FiltroVendas } from '@/services/vendasService'
 import type {
@@ -1360,11 +1361,3 @@ function IconeAtualizar({ girando }: { girando: boolean }) {
   )
 }
 
-function extrairErro(err: unknown): string {
-  if (typeof err === 'object' && err !== null && 'response' in err) {
-    const resp = (err as { response?: { data?: { detail?: string } } }).response
-    if (resp?.data?.detail) return resp.data.detail
-  }
-  if (err instanceof Error) return err.message
-  return 'Erro desconhecido'
-}

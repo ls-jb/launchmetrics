@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { Modal } from '@/components/shared/Modal'
+import { extrairErro } from '@/lib/erro'
 import { formatBRL } from '@/lib/tokens'
 import { placarService } from '@/services/placarService'
 import {
@@ -925,11 +926,3 @@ function Campo({
   )
 }
 
-function extrairErro(err: unknown): string {
-  if (typeof err === 'object' && err !== null && 'response' in err) {
-    const resp = (err as { response?: { data?: { detail?: string } } }).response
-    if (resp?.data?.detail) return resp.data.detail
-  }
-  if (err instanceof Error) return err.message
-  return 'Erro desconhecido'
-}

@@ -5,6 +5,7 @@ import { BotaoAtualizar } from '@/components/shared/BotaoAtualizar'
 import { EditavelInline } from '@/components/shared/EditavelInline'
 import { GraficoVendasCategoria } from '@/components/shared/GraficoVendasCategoria'
 import { Modal } from '@/components/shared/Modal'
+import { extrairErro } from '@/lib/erro'
 import { formatBRL, formatNum } from '@/lib/tokens'
 import {
   lancamentosPagosService,
@@ -1232,14 +1233,6 @@ function fmtData(iso: string): string {
   return iso.slice(8, 10) + '/' + iso.slice(5, 7)
 }
 
-function extrairErro(err: unknown): string {
-  if (typeof err === 'object' && err !== null && 'response' in err) {
-    const resp = (err as { response?: { data?: { detail?: string } } }).response
-    if (resp?.data?.detail) return resp.data.detail
-  }
-  if (err instanceof Error) return err.message
-  return 'Erro desconhecido'
-}
 
 const inputBase: React.CSSProperties = {
   width: '100%',
