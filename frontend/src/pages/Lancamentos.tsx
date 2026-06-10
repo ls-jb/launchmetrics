@@ -174,7 +174,7 @@ function CardLancamento({ lancamento: l }: { lancamento: Lancamento }) {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
+          gridTemplateColumns: 'repeat(2, 1fr)',
           gap: 10,
           paddingTop: 12,
           borderTop: '1px solid var(--border)',
@@ -182,7 +182,6 @@ function CardLancamento({ lancamento: l }: { lancamento: Lancamento }) {
       >
         <MetricaInline label="Investimento" valor={formatBRL(l.investimento_total)} />
         <MetricaInline label="CPL" valor={`R$ ${l.cpl.toFixed(2)}`} />
-        <MetricaInline label="ROAS" valor={`${l.roas.toFixed(2)}x`} destaque />
       </div>
     </Link>
   )
