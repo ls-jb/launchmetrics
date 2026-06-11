@@ -22,6 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Venda
+from app.services import sheets_export_service
 
 # ============================================================
 # Mapeamentos
@@ -80,10 +81,13 @@ async def processar(db: AsyncSession, payload: dict) -> None:
 
     if venda_existente:
         _atualizar(venda_existente, novos_dados)
+        venda_para_sheets = venda_existente
     else:
-        _criar(db, external_id, novos_dados)
+        venda_para_sheets = _criar(db, external_id, novos_dados)
 
     await db.commit()
+    await db.refresh(venda_para_sheets)
+    await sheets_export_service.exportar(venda_para_sheets)
 
 
 # ============================================================
@@ -297,9 +301,10 @@ async def _buscar_existente(db: AsyncSession, external_id: str) -> Venda | None:
     return (await db.execute(stmt)).scalar_one_or_none()
 
 
-def _criar(db: AsyncSession, external_id: str, dados: dict[str, Any]) -> None:
+def _criar(db: AsyncSession, external_id: str, dados: dict[str, Any]) -> Venda:
     venda = Venda(plataforma="Guru", external_id=external_id, **dados)
     db.add(venda)
+    return venda
 
 
 def _atualizar(venda: Venda, dados: dict[str, Any]) -> None:

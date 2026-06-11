@@ -43,6 +43,7 @@ from app.schemas.venda import (
     ResumoVendas,
     VendaManualCreate,
 )
+from app.services import sheets_export_service
 
 ZERO = Decimal("0")
 STATUS_FATURADO = "aprovada"
@@ -274,7 +275,7 @@ async def produtos_distintos(db: AsyncSession) -> list[str]:
 async def criar_manual(db: AsyncSession, dados: VendaManualCreate) -> Venda:
     """Cria N vendas manuais (PIX direto, venda avulsa). quantidade>1 vira
     N linhas idênticas (lote). Retorna a última criada."""
-    ultima: Venda | None = None
+    criadas: list[Venda] = []
     for _ in range(dados.quantidade):
         venda = Venda(
             plataforma="Manual",
@@ -295,11 +296,13 @@ async def criar_manual(db: AsyncSession, dados: VendaManualCreate) -> Venda:
             payload_bruto=None,
         )
         db.add(venda)
-        ultima = venda
+        criadas.append(venda)
     await db.commit()
-    assert ultima is not None
-    await db.refresh(ultima)
-    return ultima
+    assert criadas
+    for v in criadas:
+        await db.refresh(v)
+        await sheets_export_service.exportar(v)
+    return criadas[-1]
 
 
 async def remover(db: AsyncSession, venda_id) -> bool:
