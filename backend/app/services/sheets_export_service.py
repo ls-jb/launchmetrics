@@ -57,15 +57,29 @@ async def exportar(venda: Venda) -> None:
 # ============================================================
 def _montar_linha(venda: Venda) -> dict[str, Any]:
     payload = venda.payload_bruto or {}
-    # Guru e Hotmart aninham os dados em "data"; cadastro manual tem
-    # payload_bruto=None e cai direto no "raiz vazio".
+    # Guru v2 manda tudo na raiz (com "source", "contact", "items"...).
+    # Hotmart aninha em "data". Cadastro manual tem payload_bruto=None.
     data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
 
-    utm_content = _get(data, "tracking.content", "utm_content", "utm.content")
-    # O UTM Content da Guru às vezes vem como JSON {"vsrc":"whatsapp",...}.
-    # Se for, o vk_source real está lá dentro.
-    vk_source = _extrair_vsrc(utm_content) or _get(
-        data, "vk_source", "tracking.vk_source", "tracking.vsrc"
+    # Paths em ordem de prioridade:
+    #   source.*    → Guru v2 (UTMs do checkout)
+    #   tracking.*  → Hotmart
+    #   utm_*       → fallback genérico (alguns webhooks botam na raiz)
+    utm_content_bruto = _get(
+        data,
+        "source.utm_content",
+        "tracking.content",
+        "utm_content",
+        "utm.content",
+    )
+    # utm_content da Guru chega como JSON do tipo
+    # {"co":"gruposv-bdt-0626","vsrc":"whatsapp","url":"...","v":1}
+    # Só o "co" interessa pra coluna utm_content (código legível); "vsrc"
+    # vai pra coluna vk_source.
+    parsed = _parse_json_obj(utm_content_bruto)
+    utm_content = parsed.get("co") if parsed else utm_content_bruto
+    vk_source = (parsed.get("vsrc") if parsed else None) or _get(
+        data, "vk_source", "source.vsrc", "tracking.vsrc", "tracking.vk_source"
     )
 
     return {
@@ -82,12 +96,12 @@ def _montar_linha(venda: Venda) -> dict[str, Any]:
         "produto": venda.produto,
         "oferta": venda.oferta_nome or venda.oferta or "",
         "valor": float(venda.valor) if venda.valor is not None else 0,
-        "utm_source": _txt(_get(data, "tracking.source", "utm_source", "utm.source")),
-        "utm_medium": _txt(_get(data, "tracking.medium", "utm_medium", "utm.medium")),
+        "utm_source": _txt(_get(data, "source.utm_source", "tracking.source", "utm_source", "utm.source")),
+        "utm_medium": _txt(_get(data, "source.utm_medium", "tracking.medium", "utm_medium", "utm.medium")),
         "utm_content": _txt(utm_content),
-        "utm_campaign": _txt(_get(data, "tracking.campaign", "utm_campaign", "utm.campaign")),
+        "utm_campaign": _txt(_get(data, "source.utm_campaign", "tracking.campaign", "utm_campaign", "utm.campaign")),
         "utm_segmentation": _txt(
-            _get(data, "tracking.term", "utm_term", "utm_segmentation", "utm.term")
+            _get(data, "source.utm_term", "tracking.term", "utm_term", "utm_segmentation", "utm.term")
         ),
         "conversion": _txt(_get(data, "conversion", "tracking.conversion")),
         "vk_source": _txt(vk_source),
@@ -124,36 +138,31 @@ def _txt(v: Any) -> str:
 
 
 def _extrair_telefone(data: dict) -> str:
-    """Procura telefone do comprador. Guru/Hotmart guardam em
-    customer/buyer/contact com nomes variados — tenta todos."""
+    """Procura telefone do comprador. Guru manda phone_number já com DDD
+    junto em contact (ex: '47999624604'); Hotmart varia. Retorna como
+    vier — formatação fica na planilha."""
     for chave in ("customer", "buyer", "contact"):
         obj = data.get(chave) if isinstance(data, dict) else None
         if not isinstance(obj, dict):
             continue
-        for p in ("phone", "phone_number", "phoneNumber", "mobile"):
+        for p in ("phone_number", "phone", "phoneNumber", "mobile"):
             v = obj.get(p)
-            if not v:
-                continue
-            ddd = obj.get("phone_local_code") or obj.get("ddd")
-            if ddd and not str(v).startswith(str(ddd)):
-                return f"({ddd}) {v}"
-            return str(v)
+            if v:
+                return str(v)
     return ""
 
 
-def _extrair_vsrc(utm_content: Any) -> str | None:
-    """UTM Content da Guru às vezes é um JSON {"co": "...", "vsrc": "...",
-    "url": "...", "v": 1}. Extrai o vsrc se for esse formato; senão None."""
-    if not isinstance(utm_content, str):
+def _parse_json_obj(s: Any) -> dict | None:
+    """UTM Content da Guru chega como JSON do tipo
+    {"co":"gruposv-bdt-0626","vsrc":"whatsapp","url":"...","v":1}.
+    Retorna o dict parseado; None se não for JSON válido ou não for dict."""
+    if not isinstance(s, str):
         return None
-    s = utm_content.strip()
+    s = s.strip()
     if not (s.startswith("{") and s.endswith("}")):
         return None
     try:
         d = json.loads(s)
     except (ValueError, TypeError):
         return None
-    if not isinstance(d, dict):
-        return None
-    v = d.get("vsrc") or d.get("vk_source")
-    return str(v) if v else None
+    return d if isinstance(d, dict) else None
