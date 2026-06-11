@@ -1,7 +1,7 @@
 from datetime import date
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -24,6 +24,7 @@ router = APIRouter(prefix="/vendas", tags=["vendas"])
 @router.post("", response_model=VendaResponse, status_code=status.HTTP_201_CREATED)
 async def cadastrar_venda_manual(
     dados: VendaManualCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(verify_token),
 ):
@@ -31,7 +32,9 @@ async def cadastrar_venda_manual(
     Cadastra manualmente uma ou mais vendas (PIX direto, venda avulsa).
     quantidade>1 cria N linhas idênticas (lote). Plataforma = 'Manual'.
     """
-    return await vendas_service.criar_manual(db, dados)
+    return await vendas_service.criar_manual(
+        db, dados, background_tasks=background_tasks
+    )
 
 
 @router.delete("/{venda_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 
+from fastapi import BackgroundTasks
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -62,8 +63,15 @@ METODO_GURU = {
 # ============================================================
 # Entry point
 # ============================================================
-async def processar(db: AsyncSession, payload: dict) -> None:
-    """UPSERT por (Guru, external_id)."""
+async def processar(
+    db: AsyncSession,
+    payload: dict,
+    *,
+    background_tasks: BackgroundTasks | None = None,
+) -> None:
+    """UPSERT por (Guru, external_id). Se `background_tasks` for passado, o
+    export pra planilha é enfileirado como BackgroundTask (não bloqueia o
+    response do webhook). Backfill local chama sem isso e cai num await."""
     data = _localizar_data(payload)
     external_id = _extrair_external_id(payload, data)
     if not external_id:
@@ -87,7 +95,10 @@ async def processar(db: AsyncSession, payload: dict) -> None:
 
     await db.commit()
     await db.refresh(venda_para_sheets)
-    await sheets_export_service.exportar(venda_para_sheets)
+    if background_tasks is not None:
+        background_tasks.add_task(sheets_export_service.exportar, venda_para_sheets)
+    else:
+        await sheets_export_service.exportar(venda_para_sheets)
 
 
 # ============================================================

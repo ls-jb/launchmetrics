@@ -14,7 +14,7 @@ Princípios comuns:
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -61,6 +61,7 @@ async def receber_lead_ghl(
 @router.post("/hotmart")
 async def receber_venda_hotmart(
     request: Request,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     payload, headers = await _ler_payload(request)
@@ -77,7 +78,9 @@ async def receber_venda_hotmart(
         return {"status": "ok"}
 
     try:
-        await hotmart_service.processar(db, payload or {})
+        await hotmart_service.processar(
+            db, payload or {}, background_tasks=background_tasks
+        )
         log.processado = True
     except Exception as exc:
         logger.exception("[HOTMART] erro: %s", exc)
@@ -95,6 +98,7 @@ async def receber_venda_hotmart(
 @router.post("/guru")
 async def receber_venda_guru(
     request: Request,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     payload, headers = await _ler_payload(request)
@@ -111,7 +115,9 @@ async def receber_venda_guru(
         return {"status": "ok"}
 
     try:
-        await guru_service.processar(db, payload or {})
+        await guru_service.processar(
+            db, payload or {}, background_tasks=background_tasks
+        )
         log.processado = True
     except Exception as exc:
         logger.exception("[GURU] erro: %s", exc)

@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 
+from fastapi import BackgroundTasks
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -62,8 +63,15 @@ METODO_POR_PAYMENT_TYPE = {
 # ============================================================
 # Entry point
 # ============================================================
-async def processar(db: AsyncSession, payload: dict) -> None:
-    """Processa um webhook do Hotmart. Faz UPSERT por (Hotmart, external_id)."""
+async def processar(
+    db: AsyncSession,
+    payload: dict,
+    *,
+    background_tasks: BackgroundTasks | None = None,
+) -> None:
+    """Processa um webhook do Hotmart. UPSERT por (Hotmart, external_id).
+    Quando `background_tasks` vem, o export pra planilha é enfileirado e
+    não bloqueia o response. Backfill chama sem isso → await direto."""
     evento = (payload.get("event") or "").upper()
     if evento not in STATUS_POR_EVENTO:
         # eventos desconhecidos: só logamos no payload_bruto, não criamos venda
@@ -92,7 +100,10 @@ async def processar(db: AsyncSession, payload: dict) -> None:
 
     await db.commit()
     await db.refresh(venda_para_sheets)
-    await sheets_export_service.exportar(venda_para_sheets)
+    if background_tasks is not None:
+        background_tasks.add_task(sheets_export_service.exportar, venda_para_sheets)
+    else:
+        await sheets_export_service.exportar(venda_para_sheets)
 
 
 # ============================================================

@@ -34,6 +34,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fastapi import BackgroundTasks
+
 from app.models import OfertaPreco, Venda
 from app.schemas.venda import (
     OfertaBreakdown,
@@ -272,9 +274,16 @@ async def produtos_distintos(db: AsyncSession) -> list[str]:
 # ============================================================
 # Escrita
 # ============================================================
-async def criar_manual(db: AsyncSession, dados: VendaManualCreate) -> Venda:
+async def criar_manual(
+    db: AsyncSession,
+    dados: VendaManualCreate,
+    *,
+    background_tasks: BackgroundTasks | None = None,
+) -> Venda:
     """Cria N vendas manuais (PIX direto, venda avulsa). quantidade>1 vira
-    N linhas idênticas (lote). Retorna a última criada."""
+    N linhas idênticas (lote). Retorna a última criada. Quando
+    `background_tasks` vem, o export pra planilha é enfileirado e não
+    bloqueia o response."""
     criadas: list[Venda] = []
     for _ in range(dados.quantidade):
         venda = Venda(
@@ -301,7 +310,10 @@ async def criar_manual(db: AsyncSession, dados: VendaManualCreate) -> Venda:
     assert criadas
     for v in criadas:
         await db.refresh(v)
-        await sheets_export_service.exportar(v)
+        if background_tasks is not None:
+            background_tasks.add_task(sheets_export_service.exportar, v)
+        else:
+            await sheets_export_service.exportar(v)
     return criadas[-1]
 
 
