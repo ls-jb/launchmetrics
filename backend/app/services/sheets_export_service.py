@@ -31,6 +31,14 @@ logger = logging.getLogger(__name__)
 URL = os.getenv("SHEETS_WEBHOOK_URL", "").strip()
 TIMEOUT_S = 5.0
 
+# A planilha guarda só o "estado final" da venda — aprovada (entrou) ou
+# reembolsada (devolveu). Pendentes e canceladas não chegam, evitando
+# encher a planilha com transições intermediárias. Trade-off conhecido:
+# se uma venda foi aprovada e depois cancelada (não reembolsada), a
+# planilha continua mostrando "aprovada" — aceitável pois planilha é
+# secundária ao dashboard.
+STATUS_EXPORTADOS = {"aprovada", "reembolsada"}
+
 
 # ============================================================
 # Entry point
@@ -38,6 +46,8 @@ TIMEOUT_S = 5.0
 async def exportar(venda: Venda) -> None:
     """Envia a venda para a planilha. Nunca propaga erro."""
     if not URL:
+        return
+    if venda.status not in STATUS_EXPORTADOS:
         return
     try:
         linha = _montar_linha(venda)
