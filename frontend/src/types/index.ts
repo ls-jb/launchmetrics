@@ -219,6 +219,43 @@ export interface PontoVendaCategoria {
   receita: number
 }
 
+// ============================================================
+// Perpétuos
+// ============================================================
+export interface Perpetuo {
+  id: string
+  nome: string
+  data_inicio: string // YYYY-MM-DD
+  investimento: number
+}
+
+export interface OfertaBreakdownProduto {
+  oferta_codigo: string | null
+  oferta_nome: string | null
+  quantidade: number
+  receita: number
+}
+
+export interface PerpetuoProdutoDetalhe {
+  id: string
+  produto: string
+  quantidade: number
+  receita: number
+  ofertas: OfertaBreakdownProduto[]
+}
+
+export interface PerpetuoCompleto {
+  perpetuo: Perpetuo
+  produtos: PerpetuoProdutoDetalhe[]
+}
+
+export interface PontoVendaProduto {
+  dia: string
+  produto: string
+  quantidade: number
+  receita: number
+}
+
 export interface LancamentoPagoOferta {
   id: string
   produto: string

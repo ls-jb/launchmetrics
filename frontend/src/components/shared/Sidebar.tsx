@@ -13,6 +13,7 @@ type ItemMenu = {
 const ITENS: ItemMenu[] = [
   { path: '/lancamentos', label: 'Lançamentos', icone: IconeFoguete },
   { path: '/lancamento-pago', label: 'Lançamento Pago', icone: IconeRaio },
+  { path: '/perpetuos', label: 'Perpétuos', icone: IconeInfinito },
   { path: '/vendas', label: 'Dashboard de Vendas', icone: IconeGrafico },
   { path: '/placar', label: 'Placar de Líderes', icone: IconeTrofeu },
 ]
@@ -266,6 +267,14 @@ function IconeRaio({ cor }: { cor: string }) {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={cor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>
+    </svg>
+  )
+}
+
+function IconeInfinito({ cor }: { cor: string }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={cor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18.178 8c5.096 0 5.096 8 0 8-5.095 0-7.133-8-12.739-8-4.585 0-4.585 8 0 8 5.606 0 7.644-8 12.739-8z"/>
     </svg>
   )
 }
