@@ -180,6 +180,9 @@ def _montar_response(
         )
         for c in lancamento.canais
     ]
+    # Quem trouxe mais leads aparece em cima — vale pro BarraCanal e pro
+    # EditorInvestimento, que consomem a mesma lista. Empate: nome A→Z.
+    canais_resp.sort(key=lambda c: (-c.leads, c.nome.lower()))
     total_leads = sum(c.leads for c in canais_resp)
     investimento_total = sum((c.investimento for c in lancamento.canais), ZERO)
     receita_total = ZERO  # TODO etapa 5: somar vendas no período do lançamento
