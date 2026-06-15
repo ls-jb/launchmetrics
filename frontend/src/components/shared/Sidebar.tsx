@@ -13,7 +13,7 @@ type ItemMenu = {
 const ITENS: ItemMenu[] = [
   { path: '/lancamentos', label: 'Lançamentos', icone: IconeFoguete },
   { path: '/lancamento-pago', label: 'Lançamento Pago', icone: IconeRaio },
-  { path: '/perpetuos', label: 'Perpétuos', icone: IconeInfinito },
+  { path: '/perpetuos', label: 'Perpétuos', icone: IconeInfinito, em_breve: true },
   { path: '/vendas', label: 'Dashboard de Vendas', icone: IconeGrafico },
   { path: '/placar', label: 'Placar de Líderes', icone: IconeTrofeu },
 ]
