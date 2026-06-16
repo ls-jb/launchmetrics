@@ -1,8 +1,9 @@
 """Endpoints dos Perpétuos. Leitura: qualquer logado. Escrita: admin."""
+from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -10,13 +11,14 @@ from app.middleware.auth import require_admin, verify_token
 from app.schemas.perpetuo import (
     AporteCreate,
     AporteResponse,
+    OfertaCreate,
     PerpetuoCompleto,
     PerpetuoCreate,
-    PerpetuoProdutoResponse,
+    PerpetuoOfertaResponse,
     PerpetuoResponse,
     PerpetuoUpdate,
-    PontoVendaProduto,
-    ProdutoCreate,
+    PontoInvestimentoDia,
+    PontoVendaCategoria,
 )
 from app.services import perpetuo_service as svc
 
@@ -37,25 +39,62 @@ async def listar(
 @router.get("/{perpetuo_id}", response_model=PerpetuoCompleto)
 async def obter(
     perpetuo_id: UUID,
+    inicio: date | None = Query(default=None),
+    fim: date | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(verify_token),
 ):
-    perp = await svc.obter(db, perpetuo_id)
+    perp = await svc.obter(db, perpetuo_id, inicio, fim)
     if not perp:
         raise HTTPException(status_code=404, detail="Perpétuo não encontrado.")
     return perp
 
 
 @router.get(
-    "/{perpetuo_id}/vendas-por-dia", response_model=list[PontoVendaProduto]
+    "/{perpetuo_id}/vendas-por-dia", response_model=list[PontoVendaCategoria]
 )
 async def vendas_por_dia(
     perpetuo_id: UUID,
+    inicio: date | None = Query(default=None),
+    fim: date | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(verify_token),
 ):
-    """Pontos diários por produto pro gráfico com checkboxes."""
-    return await svc.vendas_por_dia_produto(db, perpetuo_id)
+    """Pontos diários por categoria (Principal / Order Bump / Upsell /
+    Downsell / Outros) pro gráfico — filtrado pelo período."""
+    return await svc.vendas_por_dia_categoria(db, perpetuo_id, inicio, fim)
+
+
+@router.get(
+    "/{perpetuo_id}/investimento-por-dia",
+    response_model=list[PontoInvestimentoDia],
+)
+async def investimento_por_dia(
+    perpetuo_id: UUID,
+    inicio: date | None = Query(default=None),
+    fim: date | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(verify_token),
+):
+    """Soma dos aportes por dia no período — pra barra sobreposta no gráfico."""
+    return await svc.investimento_por_dia(db, perpetuo_id, inicio, fim)
+
+
+@router.get(
+    "/_meta/ofertas-disponiveis",
+    response_model=list[dict],
+)
+async def listar_ofertas_disponiveis(
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(verify_token),
+):
+    """Retorna ofertas distintas das vendas aprovadas pra UI escolher
+    quais cadastrar no perpétuo. Formato: [{oferta_codigo, oferta_nome,
+    produto}]. O prefixo _meta evita conflito com a rota /{perpetuo_id}."""
+    rows = await svc.listar_ofertas_disponiveis(db)
+    return [
+        {"oferta_codigo": c, "oferta_nome": n, "produto": p} for c, n, p in rows
+    ]
 
 
 # ============================================================
@@ -74,7 +113,7 @@ async def criar(
         dados.nome,
         dados.data_inicio,
         Decimal(str(dados.investimento or 0)),
-        dados.produtos,
+        [],
     )
 
 
@@ -85,9 +124,21 @@ async def atualizar(
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_admin),
 ):
-    invest = Decimal(str(dados.investimento)) if dados.investimento is not None else None
+    invest = (
+        Decimal(str(dados.investimento)) if dados.investimento is not None else None
+    )
+    atualiza_meta = "meta_ad_account_id" in dados.model_fields_set or (
+        "meta_filtro_nome" in dados.model_fields_set
+    )
     perp = await svc.atualizar(
-        db, perpetuo_id, dados.nome, dados.data_inicio, invest
+        db,
+        perpetuo_id,
+        dados.nome,
+        dados.data_inicio,
+        invest,
+        dados.meta_ad_account_id,
+        dados.meta_filtro_nome,
+        atualizar_meta=atualiza_meta,
     )
     if not perp:
         raise HTTPException(status_code=404, detail="Perpétuo não encontrado.")
@@ -104,37 +155,42 @@ async def remover(
         raise HTTPException(status_code=404, detail="Perpétuo não encontrado.")
 
 
+# ============================================================
+# Ofertas
+# ============================================================
 @router.post(
-    "/{perpetuo_id}/produtos",
-    response_model=PerpetuoProdutoResponse,
+    "/{perpetuo_id}/ofertas",
+    response_model=PerpetuoOfertaResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def adicionar_produto(
+async def adicionar_oferta(
     perpetuo_id: UUID,
-    dados: ProdutoCreate,
+    dados: OfertaCreate,
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_admin),
 ):
-    item = await svc.adicionar_produto(db, perpetuo_id, dados.produto)
+    item = await svc.adicionar_oferta(
+        db, perpetuo_id, dados.oferta_codigo, dados.oferta_nome
+    )
     if not item:
         raise HTTPException(status_code=404, detail="Perpétuo não encontrado.")
     return item
 
 
 @router.delete(
-    "/produtos/{produto_id}", status_code=status.HTTP_204_NO_CONTENT
+    "/ofertas/{oferta_id}", status_code=status.HTTP_204_NO_CONTENT
 )
-async def remover_produto(
-    produto_id: UUID,
+async def remover_oferta(
+    oferta_id: UUID,
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_admin),
 ):
-    if not await svc.remover_produto(db, produto_id):
-        raise HTTPException(status_code=404, detail="Produto não encontrado.")
+    if not await svc.remover_oferta(db, oferta_id):
+        raise HTTPException(status_code=404, detail="Oferta não encontrada.")
 
 
 # ============================================================
-# Aportes (histórico de investimento por dia)
+# Aportes (histórico de investimento)
 # ============================================================
 @router.post(
     "/{perpetuo_id}/aportes",

@@ -1,10 +1,11 @@
 """
 Lógica dos Perpétuos.
 
-Perpétuo = agrupamento de produtos vendidos continuamente, sem janela de
-lançamento. As métricas usam a MESMA regra de venda real do dashboard
+Cada perpétuo agrupa N ofertas (oferta_codigo) e tem um histórico de
+aportes diários. As métricas usam a MESMA regra de venda real do dashboard
 (override de ofertas_precos + dedup por email+oferta_codigo + recorrência
-seq<=1 + status aprovada), aplicada à janela [data_inicio, hoje] em BRT.
+seq<=1 + status aprovada), aplicada à janela [inicio, fim] em BRT — onde
+inicio default é perpetuo.data_inicio e fim default é hoje.
 """
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
@@ -21,17 +22,34 @@ from app.models import (
     OfertaPreco,
     Perpetuo,
     PerpetuoAporte,
-    PerpetuoProduto,
+    PerpetuoOferta,
     Venda,
 )
 from app.schemas.perpetuo import (
     AporteResponse,
-    OfertaBreakdownProduto,
+    OfertaDetalhe,
     PerpetuoCompleto,
     PerpetuoResponse,
-    PontoVendaProduto,
-    ProdutoDetalhe,
+    PontoInvestimentoDia,
+    PontoVendaCategoria,
 )
+
+
+# ============================================================
+# Heurística de categoria (mesma do guru_service, pra consistência)
+# ============================================================
+def _categoria_da_oferta(oferta_nome: str | None) -> str:
+    """Mapeia nome da oferta pra Principal/Order Bump/Upsell/Downsell/Outros."""
+    nome = (oferta_nome or "").lower()
+    if "order bump" in nome or "orderbump" in nome:
+        return "Order Bump"
+    if "upsell" in nome:
+        return "Upsell"
+    if "downsell" in nome:
+        return "Downsell"
+    if "principal" in nome:
+        return "Principal"
+    return "Outros"
 
 
 # ============================================================
@@ -47,23 +65,17 @@ async def criar(
     nome: str,
     data_inicio: date,
     investimento: Decimal,
-    produtos: list[str],
+    produtos: list[str],  # ignorado — legacy do schema, mantido pra compat
 ) -> Perpetuo:
+    # produtos chega vazio agora (UI moveu pra cadastrar ofertas depois).
+    # Investimento aqui também é legacy — fonte de verdade são os aportes.
+    _ = produtos
     perp = Perpetuo(
         nome=nome,
         data_inicio=data_inicio,
         investimento=investimento or Decimal("0"),
     )
     db.add(perp)
-    await db.flush()  # gera o id
-    # produtos vêm na criação como conveniência; dedup por nome
-    vistos: set[str] = set()
-    for p in produtos:
-        nome_p = (p or "").strip()
-        if not nome_p or nome_p in vistos:
-            continue
-        vistos.add(nome_p)
-        db.add(PerpetuoProduto(perpetuo_id=perp.id, produto=nome_p))
     await db.commit()
     await db.refresh(perp)
     return perp
@@ -75,6 +87,10 @@ async def atualizar(
     nome: str | None,
     data_inicio: date | None,
     investimento: Decimal | None,
+    meta_ad_account_id: str | None = None,
+    meta_filtro_nome: str | None = None,
+    *,
+    atualizar_meta: bool = False,
 ) -> Perpetuo | None:
     perp = await db.get(Perpetuo, perpetuo_id)
     if not perp:
@@ -85,6 +101,11 @@ async def atualizar(
         perp.data_inicio = data_inicio
     if investimento is not None:
         perp.investimento = investimento
+    # Campos Meta usam flag explícita pra permitir setar como NULL
+    # (limpar o vínculo), o que `is not None` não cobre.
+    if atualizar_meta:
+        perp.meta_ad_account_id = meta_ad_account_id
+        perp.meta_filtro_nome = meta_filtro_nome
     await db.commit()
     await db.refresh(perp)
     return perp
@@ -100,22 +121,29 @@ async def remover(db: AsyncSession, perpetuo_id: UUID) -> bool:
 
 
 # ============================================================
-# Produtos do perpétuo
+# Ofertas do perpétuo
 # ============================================================
-async def adicionar_produto(
-    db: AsyncSession, perpetuo_id: UUID, produto: str
-) -> PerpetuoProduto | None:
+async def adicionar_oferta(
+    db: AsyncSession,
+    perpetuo_id: UUID,
+    oferta_codigo: str,
+    oferta_nome: str | None,
+) -> PerpetuoOferta | None:
     if not await db.get(Perpetuo, perpetuo_id):
         return None
-    item = PerpetuoProduto(perpetuo_id=perpetuo_id, produto=produto.strip())
+    item = PerpetuoOferta(
+        perpetuo_id=perpetuo_id,
+        oferta_codigo=oferta_codigo.strip(),
+        oferta_nome=(oferta_nome or "").strip() or None,
+    )
     db.add(item)
     await db.commit()
     await db.refresh(item)
     return item
 
 
-async def remover_produto(db: AsyncSession, produto_id: UUID) -> bool:
-    item = await db.get(PerpetuoProduto, produto_id)
+async def remover_oferta(db: AsyncSession, oferta_id: UUID) -> bool:
+    item = await db.get(PerpetuoOferta, oferta_id)
     if not item:
         return False
     await db.delete(item)
@@ -124,53 +152,7 @@ async def remover_produto(db: AsyncSession, produto_id: UUID) -> bool:
 
 
 # ============================================================
-# Detalhe completo (com métricas reais)
-# ============================================================
-async def obter(
-    db: AsyncSession, perpetuo_id: UUID
-) -> PerpetuoCompleto | None:
-    perp = await db.get(Perpetuo, perpetuo_id)
-    if not perp:
-        return None
-
-    produtos_cadastrados = list(
-        (
-            await db.execute(
-                select(PerpetuoProduto)
-                .where(PerpetuoProduto.perpetuo_id == perpetuo_id)
-                .order_by(PerpetuoProduto.criado_em)
-            )
-        )
-        .scalars()
-        .all()
-    )
-
-    detalhes = await _produtos_com_metricas(db, perp, produtos_cadastrados)
-
-    aportes_rows = list(
-        (
-            await db.execute(
-                select(PerpetuoAporte)
-                .where(PerpetuoAporte.perpetuo_id == perpetuo_id)
-                .order_by(PerpetuoAporte.dia)
-            )
-        )
-        .scalars()
-        .all()
-    )
-    aportes = [AporteResponse.model_validate(a) for a in aportes_rows]
-    investimento_total = sum((a.valor for a in aportes), Decimal("0"))
-
-    return PerpetuoCompleto(
-        perpetuo=PerpetuoResponse.model_validate(perp),
-        produtos=detalhes,
-        aportes=aportes,
-        investimento_total=investimento_total,
-    )
-
-
-# ============================================================
-# Aportes (histórico de investimento por dia)
+# Aportes
 # ============================================================
 async def adicionar_aporte(
     db: AsyncSession,
@@ -199,132 +181,229 @@ async def remover_aporte(db: AsyncSession, aporte_id: UUID) -> bool:
     return True
 
 
-async def _produtos_com_metricas(
+# ============================================================
+# Detalhe completo (com filtro de data)
+# ============================================================
+async def obter(
     db: AsyncSession,
-    perp: Perpetuo,
-    produtos: list[PerpetuoProduto],
-) -> list[ProdutoDetalhe]:
-    """Pra cada produto cadastrado: agrega qtd+receita totais e devolve
-    breakdown por oferta (oferta_codigo). Vendas batem pelo NOME do produto
-    (vendas.produto exato)."""
-    if not produtos:
+    perpetuo_id: UUID,
+    inicio: date | None = None,
+    fim: date | None = None,
+) -> PerpetuoCompleto | None:
+    perp = await db.get(Perpetuo, perpetuo_id)
+    if not perp:
+        return None
+
+    # Janela efetiva: default = data_inicio..hoje. Frontend manda outra
+    # quando o usuário escolhe um período menor.
+    inicio_efetivo = inicio or perp.data_inicio
+    fim_efetivo = fim or date.today()
+
+    ofertas_cadastradas = list(
+        (
+            await db.execute(
+                select(PerpetuoOferta)
+                .where(PerpetuoOferta.perpetuo_id == perpetuo_id)
+                .order_by(PerpetuoOferta.criado_em)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    detalhes = await _ofertas_com_metricas(
+        db, ofertas_cadastradas, inicio_efetivo, fim_efetivo
+    )
+
+    aportes_rows = list(
+        (
+            await db.execute(
+                select(PerpetuoAporte)
+                .where(PerpetuoAporte.perpetuo_id == perpetuo_id)
+                .order_by(PerpetuoAporte.dia)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    aportes = [AporteResponse.model_validate(a) for a in aportes_rows]
+
+    # KPIs no período (investimento = aportes só dentro da janela)
+    investimento_total = sum(
+        (Decimal(a.valor) for a in aportes if inicio_efetivo <= a.dia <= fim_efetivo),
+        Decimal("0"),
+    )
+    receita_total = sum((d.receita for d in detalhes), Decimal("0"))
+    quantidade_total = sum(d.quantidade for d in detalhes)
+
+    return PerpetuoCompleto(
+        perpetuo=PerpetuoResponse.model_validate(perp),
+        inicio=inicio_efetivo,
+        fim=fim_efetivo,
+        ofertas=detalhes,
+        aportes=aportes,
+        investimento_total=investimento_total,
+        receita_total=receita_total,
+        quantidade_total=quantidade_total,
+    )
+
+
+async def _ofertas_com_metricas(
+    db: AsyncSession,
+    ofertas: list[PerpetuoOferta],
+    inicio: date,
+    fim: date,
+) -> list[OfertaDetalhe]:
+    """Pra cada oferta cadastrada: qtd + receita no período + categoria
+    heurística. Vendas batem pelo oferta_codigo exato."""
+    if not ofertas:
         return []
-
-    nomes = [p.produto for p in produtos]
-    hoje = date.today()
-    inicio_dt, fim_dt = _range_utc(perp.data_inicio, hoje)
-
-    # Subquery: vendas efetivas no perpétuo (dedup, recorrência, override).
-    sub = _vendas_efetivas_subquery(nomes, inicio_dt, fim_dt)
+    codigos = [o.oferta_codigo for o in ofertas]
+    inicio_dt, fim_dt = _range_utc(inicio, fim)
+    sub = _vendas_efetivas_subquery(codigos, inicio_dt, fim_dt)
 
     rows = (
         await db.execute(
             select(
-                sub.c.produto,
                 sub.c.oferta_codigo,
-                sub.c.oferta_nome,
                 func.count().label("qtd"),
                 func.coalesce(func.sum(sub.c.v), 0).label("receita"),
-            ).group_by(sub.c.produto, sub.c.oferta_codigo, sub.c.oferta_nome)
+            ).group_by(sub.c.oferta_codigo)
         )
     ).all()
 
-    # Agrega por produto
-    por_produto: dict[str, dict] = defaultdict(
-        lambda: {"qtd": 0, "receita": Decimal("0"), "ofertas": []}
-    )
-    for r in rows:
-        bucket = por_produto[r.produto]
-        bucket["qtd"] += int(r.qtd)
-        bucket["receita"] += Decimal(r.receita)
-        bucket["ofertas"].append(
-            OfertaBreakdownProduto(
-                oferta_codigo=r.oferta_codigo,
-                oferta_nome=r.oferta_nome,
-                quantidade=int(r.qtd),
-                receita=Decimal(r.receita),
-            )
-        )
+    metricas: dict[str, tuple[int, Decimal]] = {
+        r.oferta_codigo: (int(r.qtd), Decimal(r.receita)) for r in rows
+    }
 
-    detalhes: list[ProdutoDetalhe] = []
-    for p in produtos:
-        b = por_produto.get(p.produto, {"qtd": 0, "receita": Decimal("0"), "ofertas": []})
-        ofertas_sorted = sorted(
-            b["ofertas"], key=lambda o: (-o.receita, -o.quantidade)
-        )
+    detalhes: list[OfertaDetalhe] = []
+    for o in ofertas:
+        qtd, receita = metricas.get(o.oferta_codigo, (0, Decimal("0")))
         detalhes.append(
-            ProdutoDetalhe(
-                id=p.id,
-                produto=p.produto,
-                quantidade=b["qtd"],
-                receita=b["receita"],
-                ofertas=ofertas_sorted,
+            OfertaDetalhe(
+                id=o.id,
+                oferta_codigo=o.oferta_codigo,
+                oferta_nome=o.oferta_nome,
+                categoria=_categoria_da_oferta(o.oferta_nome),  # type: ignore[arg-type]
+                quantidade=qtd,
+                receita=receita,
             )
         )
-    # Ordena por receita desc (produtos sem venda vão pro fim)
-    detalhes.sort(key=lambda d: (-d.receita, -d.quantidade, d.produto))
+    # Receita desc; sem venda vai pro fim
+    detalhes.sort(key=lambda d: (-d.receita, -d.quantidade, d.oferta_nome or ""))
     return detalhes
 
 
 # ============================================================
-# Vendas diárias por produto (gráfico com checkboxes)
+# Gráfico diário — vendas por categoria + investimento
 # ============================================================
-async def vendas_por_dia_produto(
-    db: AsyncSession, perpetuo_id: UUID
-) -> list[PontoVendaProduto]:
-    """Pontos (dia BRT × produto) com qtd e receita. Frontend usa pra
-    montar o gráfico com checkboxes."""
+async def vendas_por_dia_categoria(
+    db: AsyncSession,
+    perpetuo_id: UUID,
+    inicio: date | None = None,
+    fim: date | None = None,
+) -> list[PontoVendaCategoria]:
+    """Pontos (dia BRT × categoria) com qtd e receita, no período."""
     perp = await db.get(Perpetuo, perpetuo_id)
     if not perp:
         return []
-    produtos = list(
+    inicio_efetivo = inicio or perp.data_inicio
+    fim_efetivo = fim or date.today()
+
+    ofertas = list(
         (
             await db.execute(
-                select(PerpetuoProduto.produto).where(
-                    PerpetuoProduto.perpetuo_id == perpetuo_id
+                select(PerpetuoOferta).where(
+                    PerpetuoOferta.perpetuo_id == perpetuo_id
                 )
             )
         )
         .scalars()
         .all()
     )
-    if not produtos:
+    if not ofertas:
         return []
+    codigo_para_cat = {
+        o.oferta_codigo: _categoria_da_oferta(o.oferta_nome) for o in ofertas
+    }
 
-    hoje = date.today()
-    inicio_dt, fim_dt = _range_utc(perp.data_inicio, hoje)
-    sub = _vendas_efetivas_subquery(produtos, inicio_dt, fim_dt)
+    inicio_dt, fim_dt = _range_utc(inicio_efetivo, fim_efetivo)
+    sub = _vendas_efetivas_subquery(list(codigo_para_cat.keys()), inicio_dt, fim_dt)
 
     dia_brt = cast(
         func.timezone("America/Sao_Paulo", sub.c.data_venda), Date
     ).label("dia")
-    stmt = (
-        select(
-            sub.c.produto,
-            dia_brt,
-            func.count().label("qtd"),
-            func.coalesce(func.sum(sub.c.v), 0).label("receita"),
+    rows = (
+        await db.execute(
+            select(
+                sub.c.oferta_codigo,
+                dia_brt,
+                func.count().label("qtd"),
+                func.coalesce(func.sum(sub.c.v), 0).label("receita"),
+            ).group_by(sub.c.oferta_codigo, dia_brt)
         )
-        .group_by(sub.c.produto, dia_brt)
-        .order_by(dia_brt, sub.c.produto)
+    ).all()
+
+    # Soma por (dia × categoria), agregando os códigos da mesma categoria
+    agregado: dict[tuple[date, str], tuple[int, Decimal]] = defaultdict(
+        lambda: (0, Decimal("0"))
     )
-    rows = (await db.execute(stmt)).all()
-    return [
-        PontoVendaProduto(
-            dia=r.dia,
-            produto=r.produto,
-            quantidade=int(r.qtd),
-            receita=Decimal(r.receita),
+    for r in rows:
+        cat = codigo_para_cat[r.oferta_codigo]
+        ant_qtd, ant_rec = agregado[(r.dia, cat)]
+        agregado[(r.dia, cat)] = (
+            ant_qtd + int(r.qtd),
+            ant_rec + Decimal(r.receita),
         )
-        for r in rows
+
+    return [
+        PontoVendaCategoria(
+            dia=dia,
+            categoria=cat,  # type: ignore[arg-type]
+            quantidade=qtd,
+            receita=receita,
+        )
+        for (dia, cat), (qtd, receita) in sorted(agregado.items())
     ]
+
+
+async def investimento_por_dia(
+    db: AsyncSession,
+    perpetuo_id: UUID,
+    inicio: date | None = None,
+    fim: date | None = None,
+) -> list[PontoInvestimentoDia]:
+    """Soma de aportes por dia dentro do período. Pra barra de investimento
+    sobreposta no gráfico."""
+    perp = await db.get(Perpetuo, perpetuo_id)
+    if not perp:
+        return []
+    inicio_efetivo = inicio or perp.data_inicio
+    fim_efetivo = fim or date.today()
+
+    rows = (
+        await db.execute(
+            select(
+                PerpetuoAporte.dia,
+                func.coalesce(func.sum(PerpetuoAporte.valor), 0).label("valor"),
+            )
+            .where(
+                PerpetuoAporte.perpetuo_id == perpetuo_id,
+                PerpetuoAporte.dia >= inicio_efetivo,
+                PerpetuoAporte.dia <= fim_efetivo,
+            )
+            .group_by(PerpetuoAporte.dia)
+            .order_by(PerpetuoAporte.dia)
+        )
+    ).all()
+    return [PontoInvestimentoDia(dia=r.dia, valor=Decimal(r.valor)) for r in rows]
 
 
 # ============================================================
 # Helpers compartilhados (dedup + override + janela BRT)
 # ============================================================
 def _range_utc(inicio: date, fim: date) -> tuple[datetime, datetime]:
-    """Converte [inicio, fim+1) em BRT pra UTC — janela do filtro."""
+    """[inicio, fim+1) em BRT convertido pra UTC."""
     inicio_dt = datetime.combine(inicio, time.min, tzinfo=BR_TZ).astimezone(timezone.utc)
     fim_dt = datetime.combine(
         fim + timedelta(days=1), time.min, tzinfo=BR_TZ
@@ -332,10 +411,10 @@ def _range_utc(inicio: date, fim: date) -> tuple[datetime, datetime]:
     return inicio_dt, fim_dt
 
 
-def _vendas_efetivas_subquery(produtos: list[str], inicio_dt, fim_dt):
-    """Replica a regra do dashboard pra os produtos do perpétuo. Filtra por
-    NOME (vendas.produto in produtos), não por oferta_codigo, porque o
-    perpétuo agrega TODAS as ofertas de um produto."""
+def _vendas_efetivas_subquery(codigos: list[str], inicio_dt, fim_dt):
+    """Filtra por oferta_codigo IN codigos, aplica regra de venda real do
+    dashboard (status=aprovada, recorrência seq<=1, override de ofertas_precos,
+    dedup por email+codigo)."""
     valor_efetivo = func.coalesce(OfertaPreco.valor, Venda.valor).label("v")
     dedup_key = case(
         (
@@ -354,9 +433,7 @@ def _vendas_efetivas_subquery(produtos: list[str], inicio_dt, fim_dt):
     )
     base = (
         select(
-            Venda.produto.label("produto"),
             Venda.oferta_codigo.label("oferta_codigo"),
-            Venda.oferta_nome.label("oferta_nome"),
             valor_efetivo,
             Venda.data_venda.label("data_venda"),
             rn,
@@ -364,7 +441,7 @@ def _vendas_efetivas_subquery(produtos: list[str], inicio_dt, fim_dt):
         .select_from(Venda)
         .outerjoin(OfertaPreco, OfertaPreco.oferta_codigo == Venda.oferta_codigo)
         .where(
-            Venda.produto.in_(produtos),
+            Venda.oferta_codigo.in_(codigos),
             Venda.status == "aprovada",
             or_(Venda.recorrencia_seq.is_(None), Venda.recorrencia_seq == 1),
             Venda.data_venda >= inicio_dt,
@@ -373,13 +450,30 @@ def _vendas_efetivas_subquery(produtos: list[str], inicio_dt, fim_dt):
         .subquery()
     )
     return (
-        select(
-            base.c.produto,
-            base.c.oferta_codigo,
-            base.c.oferta_nome,
-            base.c.v,
-            base.c.data_venda,
-        )
+        select(base.c.oferta_codigo, base.c.v, base.c.data_venda)
         .where(base.c.rn == 1)
         .subquery()
     )
+
+
+# ============================================================
+# Helpers para listar ofertas distintas (pra UI de "adicionar oferta")
+# ============================================================
+async def listar_ofertas_disponiveis(
+    db: AsyncSession,
+) -> list[tuple[str, str | None, str | None]]:
+    """Retorna tuplas (oferta_codigo, oferta_nome, produto) distintas das
+    vendas aprovadas — pra UI mostrar quais ofertas existem pra cadastrar
+    no perpétuo."""
+    stmt = (
+        select(
+            Venda.oferta_codigo,
+            func.max(Venda.oferta_nome).label("oferta_nome"),
+            func.max(Venda.produto).label("produto"),
+        )
+        .where(Venda.oferta_codigo.is_not(None), Venda.status == "aprovada")
+        .group_by(Venda.oferta_codigo)
+        .order_by(func.max(Venda.produto), func.max(Venda.oferta_nome))
+    )
+    rows = (await db.execute(stmt)).all()
+    return [(r.oferta_codigo, r.oferta_nome, r.produto) for r in rows]

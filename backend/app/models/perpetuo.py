@@ -1,10 +1,15 @@
 """
 Perpétuos — produtos vendidos continuamente, sem janela de lançamento.
 
-Cada perpétuo agrupa N produtos (cada um casa com vendas.produto). As métricas
-(receita, qtd, ROAS, gráfico diário) usam a MESMA regra de venda real do
+Cada perpétuo agrupa N ofertas (cada uma identificada por oferta_codigo, casa
+com vendas.oferta_codigo). As métricas usam a MESMA regra de venda real do
 Lançamento Pago: override de ofertas_precos + dedup por email+oferta_codigo
-+ recorrência seq<=1 + status aprovada. Janela: [data_inicio, hoje].
++ recorrência seq<=1 + status aprovada. Janela: [filtro_inicio, filtro_fim]
+em BRT — default = [perpetuo.data_inicio, hoje].
+
+Cada perpétuo pode opcionalmente apontar pra uma Ad Account da Meta + filtro
+de nome de campanha (ex: "[PAR]") pra sincronização automática de gasto
+diário (Sprint 2 — cron pega gasto e gera aportes em perpetuos_aportes).
 """
 from datetime import date, datetime
 from decimal import Decimal
@@ -26,20 +31,28 @@ class Perpetuo(Base):
     id: Mapped[UUIDType] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     nome: Mapped[str] = mapped_column(String, nullable=False)
     data_inicio: Mapped[date] = mapped_column(Date, nullable=False)
-    """A partir desse dia, as vendas dos produtos contam pro perpétuo."""
+    """A partir desse dia, as vendas das ofertas contam pro perpétuo (default
+    do filtro de data; usuário pode escolher janela menor na UI)."""
     investimento: Mapped[Decimal] = mapped_column(
         Numeric(12, 2), nullable=False, default=0
     )
-    """Investimento acumulado em mídia — edita inline na tela."""
+    """Legacy: campo antigo. Hoje o investimento é a soma dos aportes."""
+    meta_ad_account_id: Mapped[str | None] = mapped_column(String)
+    """ID numérico da ad account da Meta (ex: '628263058826646'). Opcional."""
+    meta_filtro_nome: Mapped[str | None] = mapped_column(String)
+    """Pattern (substring) pra filtrar campanhas pelo nome (ex: '[PAR]').
+    Quando null, todas as campanhas da conta entram no investimento."""
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
 
-class PerpetuoProduto(Base):
-    """Liga um perpétuo a um produto (texto que casa com vendas.produto)."""
+class PerpetuoOferta(Base):
+    """Liga um perpétuo a uma oferta específica (oferta_codigo casa com
+    vendas.oferta_codigo). Cada oferta é cadastrada individualmente — o
+    perpétuo pode misturar ofertas de produtos diferentes se quiser."""
 
-    __tablename__ = "perpetuos_produtos"
+    __tablename__ = "perpetuos_ofertas"
     __table_args__ = {"schema": _SCHEMA}
 
     id: Mapped[UUIDType] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -48,7 +61,9 @@ class PerpetuoProduto(Base):
         ForeignKey(f"{_SCHEMA}.perpetuos.id", ondelete="CASCADE"),
         nullable=False,
     )
-    produto: Mapped[str] = mapped_column(String, nullable=False)
+    oferta_codigo: Mapped[str] = mapped_column(String, nullable=False)
+    oferta_nome: Mapped[str | None] = mapped_column(String)
+    """Denormalizado pra UI mostrar nome sem precisar joinar com vendas."""
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -56,8 +71,8 @@ class PerpetuoProduto(Base):
 
 class PerpetuoAporte(Base):
     """Aporte de investimento de um dia específico. Investimento total do
-    perpétuo agora é a SOMA dos aportes (o campo perpetuos.investimento
-    fica como legacy/snapshot, mas a fonte de verdade são os aportes)."""
+    perpétuo agora é a SOMA dos aportes (no período filtrado). O campo
+    perpetuos.investimento fica como legacy/snapshot."""
 
     __tablename__ = "perpetuos_aportes"
     __table_args__ = {"schema": _SCHEMA}

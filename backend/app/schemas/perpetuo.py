@@ -1,10 +1,19 @@
 """Schemas dos Perpétuos."""
 from datetime import date
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas._types import Money
+
+
+# ============================================================
+# Categoria de oferta (heurística pelo nome — mesma do guru_service)
+# ============================================================
+Categoria = Literal[
+    "Principal", "Order Bump", "Upsell", "Downsell", "Outros"
+]
 
 
 # ============================================================
@@ -14,20 +23,23 @@ class PerpetuoCreate(BaseModel):
     nome: str = Field(..., min_length=1, max_length=200)
     data_inicio: date
     investimento: Money | None = Field(default=0, ge=0)
-    produtos: list[str] = Field(default_factory=list)
-    """Produtos selecionados na criação. Pode ser vazio — adiciona depois."""
+    """Legacy — mantido pra compat com chamadores antigos. Hoje o
+    investimento real vem dos aportes."""
 
 
 class PerpetuoUpdate(BaseModel):
     nome: str | None = Field(default=None, min_length=1, max_length=200)
     data_inicio: date | None = None
     investimento: Money | None = Field(default=None, ge=0)
+    meta_ad_account_id: str | None = Field(default=None, max_length=64)
+    meta_filtro_nome: str | None = Field(default=None, max_length=200)
 
 
-class ProdutoCreate(BaseModel):
-    """Adiciona um produto a um perpétuo existente."""
+class OfertaCreate(BaseModel):
+    """Adiciona uma oferta ao perpétuo."""
 
-    produto: str = Field(..., min_length=1, max_length=200)
+    oferta_codigo: str = Field(..., min_length=1, max_length=200)
+    oferta_nome: str | None = Field(default=None, max_length=200)
 
 
 # ============================================================
@@ -40,42 +52,52 @@ class PerpetuoResponse(BaseModel):
     nome: str
     data_inicio: date
     investimento: Money = 0  # type: ignore[assignment]
+    meta_ad_account_id: str | None = None
+    meta_filtro_nome: str | None = None
 
 
-class PerpetuoProdutoResponse(BaseModel):
-    """Um produto cadastrado num perpétuo."""
+class PerpetuoOfertaResponse(BaseModel):
+    """Linha simples de oferta cadastrada (sem métricas)."""
 
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    produto: str
-
-
-class OfertaBreakdownProduto(BaseModel):
-    """Breakdown por oferta dentro de um produto do perpétuo."""
-
-    oferta_codigo: str | None = None
+    oferta_codigo: str
     oferta_nome: str | None = None
-    quantidade: int
-    receita: Money
 
 
-class ProdutoDetalhe(BaseModel):
-    """Card de produto no detalhe do perpétuo."""
+class OfertaDetalhe(BaseModel):
+    """Oferta cadastrada + métricas no período filtrado."""
 
     id: UUID
-    """ID da linha em perpetuos_produtos (pra remover)."""
-    produto: str
+    """ID da linha em perpetuos_ofertas (pra remover)."""
+    oferta_codigo: str
+    oferta_nome: str | None = None
+    categoria: Categoria
+    """Categoria heurística pelo nome (Principal / Upsell / etc)."""
     quantidade: int
     receita: Money
-    ofertas: list[OfertaBreakdownProduto] = []
-    """Breakdown por oferta_codigo desse produto na janela. Carrega no
-    expand do card."""
+
+
+class PontoVendaCategoria(BaseModel):
+    """Ponto do gráfico diário — 1 linha por (dia × categoria).
+    Investimento do dia vem em ponto separado pra simplificar o frontend."""
+
+    dia: date
+    categoria: Categoria
+    quantidade: int
+    receita: Money
+
+
+class PontoInvestimentoDia(BaseModel):
+    """Ponto de investimento por dia (soma dos aportes do dia)."""
+
+    dia: date
+    valor: Money
 
 
 class AporteCreate(BaseModel):
-    """Aporte de investimento de um dia. valor é em R$, podendo ser zero
-    (ex: registrar que naquele dia houve campanha mas custo foi 0)."""
+    """Aporte de investimento de um dia. valor é em R$, podendo ser zero."""
 
     dia: date
     valor: Money = Field(..., ge=0)
@@ -92,25 +114,22 @@ class AporteResponse(BaseModel):
 
 
 class PerpetuoCompleto(BaseModel):
-    """Tudo que a tela de detalhe precisa."""
+    """Tudo que a tela de detalhe precisa, JÁ FILTRADO pelo período
+    passado em inicio/fim (default = data_inicio..hoje)."""
 
     perpetuo: PerpetuoResponse
-    produtos: list[ProdutoDetalhe]
-    """Produtos cadastrados, com qtd+receita totais (todas as ofertas
-    agregadas). Ordenados por receita desc."""
+
+    # janela considerada (pra UI mostrar)
+    inicio: date
+    fim: date
+
+    # ofertas cadastradas, com métricas no período
+    ofertas: list[OfertaDetalhe] = []
+
+    # aportes do perpétuo (todos — pra UI gerenciar; não filtrados)
     aportes: list[AporteResponse] = []
-    """Aportes de investimento (dia × valor). Ordem: dia asc. A soma
-    desses aportes é o investimento total — o campo perpetuo.investimento
-    fica como legacy."""
+
+    # totais no período (pra os 4 KPIs)
     investimento_total: Money = 0  # type: ignore[assignment]
-    """Soma dos aportes — fonte de verdade do investimento agora."""
-
-
-class PontoVendaProduto(BaseModel):
-    """Ponto do gráfico diário (1 linha por dia × produto). Frontend
-    filtra pelos produtos marcados nos checkboxes."""
-
-    dia: date
-    produto: str
-    quantidade: int
-    receita: Money
+    receita_total: Money = 0  # type: ignore[assignment]
+    quantidade_total: int = 0

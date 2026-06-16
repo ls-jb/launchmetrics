@@ -12,7 +12,7 @@ from app.models.lancamento_pago import (
 from app.models.lead import Lead
 from app.models.oferta_preco import OfertaPreco
 from app.models.perfil import Perfil
-from app.models.perpetuo import Perpetuo, PerpetuoAporte, PerpetuoProduto
+from app.models.perpetuo import Perpetuo, PerpetuoAporte, PerpetuoOferta
 from app.models.placar import (
     PlacarContagem,
     PlacarLancamento,
@@ -33,7 +33,7 @@ __all__ = [
     "Perfil",
     "Perpetuo",
     "PerpetuoAporte",
-    "PerpetuoProduto",
+    "PerpetuoOferta",
     "PlacarContagem",
     "PlacarLancamento",
     "PlacarOferta",
