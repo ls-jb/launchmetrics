@@ -222,26 +222,29 @@ export interface PontoVendaCategoria {
 // ============================================================
 // Perpétuos
 // ============================================================
+export type CategoriaPerpetuo =
+  | 'Principal'
+  | 'Order Bump'
+  | 'Upsell'
+  | 'Downsell'
+  | 'Outros'
+
 export interface Perpetuo {
   id: string
   nome: string
   data_inicio: string // YYYY-MM-DD
   investimento: number
+  meta_ad_account_id: string | null
+  meta_filtro_nome: string | null
 }
 
-export interface OfertaBreakdownProduto {
-  oferta_codigo: string | null
-  oferta_nome: string | null
-  quantidade: number
-  receita: number
-}
-
-export interface PerpetuoProdutoDetalhe {
+export interface PerpetuoOfertaDetalhe {
   id: string
-  produto: string
+  oferta_codigo: string
+  oferta_nome: string | null
+  categoria: CategoriaPerpetuo
   quantidade: number
   receita: number
-  ofertas: OfertaBreakdownProduto[]
 }
 
 export interface PerpetuoAporte {
@@ -253,16 +256,31 @@ export interface PerpetuoAporte {
 
 export interface PerpetuoCompleto {
   perpetuo: Perpetuo
-  produtos: PerpetuoProdutoDetalhe[]
+  inicio: string
+  fim: string
+  ofertas: PerpetuoOfertaDetalhe[]
   aportes: PerpetuoAporte[]
   investimento_total: number
+  receita_total: number
+  quantidade_total: number
 }
 
-export interface PontoVendaProduto {
+export interface PontoVendaCategoriaPerp {
   dia: string
-  produto: string
+  categoria: CategoriaPerpetuo
   quantidade: number
   receita: number
+}
+
+export interface PontoInvestimentoDia {
+  dia: string
+  valor: number
+}
+
+export interface OfertaDisponivel {
+  oferta_codigo: string
+  oferta_nome: string | null
+  produto: string | null
 }
 
 export interface LancamentoPagoOferta {

@@ -1,8 +1,10 @@
 import { format } from 'date-fns'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { BotaoAtualizar } from '@/components/shared/BotaoAtualizar'
-import { GraficoVendasProduto } from '@/components/shared/GraficoVendasProduto'
+import { FiltroData } from '@/components/shared/FiltroData'
+import { GraficoPerpetuoDia } from '@/components/shared/GraficoPerpetuoDia'
+import { KPICard } from '@/components/shared/KPICard'
 import { Modal } from '@/components/shared/Modal'
 import { extrairErro } from '@/lib/erro'
 import { formatBRL, formatNum } from '@/lib/tokens'
@@ -10,16 +12,20 @@ import {
   perpetuosService,
   type NovoPerpetuoPayload,
 } from '@/services/perpetuosService'
-import { vendasService } from '@/services/vendasService'
 import { useAuthStore } from '@/store/authStore'
 import type {
+  OfertaDisponivel,
   Perpetuo,
   PerpetuoAporte,
   PerpetuoCompleto,
-  PerpetuoProdutoDetalhe,
-  PontoVendaProduto,
+  PerpetuoOfertaDetalhe,
+  PontoInvestimentoDia,
+  PontoVendaCategoriaPerp,
 } from '@/types'
 
+// ============================================================
+// Página: lista de perpétuos
+// ============================================================
 export function Perpetuos() {
   const papel = useAuthStore((s) => s.papel)
   const isAdmin = papel === 'admin'
@@ -44,7 +50,6 @@ export function Perpetuos() {
     recarregarLista()
   }, [recarregarLista])
 
-  // Tela 1 — lista
   if (!perpetuoId) {
     return (
       <div>
@@ -63,7 +68,7 @@ export function Perpetuos() {
               Perpétuos
             </h1>
             <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>
-              Produtos vendidos continuamente — métricas desde a data de início
+              Produtos vendidos continuamente — métricas com filtro por período
             </p>
           </div>
           {isAdmin && (
@@ -78,11 +83,7 @@ export function Perpetuos() {
         {!carregandoLista && perps.length === 0 && (
           <CardVazio
             titulo="Nenhum perpétuo ainda"
-            mensagem={
-              isAdmin
-                ? 'Clique em "+ Novo perpétuo" pra cadastrar o primeiro.'
-                : 'Peça a um administrador pra cadastrar um perpétuo.'
-            }
+            mensagem={isAdmin ? 'Clique em "+ Novo perpétuo" pra cadastrar o primeiro.' : 'Peça a um admin pra cadastrar um perpétuo.'}
           />
         )}
 
@@ -100,7 +101,8 @@ export function Perpetuos() {
                   {p.nome}
                 </p>
                 <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-faint)' }}>
-                  Desde {fmtData(p.data_inicio)} · Investimento {formatBRL(p.investimento)}
+                  Desde {fmtData(p.data_inicio)}
+                  {p.meta_ad_account_id ? ` · Meta Ads: ${p.meta_ad_account_id}` : ''}
                 </p>
               </div>
               <span style={{ fontSize: 18, color: 'var(--text-dim)' }}>›</span>
@@ -112,7 +114,7 @@ export function Perpetuos() {
           aberto={modalNovo}
           titulo="Novo perpétuo"
           onFechar={() => setModalNovo(false)}
-          largura={560}
+          largura={520}
         >
           <FormNovoPerpetuo
             onCancelar={() => setModalNovo(false)}
@@ -127,7 +129,6 @@ export function Perpetuos() {
     )
   }
 
-  // Tela 2 — detalhe
   return (
     <DetalhePerpetuo
       perpetuoId={perpetuoId}
@@ -141,7 +142,7 @@ export function Perpetuos() {
 }
 
 // ============================================================
-// Detalhe
+// Tela 2 — Detalhe do perpétuo
 // ============================================================
 function DetalhePerpetuo({
   perpetuoId,
@@ -153,24 +154,34 @@ function DetalhePerpetuo({
   onVoltar: () => void
 }) {
   const [completo, setCompleto] = useState<PerpetuoCompleto | null>(null)
-  const [vendasDia, setVendasDia] = useState<PontoVendaProduto[]>([])
+  const [vendasDia, setVendasDia] = useState<PontoVendaCategoriaPerp[]>([])
+  const [investDia, setInvestDia] = useState<PontoInvestimentoDia[]>([])
   const [carregando, setCarregando] = useState(true)
   const [atualizando, setAtualizando] = useState(false)
   const [erro, setErro] = useState('')
-  const [modalProduto, setModalProduto] = useState(false)
+
+  // Estado do filtro de data — só commita quando muda
+  const [inicio, setInicio] = useState<string | undefined>(undefined)
+  const [fim, setFim] = useState<string | undefined>(undefined)
+
+  // Modais
+  const [modalOferta, setModalOferta] = useState(false)
   const [modalAportes, setModalAportes] = useState(false)
+  const [modalMeta, setModalMeta] = useState(false)
 
   const carregar = useCallback(
     async (silencioso = false) => {
       if (!silencioso) setCarregando(true)
       else setAtualizando(true)
       try {
-        const [c, v] = await Promise.all([
-          perpetuosService.obter(perpetuoId),
-          perpetuosService.vendasPorDia(perpetuoId),
+        const [c, v, i] = await Promise.all([
+          perpetuosService.obter(perpetuoId, inicio, fim),
+          perpetuosService.vendasPorDia(perpetuoId, inicio, fim),
+          perpetuosService.investimentoPorDia(perpetuoId, inicio, fim),
         ])
         setCompleto(c)
         setVendasDia(v)
+        setInvestDia(i)
       } catch (e) {
         if (!silencioso) setErro(extrairErro(e))
       } finally {
@@ -178,7 +189,7 @@ function DetalhePerpetuo({
         else setAtualizando(false)
       }
     },
-    [perpetuoId],
+    [perpetuoId, inicio, fim],
   )
 
   useEffect(() => {
@@ -204,11 +215,21 @@ function DetalhePerpetuo({
     }
   }
 
+  const removerOferta = async (id: string) => {
+    if (!confirm('Remover essa oferta do perpétuo?')) return
+    try {
+      await perpetuosService.removerOferta(id)
+      await carregar(false)
+    } catch (e) {
+      alert(extrairErro(e))
+    }
+  }
+
   const removerPerpetuo = async () => {
     if (!completo) return
     if (
       !confirm(
-        `Remover o perpétuo "${completo.perpetuo.nome}"?\n\nIsso apaga os produtos configurados dele. As vendas reais continuam intactas.`,
+        `Remover o perpétuo "${completo.perpetuo.nome}"?\n\nIsso apaga as ofertas e os aportes. As vendas reais continuam intactas.`,
       )
     )
       return
@@ -220,14 +241,12 @@ function DetalhePerpetuo({
     }
   }
 
-  const removerProduto = async (id: string) => {
-    if (!confirm('Remover esse produto do perpétuo?')) return
-    try {
-      await perpetuosService.removerProduto(id)
-      carregar(false)
-    } catch (e) {
-      alert(extrairErro(e))
-    }
+  const salvarMeta = async (ad: string | null, filtro: string | null) => {
+    await perpetuosService.atualizar(perpetuoId, {
+      meta_ad_account_id: ad,
+      meta_filtro_nome: filtro,
+    })
+    await carregar(false)
   }
 
   if (carregando && !completo) {
@@ -238,10 +257,10 @@ function DetalhePerpetuo({
   }
   if (!completo) return null
 
-  const receitaTotal = completo.produtos.reduce((acc, p) => acc + Number(p.receita), 0)
-  const qtdTotal = completo.produtos.reduce((acc, p) => acc + p.quantidade, 0)
-  const investimento = Number(completo.investimento_total)
-  const roas = investimento > 0 ? receitaTotal / investimento : 0
+  const receita = Number(completo.receita_total)
+  const invest = Number(completo.investimento_total)
+  const qtd = completo.quantidade_total
+  const roas = invest > 0 ? receita / invest : 0
 
   return (
     <div>
@@ -254,7 +273,7 @@ function DetalhePerpetuo({
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'flex-end',
-          marginBottom: '1.5rem',
+          marginBottom: '1rem',
           flexWrap: 'wrap',
           gap: 12,
         }}
@@ -265,17 +284,28 @@ function DetalhePerpetuo({
           </h1>
           <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>
             Desde {fmtData(completo.perpetuo.data_inicio)}
+            {completo.perpetuo.meta_ad_account_id ? (
+              <>
+                {' · '}Meta Ads {completo.perpetuo.meta_ad_account_id}
+                {completo.perpetuo.meta_filtro_nome
+                  ? ` (filtro: "${completo.perpetuo.meta_filtro_nome}")`
+                  : ''}
+              </>
+            ) : null}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <BotaoAtualizar onClick={() => carregar(true)} atualizando={atualizando} />
           {isAdmin && (
             <>
               <button onClick={() => setModalAportes(true)} style={botaoSecundario}>
                 + Aporte
               </button>
-              <button onClick={() => setModalProduto(true)} style={botaoSecundario}>
-                + Produto
+              <button onClick={() => setModalOferta(true)} style={botaoSecundario}>
+                + Oferta
+              </button>
+              <button onClick={() => setModalMeta(true)} style={botaoSecundario}>
+                Meta Ads
               </button>
               <button onClick={removerPerpetuo} style={{ ...botaoSecundario, color: '#EF4444' }}>
                 Remover
@@ -285,78 +315,54 @@ function DetalhePerpetuo({
         </div>
       </header>
 
-      {/* Receita total */}
-      <div style={{ ...cardCabecalho, marginBottom: '0.75rem' }}>
-        <div>
-          <p style={rotuloCard}>Receita total do perpétuo</p>
-          <p style={{ margin: '4px 0 0', fontSize: 28, fontWeight: 700, color: '#3ECFB2' }}>
-            {formatBRL(receitaTotal)}
-          </p>
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <p style={{ margin: 0, fontSize: 11, color: 'var(--text-faint)' }}>Vendas</p>
-          <p style={{ margin: '4px 0 0', fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>
-            {formatNum(qtdTotal)}
-          </p>
-        </div>
+      {/* Filtro de data */}
+      <div
+        style={{
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 12,
+          padding: '0.75rem 1rem',
+          marginBottom: '1rem',
+        }}
+      >
+        <FiltroData
+          inicioInicial={completo.inicio}
+          fimInicial={completo.fim}
+          onChange={(i, f) => {
+            setInicio(i)
+            setFim(f)
+          }}
+        />
       </div>
 
-      {/* Investimento (soma dos aportes) + ROAS */}
-      <div style={{ ...cardCabecalho, padding: '1.25rem 1.5rem', marginBottom: '1.5rem' }}>
-        <div>
-          <p style={rotuloCard}>Investimento total</p>
-          <p style={{ margin: '4px 0 0', fontSize: 28, fontWeight: 700, color: '#F59E0B' }}>
-            {formatBRL(investimento)}
-          </p>
-          <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--text-faint)' }}>
-            {completo.aportes.length} {completo.aportes.length === 1 ? 'aporte' : 'aportes'}
-            {isAdmin && (
-              <>
-                {' · '}
-                <button
-                  onClick={() => setModalAportes(true)}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: '#7C6AF7',
-                    padding: 0,
-                    fontSize: 11,
-                    cursor: 'pointer',
-                    textDecoration: 'underline',
-                  }}
-                >
-                  gerenciar
-                </button>
-              </>
-            )}
-          </p>
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <p style={{ margin: 0, fontSize: 11, color: 'var(--text-faint)' }}>ROAS</p>
-          <p
-            style={{
-              margin: '4px 0 0',
-              fontSize: 22,
-              fontWeight: 700,
-              color: investimento > 0 ? '#7C6AF7' : 'var(--text-dim)',
-            }}
-          >
-            {investimento > 0 ? `${roas.toFixed(2)}x` : '—'}
-          </p>
-        </div>
+      {/* 4 KPIs */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gap: 12,
+          marginBottom: '1.5rem',
+        }}
+      >
+        <KPICard label="Investimento" valor={formatBRL(invest)} cor="#F59E0B" />
+        <KPICard label="Faturamento" valor={formatBRL(receita)} cor="#3ECFB2" />
+        <KPICard label="Vendas" valor={formatNum(qtd)} cor="var(--text)" />
+        <KPICard
+          label="ROAS"
+          valor={invest > 0 ? `${roas.toFixed(2)}x` : '—'}
+          cor={invest > 0 ? '#7C6AF7' : 'var(--text-dim)'}
+        />
       </div>
 
-      {/* Produtos */}
-      <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600, color: 'var(--text-strong)' }}>
-        Produtos
-      </h3>
-      {completo.produtos.length === 0 ? (
+      {/* Lista de ofertas */}
+      <h3 style={tituloSecao}>Ofertas</h3>
+      {completo.ofertas.length === 0 ? (
         <CardVazio
-          titulo="Sem produtos cadastrados"
+          titulo="Nenhuma oferta cadastrada"
           mensagem={
             isAdmin
-              ? 'Clique em "+ Adicionar produto" pra incluir um. Vendas batem pelo nome exato em vendas.produto.'
-              : 'Peça a um admin pra cadastrar produtos.'
+              ? 'Clique em "+ Oferta" pra adicionar. Cada oferta casa com vendas.oferta_codigo.'
+              : 'Peça a um admin pra cadastrar ofertas.'
           }
         />
       ) : (
@@ -368,36 +374,30 @@ function DetalhePerpetuo({
             marginBottom: '1.5rem',
           }}
         >
-          {completo.produtos.map((p) => (
-            <CardProduto
-              key={p.id}
-              detalhe={p}
-              isAdmin={isAdmin}
-              onRemover={removerProduto}
-            />
+          {completo.ofertas.map((o) => (
+            <CardOferta key={o.id} detalhe={o} isAdmin={isAdmin} onRemover={removerOferta} />
           ))}
         </div>
       )}
 
-      {/* Gráfico */}
-      <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600, color: 'var(--text-strong)' }}>
-        Vendas por dia
-      </h3>
+      {/* Gráfico diário */}
+      <h3 style={tituloSecao}>Vendas por dia × categoria</h3>
       <div style={{ marginBottom: '1.5rem' }}>
-        <GraficoVendasProduto dados={vendasDia} />
+        <GraficoPerpetuoDia vendas={vendasDia} investimento={investDia} />
       </div>
 
       <Modal
-        aberto={modalProduto}
-        titulo="Adicionar produto ao perpétuo"
-        onFechar={() => setModalProduto(false)}
-        largura={520}
+        aberto={modalOferta}
+        titulo="Adicionar oferta ao perpétuo"
+        onFechar={() => setModalOferta(false)}
+        largura={620}
       >
-        <FormAdicionarProduto
+        <FormAdicionarOferta
           perpetuoId={perpetuoId}
-          onCancelar={() => setModalProduto(false)}
+          jaCadastrados={new Set(completo.ofertas.map((o) => o.oferta_codigo))}
+          onCancelar={() => setModalOferta(false)}
           onCriou={() => {
-            setModalProduto(false)
+            setModalOferta(false)
             carregar(false)
           }}
         />
@@ -415,24 +415,48 @@ function DetalhePerpetuo({
           onRemover={removerAporte}
         />
       </Modal>
+
+      <Modal
+        aberto={modalMeta}
+        titulo="Configurar Meta Ads"
+        onFechar={() => setModalMeta(false)}
+        largura={480}
+      >
+        <FormConfigurarMeta
+          adInicial={completo.perpetuo.meta_ad_account_id}
+          filtroInicial={completo.perpetuo.meta_filtro_nome}
+          onCancelar={() => setModalMeta(false)}
+          onSalvar={async (ad, filtro) => {
+            await salvarMeta(ad, filtro)
+            setModalMeta(false)
+          }}
+        />
+      </Modal>
     </div>
   )
 }
 
 // ============================================================
-// Card de produto (com breakdown por oferta)
+// Card de uma oferta cadastrada
 // ============================================================
-function CardProduto({
+function CardOferta({
   detalhe,
   isAdmin,
   onRemover,
 }: {
-  detalhe: PerpetuoProdutoDetalhe
+  detalhe: PerpetuoOfertaDetalhe
   isAdmin: boolean
   onRemover: (id: string) => void
 }) {
-  const [aberto, setAberto] = useState(false)
-  const cpl = detalhe.quantidade > 0 ? Number(detalhe.receita) / detalhe.quantidade : 0
+  const cpv =
+    detalhe.quantidade > 0 ? Number(detalhe.receita) / detalhe.quantidade : 0
+  const corCategoria: Record<string, string> = {
+    Principal: '#7C6AF7',
+    'Order Bump': '#F59E0B',
+    Upsell: '#60A5FA',
+    Downsell: '#EC4899',
+    Outros: '#6B7280',
+  }
   return (
     <div
       style={{
@@ -444,20 +468,33 @@ function CardProduto({
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
+          <span
+            style={{
+              display: 'inline-block',
+              fontSize: 10,
+              fontWeight: 700,
+              color: corCategoria[detalhe.categoria] || '#6B7280',
+              background: `${corCategoria[detalhe.categoria] || '#6B7280'}22`,
+              padding: '2px 8px',
+              borderRadius: 99,
+              marginBottom: 6,
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+            }}
+          >
+            {detalhe.categoria}
+          </span>
           <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {detalhe.produto}
+            {detalhe.oferta_nome || detalhe.oferta_codigo}
           </p>
-          <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            Receita
-          </p>
-          <p style={{ margin: '2px 0 0', fontSize: 18, fontWeight: 700, color: '#3ECFB2' }}>
-            {formatBRL(detalhe.receita)}
+          <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--text-faint)' }}>
+            cód: {detalhe.oferta_codigo}
           </p>
         </div>
         {isAdmin && (
           <button
             onClick={() => onRemover(detalhe.id)}
-            title="Remover produto do perpétuo"
+            title="Remover oferta"
             style={botaoIconeRemover}
           >
             ×
@@ -468,7 +505,7 @@ function CardProduto({
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(2, 1fr)',
+          gridTemplateColumns: 'repeat(3, 1fr)',
           gap: 10,
           marginTop: 10,
           paddingTop: 10,
@@ -476,50 +513,9 @@ function CardProduto({
         }}
       >
         <MetricaInline label="Vendas" valor={formatNum(detalhe.quantidade)} />
-        <MetricaInline label="Ticket médio" valor={`R$ ${cpl.toFixed(2)}`} />
+        <MetricaInline label="Receita" valor={formatBRL(detalhe.receita)} />
+        <MetricaInline label="Ticket méd." valor={`R$ ${cpv.toFixed(2)}`} />
       </div>
-
-      {detalhe.ofertas.length > 0 && (
-        <>
-          <button
-            onClick={() => setAberto((v) => !v)}
-            style={{
-              marginTop: 12,
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--text-faint)',
-              fontSize: 12,
-              cursor: 'pointer',
-              padding: 0,
-            }}
-          >
-            {aberto ? '▾' : '▸'} {detalhe.ofertas.length} {detalhe.ofertas.length === 1 ? 'oferta' : 'ofertas'}
-          </button>
-          {aberto && (
-            <div style={{ marginTop: 8, display: 'grid', gap: 6 }}>
-              {detalhe.ofertas.map((o, i) => (
-                <div
-                  key={`${o.oferta_codigo ?? 'sem'}-${i}`}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'baseline',
-                    fontSize: 12,
-                    padding: '4px 0',
-                  }}
-                >
-                  <span style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '60%' }}>
-                    {o.oferta_nome ?? '(sem oferta)'}
-                  </span>
-                  <span style={{ color: 'var(--text)', fontWeight: 600 }}>
-                    {formatNum(o.quantidade)} · {formatBRL(o.receita)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
     </div>
   )
 }
@@ -546,7 +542,7 @@ function MetricaInline({ label, valor }: { label: string; valor: string }) {
 }
 
 // ============================================================
-// Form: novo perpétuo
+// Form: novo perpétuo (sem produtos — agora cadastra ofertas depois)
 // ============================================================
 function FormNovoPerpetuo({
   onCancelar,
@@ -557,40 +553,14 @@ function FormNovoPerpetuo({
 }) {
   const [nome, setNome] = useState('')
   const [dataInicio, setDataInicio] = useState(format(new Date(), 'yyyy-MM-dd'))
-  const [investimento, setInvestimento] = useState('')
-  const [produtosDisponiveis, setProdutosDisponiveis] = useState<string[]>([])
-  const [selecionados, setSelecionados] = useState<Set<string>>(new Set())
-  const [filtro, setFiltro] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState('')
-
-  useEffect(() => {
-    vendasService.produtos().then(setProdutosDisponiveis).catch(() => setProdutosDisponiveis([]))
-  }, [])
-
-  const alternar = (produto: string) => {
-    setSelecionados((prev) => {
-      const novo = new Set(prev)
-      if (novo.has(produto)) novo.delete(produto)
-      else novo.add(produto)
-      return novo
-    })
-  }
-
-  const filtrados = produtosDisponiveis.filter((p) =>
-    p.toLowerCase().includes(filtro.toLowerCase()),
-  )
 
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault()
     setErro('')
     setEnviando(true)
-    const payload: NovoPerpetuoPayload = {
-      nome,
-      data_inicio: dataInicio,
-      investimento: investimento ? Number(investimento) : 0,
-      produtos: Array.from(selecionados),
-    }
+    const payload: NovoPerpetuoPayload = { nome, data_inicio: dataInicio }
     try {
       const novo = await perpetuosService.criar(payload)
       onCriou(novo)
@@ -602,63 +572,13 @@ function FormNovoPerpetuo({
 
   return (
     <form onSubmit={enviar} style={{ display: 'grid', gap: 14 }}>
-      <Campo label="Nome do perpétuo" tipo="text" valor={nome} onChange={setNome} placeholder="Ex: Comunidade Vida Alinhada" required />
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <Campo label="Data de início" tipo="date" valor={dataInicio} onChange={setDataInicio} required />
-        <Campo label="Investimento (R$)" tipo="number" valor={investimento} onChange={setInvestimento} placeholder="0,00" step="0.01" />
-      </div>
+      <Campo label="Nome do perpétuo" tipo="text" valor={nome} onChange={setNome} placeholder="Ex: Protocolo Antidor" required />
+      <Campo label="Data de início" tipo="date" valor={dataInicio} onChange={setDataInicio} required />
+      <p style={{ margin: 0, fontSize: 11, color: 'var(--text-faint)' }}>
+        Depois de criar, você adiciona as ofertas e os aportes no detalhe.
+      </p>
 
-      <div>
-        <label style={rotulo}>Produtos ({selecionados.size} selecionados)</label>
-        <input
-          type="text"
-          value={filtro}
-          onChange={(e) => setFiltro(e.target.value)}
-          placeholder="Filtrar produtos…"
-          style={{ ...inputBase, marginBottom: 8 }}
-        />
-        <div
-          style={{
-            maxHeight: 220,
-            overflowY: 'auto',
-            border: '1px solid var(--border-strong)',
-            borderRadius: 8,
-            padding: 8,
-            background: 'var(--surface-2)',
-          }}
-        >
-          {filtrados.length === 0 ? (
-            <p style={{ margin: 0, fontSize: 12, color: 'var(--text-faint)', padding: 8 }}>
-              {produtosDisponiveis.length === 0 ? 'Carregando produtos…' : 'Nenhum produto.'}
-            </p>
-          ) : (
-            filtrados.map((p) => (
-              <label
-                key={p}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '6px 4px',
-                  fontSize: 13,
-                  color: 'var(--text)',
-                  cursor: 'pointer',
-                  borderRadius: 4,
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={selecionados.has(p)}
-                  onChange={() => alternar(p)}
-                />
-                <span>{p}</span>
-              </label>
-            ))
-          )}
-        </div>
-      </div>
-
-      {erro && <Aviso texto={`Erro: ${erro}`} />}
+      {erro && <Aviso texto={erro} />}
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
         <button type="button" onClick={onCancelar} disabled={enviando} style={botaoSecundarioModal}>
@@ -673,37 +593,62 @@ function FormNovoPerpetuo({
 }
 
 // ============================================================
-// Form: adicionar produto ao perpétuo existente
+// Form: adicionar oferta (lista de ofertas disponíveis das vendas)
 // ============================================================
-function FormAdicionarProduto({
+function FormAdicionarOferta({
   perpetuoId,
+  jaCadastrados,
   onCancelar,
   onCriou,
 }: {
   perpetuoId: string
+  jaCadastrados: Set<string>
   onCancelar: () => void
   onCriou: () => void
 }) {
-  const [produtosDisponiveis, setProdutosDisponiveis] = useState<string[]>([])
+  const [disponiveis, setDisponiveis] = useState<OfertaDisponivel[]>([])
   const [filtro, setFiltro] = useState('')
-  const [selecionado, setSelecionado] = useState<string | null>(null)
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set())
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState('')
 
   useEffect(() => {
-    vendasService.produtos().then(setProdutosDisponiveis).catch(() => setProdutosDisponiveis([]))
+    perpetuosService.ofertasDisponiveis().then(setDisponiveis).catch(() => setDisponiveis([]))
   }, [])
 
-  const filtrados = produtosDisponiveis.filter((p) =>
-    p.toLowerCase().includes(filtro.toLowerCase()),
-  )
+  const filtrados = useMemo(() => {
+    const q = filtro.toLowerCase()
+    return disponiveis.filter((o) => {
+      if (jaCadastrados.has(o.oferta_codigo)) return false
+      return (
+        o.oferta_codigo.toLowerCase().includes(q) ||
+        (o.oferta_nome || '').toLowerCase().includes(q) ||
+        (o.produto || '').toLowerCase().includes(q)
+      )
+    })
+  }, [disponiveis, filtro, jaCadastrados])
+
+  const alternar = (codigo: string) => {
+    setSelecionados((prev) => {
+      const novo = new Set(prev)
+      if (novo.has(codigo)) novo.delete(codigo)
+      else novo.add(codigo)
+      return novo
+    })
+  }
 
   const enviar = async () => {
-    if (!selecionado) return
+    if (selecionados.size === 0) return
     setErro('')
     setEnviando(true)
     try {
-      await perpetuosService.adicionarProduto(perpetuoId, selecionado)
+      for (const cod of selecionados) {
+        const oferta = disponiveis.find((o) => o.oferta_codigo === cod)
+        await perpetuosService.adicionarOferta(perpetuoId, {
+          oferta_codigo: cod,
+          oferta_nome: oferta?.oferta_nome ?? null,
+        })
+      }
       onCriou()
     } catch (err) {
       setErro(extrairErro(err))
@@ -717,72 +662,148 @@ function FormAdicionarProduto({
         type="text"
         value={filtro}
         onChange={(e) => setFiltro(e.target.value)}
-        placeholder="Filtrar produtos…"
+        placeholder="Filtrar por nome / código / produto…"
         style={inputBase}
         autoFocus
       />
       <div
         style={{
-          maxHeight: 280,
+          maxHeight: 320,
           overflowY: 'auto',
           border: '1px solid var(--border-strong)',
           borderRadius: 8,
-          padding: 8,
+          padding: 6,
           background: 'var(--surface-2)',
         }}
       >
         {filtrados.length === 0 ? (
-          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-faint)', padding: 8 }}>
-            {produtosDisponiveis.length === 0 ? 'Carregando…' : 'Nenhum produto.'}
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-faint)', padding: 12, textAlign: 'center' }}>
+            {disponiveis.length === 0 ? 'Carregando…' : 'Nenhuma oferta disponível.'}
           </p>
         ) : (
-          filtrados.map((p) => (
+          filtrados.map((o) => (
             <label
-              key={p}
+              key={o.oferta_codigo}
               style={{
                 display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '6px 4px',
+                alignItems: 'flex-start',
+                gap: 10,
+                padding: '6px 8px',
                 fontSize: 13,
                 color: 'var(--text)',
                 cursor: 'pointer',
                 borderRadius: 4,
-                background: selecionado === p ? 'var(--border)' : 'transparent',
+                background: selecionados.has(o.oferta_codigo) ? 'var(--border)' : 'transparent',
               }}
             >
               <input
-                type="radio"
-                name="produto-perpetuo"
-                checked={selecionado === p}
-                onChange={() => setSelecionado(p)}
+                type="checkbox"
+                checked={selecionados.has(o.oferta_codigo)}
+                onChange={() => alternar(o.oferta_codigo)}
+                style={{ marginTop: 3 }}
               />
-              <span>{p}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ margin: 0, fontWeight: 500 }}>{o.oferta_nome || '(sem nome)'}</p>
+                <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--text-faint)' }}>
+                  {o.produto || '—'} · cód {o.oferta_codigo}
+                </p>
+              </div>
             </label>
           ))
         )}
       </div>
 
-      {erro && <Aviso texto={`Erro: ${erro}`} />}
+      {erro && <Aviso texto={erro} />}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-        <button type="button" onClick={onCancelar} disabled={enviando} style={botaoSecundarioModal}>
-          Cancelar
-        </button>
-        <button
-          onClick={enviar}
-          disabled={enviando || !selecionado}
-          style={{ ...botaoPrimario, opacity: !selecionado ? 0.6 : 1 }}
-        >
-          {enviando ? 'Adicionando…' : 'Adicionar'}
-        </button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>
+          {selecionados.size} selecionadas
+        </span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" onClick={onCancelar} disabled={enviando} style={botaoSecundarioModal}>
+            Cancelar
+          </button>
+          <button
+            onClick={enviar}
+            disabled={enviando || selecionados.size === 0}
+            style={{ ...botaoPrimario, opacity: selecionados.size === 0 ? 0.6 : 1 }}
+          >
+            {enviando ? 'Adicionando…' : 'Adicionar selecionadas'}
+          </button>
+        </div>
       </div>
     </div>
   )
 }
 
 // ============================================================
-// Modal de aportes — lista existente + form pra adicionar
+// Modal: configurar Meta Ads (ad_account_id + filtro)
+// ============================================================
+function FormConfigurarMeta({
+  adInicial,
+  filtroInicial,
+  onCancelar,
+  onSalvar,
+}: {
+  adInicial: string | null
+  filtroInicial: string | null
+  onCancelar: () => void
+  onSalvar: (ad: string | null, filtro: string | null) => Promise<void>
+}) {
+  const [ad, setAd] = useState(adInicial ?? '')
+  const [filtro, setFiltro] = useState(filtroInicial ?? '')
+  const [enviando, setEnviando] = useState(false)
+  const [erro, setErro] = useState('')
+
+  const enviar = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setErro('')
+    setEnviando(true)
+    try {
+      await onSalvar(ad.trim() || null, filtro.trim() || null)
+    } catch (err) {
+      setErro(extrairErro(err))
+      setEnviando(false)
+    }
+  }
+
+  return (
+    <form onSubmit={enviar} style={{ display: 'grid', gap: 14 }}>
+      <p style={{ margin: 0, fontSize: 12, color: 'var(--text-faint)' }}>
+        Vincule esse perpétuo a uma Ad Account da Meta. Aportes serão puxados
+        automaticamente das campanhas que tiverem o filtro no nome.
+      </p>
+      <Campo
+        label="Ad Account ID"
+        tipo="text"
+        valor={ad}
+        onChange={setAd}
+        placeholder="Ex: 628263058826646"
+      />
+      <Campo
+        label="Filtro de campanhas (substring no nome)"
+        tipo="text"
+        valor={filtro}
+        onChange={setFiltro}
+        placeholder="Ex: [PAR]"
+      />
+
+      {erro && <Aviso texto={erro} />}
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <button type="button" onClick={onCancelar} disabled={enviando} style={botaoSecundarioModal}>
+          Cancelar
+        </button>
+        <button type="submit" disabled={enviando} style={botaoPrimario}>
+          {enviando ? 'Salvando…' : 'Salvar'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+// ============================================================
+// Modal de aportes — form + lista
 // ============================================================
 function GerenciadorAportes({
   aportes,
@@ -824,65 +845,30 @@ function GerenciadorAportes({
   return (
     <div style={{ display: 'grid', gap: 16 }}>
       <form onSubmit={enviar} style={{ display: 'grid', gap: 10 }}>
-        <p style={{ margin: 0, fontSize: 12, color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          Novo aporte
-        </p>
+        <p style={subtituloModal}>Novo aporte</p>
         <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr 1fr', gap: 8 }}>
-          <input
-            type="date"
-            value={dia}
-            onChange={(e) => setDia(e.target.value)}
-            required
-            style={inputBase}
-          />
-          <input
-            type="number"
-            step="0.01"
-            value={valor}
-            onChange={(e) => setValor(e.target.value)}
-            placeholder="Valor (R$)"
-            required
-            style={inputBase}
-          />
-          <input
-            type="text"
-            value={descricao}
-            onChange={(e) => setDescricao(e.target.value)}
-            placeholder="Descrição (opcional)"
-            style={inputBase}
-          />
+          <input type="date" value={dia} onChange={(e) => setDia(e.target.value)} required style={inputBase} />
+          <input type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="Valor (R$)" required style={inputBase} />
+          <input type="text" value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Descrição (opcional)" style={inputBase} />
         </div>
         {erro && <Aviso texto={erro} />}
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <button
-            type="submit"
-            disabled={enviando || !valor}
-            style={{ ...botaoPrimario, opacity: !valor ? 0.6 : 1 }}
-          >
+          <button type="submit" disabled={enviando || !valor} style={{ ...botaoPrimario, opacity: !valor ? 0.6 : 1 }}>
             {enviando ? 'Adicionando…' : 'Adicionar aporte'}
           </button>
         </div>
       </form>
 
       <div>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: 8,
-          }}
-        >
-          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            Aportes registrados ({aportes.length})
-          </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <p style={subtituloModal}>Aportes registrados ({aportes.length})</p>
           <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#F59E0B' }}>
             Total {formatBRL(total)}
           </p>
         </div>
         {aportes.length === 0 ? (
           <p style={{ margin: 0, fontSize: 12, color: 'var(--text-faint)', textAlign: 'center', padding: 16 }}>
-            Sem aportes ainda. Adicione o primeiro acima.
+            Sem aportes ainda.
           </p>
         ) : (
           <div style={{ display: 'grid', gap: 4, maxHeight: 280, overflowY: 'auto' }}>
@@ -931,7 +917,6 @@ function GerenciadorAportes({
   )
 }
 
-
 // ============================================================
 // Helpers visuais
 // ============================================================
@@ -946,9 +931,7 @@ function CardVazio({ titulo, mensagem }: { titulo: string; mensagem: string }) {
         textAlign: 'center',
       }}
     >
-      <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--text-strong)' }}>
-        {titulo}
-      </p>
+      <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--text-strong)' }}>{titulo}</p>
       <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--text-faint)' }}>{mensagem}</p>
     </div>
   )
@@ -978,7 +961,6 @@ function Campo({
   onChange,
   placeholder,
   required,
-  step,
 }: {
   label: string
   tipo: string
@@ -986,7 +968,6 @@ function Campo({
   onChange: (v: string) => void
   placeholder?: string
   required?: boolean
-  step?: string
 }) {
   return (
     <div>
@@ -997,7 +978,6 @@ function Campo({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         required={required}
-        step={step}
         style={inputBase}
       />
     </div>
@@ -1103,22 +1083,18 @@ const cardClicavel: React.CSSProperties = {
   transition: 'border-color 0.15s',
 }
 
-const cardCabecalho: React.CSSProperties = {
-  background: 'var(--surface)',
-  border: '1px solid var(--border)',
-  borderRadius: 12,
-  padding: '1.25rem 1.5rem',
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  flexWrap: 'wrap',
-  gap: 12,
+const tituloSecao: React.CSSProperties = {
+  margin: '0 0 12px',
+  fontSize: 14,
+  fontWeight: 600,
+  color: 'var(--text-strong)',
 }
 
-const rotuloCard: React.CSSProperties = {
+const subtituloModal: React.CSSProperties = {
   margin: 0,
-  fontSize: 11,
+  fontSize: 12,
   color: 'var(--text-faint)',
+  fontWeight: 600,
   textTransform: 'uppercase',
   letterSpacing: '0.06em',
 }
