@@ -1,9 +1,16 @@
 import { api } from './api'
 import type {
   Perpetuo,
+  PerpetuoAporte,
   PerpetuoCompleto,
   PontoVendaProduto,
 } from '@/types'
+
+export interface NovoAportePayload {
+  dia: string // YYYY-MM-DD
+  valor: number
+  descricao?: string | null
+}
 
 export interface NovoPerpetuoPayload {
   nome: string
@@ -51,4 +58,12 @@ export const perpetuosService = {
     api
       .get<PontoVendaProduto[]>(`/api/perpetuos/${id}/vendas-por-dia`)
       .then((r) => r.data),
+
+  adicionarAporte: (perpetuoId: string, dados: NovoAportePayload) =>
+    api
+      .post<PerpetuoAporte>(`/api/perpetuos/${perpetuoId}/aportes`, dados)
+      .then((r) => r.data),
+
+  removerAporte: (aporteId: string) =>
+    api.delete(`/api/perpetuos/aportes/${aporteId}`).then(() => undefined),
 }

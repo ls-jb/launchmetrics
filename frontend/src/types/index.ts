@@ -244,9 +244,18 @@ export interface PerpetuoProdutoDetalhe {
   ofertas: OfertaBreakdownProduto[]
 }
 
+export interface PerpetuoAporte {
+  id: string
+  dia: string // YYYY-MM-DD
+  valor: number
+  descricao: string | null
+}
+
 export interface PerpetuoCompleto {
   perpetuo: Perpetuo
   produtos: PerpetuoProdutoDetalhe[]
+  aportes: PerpetuoAporte[]
+  investimento_total: number
 }
 
 export interface PontoVendaProduto {

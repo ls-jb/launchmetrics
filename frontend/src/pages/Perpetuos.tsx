@@ -2,7 +2,6 @@ import { format } from 'date-fns'
 import { useCallback, useEffect, useState } from 'react'
 
 import { BotaoAtualizar } from '@/components/shared/BotaoAtualizar'
-import { EditavelInline } from '@/components/shared/EditavelInline'
 import { GraficoVendasProduto } from '@/components/shared/GraficoVendasProduto'
 import { Modal } from '@/components/shared/Modal'
 import { extrairErro } from '@/lib/erro'
@@ -15,6 +14,7 @@ import { vendasService } from '@/services/vendasService'
 import { useAuthStore } from '@/store/authStore'
 import type {
   Perpetuo,
+  PerpetuoAporte,
   PerpetuoCompleto,
   PerpetuoProdutoDetalhe,
   PontoVendaProduto,
@@ -158,6 +158,7 @@ function DetalhePerpetuo({
   const [atualizando, setAtualizando] = useState(false)
   const [erro, setErro] = useState('')
   const [modalProduto, setModalProduto] = useState(false)
+  const [modalAportes, setModalAportes] = useState(false)
 
   const carregar = useCallback(
     async (silencioso = false) => {
@@ -184,13 +185,23 @@ function DetalhePerpetuo({
     carregar(false)
   }, [carregar])
 
-  const salvarInvestimento = async (valor: number | null) => {
-    const atualizado = await perpetuosService.atualizar(perpetuoId, {
-      investimento: valor ?? 0,
-    })
-    setCompleto((prev) =>
-      prev ? { ...prev, perpetuo: { ...prev.perpetuo, investimento: atualizado.investimento } } : prev,
-    )
+  const adicionarAporte = async (
+    dia: string,
+    valor: number,
+    descricao: string | null,
+  ) => {
+    await perpetuosService.adicionarAporte(perpetuoId, { dia, valor, descricao })
+    await carregar(false)
+  }
+
+  const removerAporte = async (id: string) => {
+    if (!confirm('Remover esse aporte?')) return
+    try {
+      await perpetuosService.removerAporte(id)
+      await carregar(false)
+    } catch (e) {
+      alert(extrairErro(e))
+    }
   }
 
   const removerPerpetuo = async () => {
@@ -229,7 +240,7 @@ function DetalhePerpetuo({
 
   const receitaTotal = completo.produtos.reduce((acc, p) => acc + Number(p.receita), 0)
   const qtdTotal = completo.produtos.reduce((acc, p) => acc + p.quantidade, 0)
-  const investimento = Number(completo.perpetuo.investimento)
+  const investimento = Number(completo.investimento_total)
   const roas = investimento > 0 ? receitaTotal / investimento : 0
 
   return (
@@ -260,11 +271,14 @@ function DetalhePerpetuo({
           <BotaoAtualizar onClick={() => carregar(true)} atualizando={atualizando} />
           {isAdmin && (
             <>
+              <button onClick={() => setModalAportes(true)} style={botaoSecundario}>
+                + Aporte
+              </button>
               <button onClick={() => setModalProduto(true)} style={botaoSecundario}>
-                + Adicionar produto
+                + Produto
               </button>
               <button onClick={removerPerpetuo} style={{ ...botaoSecundario, color: '#EF4444' }}>
-                Remover perpétuo
+                Remover
               </button>
             </>
           )}
@@ -287,26 +301,35 @@ function DetalhePerpetuo({
         </div>
       </div>
 
-      {/* Investimento + ROAS */}
+      {/* Investimento (soma dos aportes) + ROAS */}
       <div style={{ ...cardCabecalho, padding: '1.25rem 1.5rem', marginBottom: '1.5rem' }}>
         <div>
-          <p style={rotuloCard}>Investimento</p>
-          <div style={{ marginTop: 4 }}>
-            {isAdmin ? (
-              <EditavelInline
-                label="Investimento"
-                valor={investimento || null}
-                formatar={formatBRL}
-                aoSalvar={salvarInvestimento}
-                destaque
-                cor="#F59E0B"
-              />
-            ) : (
-              <p style={{ margin: 0, fontSize: 28, fontWeight: 700, color: '#F59E0B' }}>
-                {formatBRL(investimento)}
-              </p>
+          <p style={rotuloCard}>Investimento total</p>
+          <p style={{ margin: '4px 0 0', fontSize: 28, fontWeight: 700, color: '#F59E0B' }}>
+            {formatBRL(investimento)}
+          </p>
+          <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--text-faint)' }}>
+            {completo.aportes.length} {completo.aportes.length === 1 ? 'aporte' : 'aportes'}
+            {isAdmin && (
+              <>
+                {' · '}
+                <button
+                  onClick={() => setModalAportes(true)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#7C6AF7',
+                    padding: 0,
+                    fontSize: 11,
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                  }}
+                >
+                  gerenciar
+                </button>
+              </>
             )}
-          </div>
+          </p>
         </div>
         <div style={{ textAlign: 'right' }}>
           <p style={{ margin: 0, fontSize: 11, color: 'var(--text-faint)' }}>ROAS</p>
@@ -377,6 +400,19 @@ function DetalhePerpetuo({
             setModalProduto(false)
             carregar(false)
           }}
+        />
+      </Modal>
+
+      <Modal
+        aberto={modalAportes}
+        titulo="Aportes de investimento"
+        onFechar={() => setModalAportes(false)}
+        largura={640}
+      >
+        <GerenciadorAportes
+          aportes={completo.aportes}
+          onAdicionar={adicionarAporte}
+          onRemover={removerAporte}
         />
       </Modal>
     </div>
@@ -744,6 +780,157 @@ function FormAdicionarProduto({
     </div>
   )
 }
+
+// ============================================================
+// Modal de aportes — lista existente + form pra adicionar
+// ============================================================
+function GerenciadorAportes({
+  aportes,
+  onAdicionar,
+  onRemover,
+}: {
+  aportes: PerpetuoAporte[]
+  onAdicionar: (dia: string, valor: number, descricao: string | null) => Promise<void>
+  onRemover: (id: string) => void
+}) {
+  const [dia, setDia] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [valor, setValor] = useState('')
+  const [descricao, setDescricao] = useState('')
+  const [enviando, setEnviando] = useState(false)
+  const [erro, setErro] = useState('')
+
+  const enviar = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setErro('')
+    const v = Number(valor)
+    if (Number.isNaN(v) || v < 0) {
+      setErro('Valor inválido.')
+      return
+    }
+    setEnviando(true)
+    try {
+      await onAdicionar(dia, v, descricao.trim() || null)
+      setValor('')
+      setDescricao('')
+    } catch (err) {
+      setErro(extrairErro(err))
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  const total = aportes.reduce((acc, a) => acc + Number(a.valor), 0)
+
+  return (
+    <div style={{ display: 'grid', gap: 16 }}>
+      <form onSubmit={enviar} style={{ display: 'grid', gap: 10 }}>
+        <p style={{ margin: 0, fontSize: 12, color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          Novo aporte
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr 1fr', gap: 8 }}>
+          <input
+            type="date"
+            value={dia}
+            onChange={(e) => setDia(e.target.value)}
+            required
+            style={inputBase}
+          />
+          <input
+            type="number"
+            step="0.01"
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
+            placeholder="Valor (R$)"
+            required
+            style={inputBase}
+          />
+          <input
+            type="text"
+            value={descricao}
+            onChange={(e) => setDescricao(e.target.value)}
+            placeholder="Descrição (opcional)"
+            style={inputBase}
+          />
+        </div>
+        {erro && <Aviso texto={erro} />}
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            type="submit"
+            disabled={enviando || !valor}
+            style={{ ...botaoPrimario, opacity: !valor ? 0.6 : 1 }}
+          >
+            {enviando ? 'Adicionando…' : 'Adicionar aporte'}
+          </button>
+        </div>
+      </form>
+
+      <div>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 8,
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Aportes registrados ({aportes.length})
+          </p>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#F59E0B' }}>
+            Total {formatBRL(total)}
+          </p>
+        </div>
+        {aportes.length === 0 ? (
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-faint)', textAlign: 'center', padding: 16 }}>
+            Sem aportes ainda. Adicione o primeiro acima.
+          </p>
+        ) : (
+          <div style={{ display: 'grid', gap: 4, maxHeight: 280, overflowY: 'auto' }}>
+            {aportes.map((a) => (
+              <div
+                key={a.id}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '90px 110px 1fr 32px',
+                  gap: 8,
+                  padding: '8px 10px',
+                  fontSize: 12,
+                  background: 'var(--surface-2)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 6,
+                  alignItems: 'center',
+                }}
+              >
+                <span style={{ color: 'var(--text-muted)' }}>{fmtData(a.dia)}</span>
+                <span style={{ color: 'var(--text)', fontWeight: 600 }}>{formatBRL(a.valor)}</span>
+                <span style={{ color: 'var(--text-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {a.descricao || '—'}
+                </span>
+                <button
+                  onClick={() => onRemover(a.id)}
+                  title="Remover aporte"
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid var(--border-strong)',
+                    color: '#EF4444',
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                    fontSize: 14,
+                    fontWeight: 600,
+                    padding: '2px 6px',
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 
 // ============================================================
 // Helpers visuais
