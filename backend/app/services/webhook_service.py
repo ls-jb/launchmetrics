@@ -78,6 +78,11 @@ async def processar_lead_ghl(db: AsyncSession, token: str, payload: dict) -> Non
             return  # duplicado — silencia
 
     canal_nome = _normalizar(_extrair_canal_bruto(fontes))
+    # WhatsApp tem duas naturezas distintas com custos diferentes: grupos
+    # (orgânico, gratuito) e API (pago). Separamos pelo utm_medium pra
+    # cada um virar um canal com investimento e CPL próprios.
+    if canal_nome == "WhatsApp":
+        canal_nome = _split_whatsapp(_pegar(fontes, "utm_medium", "utmMedium"))
     canal_id = await _obter_ou_criar_canal(db, lancamento.id, canal_nome)
 
     lead = Lead(
@@ -159,6 +164,17 @@ def _normalizar(valor: str) -> str:
     if chave in NORMALIZACAO_CANAL:
         return NORMALIZACAO_CANAL[chave]
     return valor.strip() or "Sem Utm"
+
+
+def _split_whatsapp(utm_medium: str | None) -> str:
+    """WhatsApp tem 2 origens com custos distintos: grupos (orgânico,
+    gratuito) e API (pago). Decidido pelo utm_medium da submissão atual.
+    Default é Grupos — se vier dúvida, classifica como gratuito (não infla
+    o CPL da API com leads não pagos)."""
+    m = (utm_medium or "").strip().lower()
+    if m.startswith("api"):
+        return "WhatsApp - API"
+    return "WhatsApp - Grupos"
 
 
 # Formatos aceitos para o campo "Data" enviado pelo GHL
