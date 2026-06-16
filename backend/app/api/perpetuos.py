@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.middleware.auth import require_admin, verify_token
 from app.schemas.perpetuo import (
+    AporteCreate,
+    AporteResponse,
     PerpetuoCompleto,
     PerpetuoCreate,
     PerpetuoProdutoResponse,
@@ -129,3 +131,41 @@ async def remover_produto(
 ):
     if not await svc.remover_produto(db, produto_id):
         raise HTTPException(status_code=404, detail="Produto não encontrado.")
+
+
+# ============================================================
+# Aportes (histórico de investimento por dia)
+# ============================================================
+@router.post(
+    "/{perpetuo_id}/aportes",
+    response_model=AporteResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def adicionar_aporte(
+    perpetuo_id: UUID,
+    dados: AporteCreate,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_admin),
+):
+    aporte = await svc.adicionar_aporte(
+        db,
+        perpetuo_id,
+        dados.dia,
+        Decimal(str(dados.valor)),
+        dados.descricao,
+    )
+    if not aporte:
+        raise HTTPException(status_code=404, detail="Perpétuo não encontrado.")
+    return aporte
+
+
+@router.delete(
+    "/aportes/{aporte_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def remover_aporte(
+    aporte_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_admin),
+):
+    if not await svc.remover_aporte(db, aporte_id):
+        raise HTTPException(status_code=404, detail="Aporte não encontrado.")

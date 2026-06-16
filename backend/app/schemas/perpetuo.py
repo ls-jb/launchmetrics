@@ -73,6 +73,24 @@ class ProdutoDetalhe(BaseModel):
     expand do card."""
 
 
+class AporteCreate(BaseModel):
+    """Aporte de investimento de um dia. valor é em R$, podendo ser zero
+    (ex: registrar que naquele dia houve campanha mas custo foi 0)."""
+
+    dia: date
+    valor: Money = Field(..., ge=0)
+    descricao: str | None = Field(default=None, max_length=200)
+
+
+class AporteResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    dia: date
+    valor: Money
+    descricao: str | None = None
+
+
 class PerpetuoCompleto(BaseModel):
     """Tudo que a tela de detalhe precisa."""
 
@@ -80,6 +98,12 @@ class PerpetuoCompleto(BaseModel):
     produtos: list[ProdutoDetalhe]
     """Produtos cadastrados, com qtd+receita totais (todas as ofertas
     agregadas). Ordenados por receita desc."""
+    aportes: list[AporteResponse] = []
+    """Aportes de investimento (dia × valor). Ordem: dia asc. A soma
+    desses aportes é o investimento total — o campo perpetuo.investimento
+    fica como legacy."""
+    investimento_total: Money = 0  # type: ignore[assignment]
+    """Soma dos aportes — fonte de verdade do investimento agora."""
 
 
 class PontoVendaProduto(BaseModel):

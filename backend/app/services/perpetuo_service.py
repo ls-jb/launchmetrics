@@ -17,8 +17,15 @@ BR_TZ = ZoneInfo("America/Sao_Paulo")
 from sqlalchemy import Date, String, and_, case, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import OfertaPreco, Perpetuo, PerpetuoProduto, Venda
+from app.models import (
+    OfertaPreco,
+    Perpetuo,
+    PerpetuoAporte,
+    PerpetuoProduto,
+    Venda,
+)
 from app.schemas.perpetuo import (
+    AporteResponse,
     OfertaBreakdownProduto,
     PerpetuoCompleto,
     PerpetuoResponse,
@@ -139,10 +146,57 @@ async def obter(
     )
 
     detalhes = await _produtos_com_metricas(db, perp, produtos_cadastrados)
+
+    aportes_rows = list(
+        (
+            await db.execute(
+                select(PerpetuoAporte)
+                .where(PerpetuoAporte.perpetuo_id == perpetuo_id)
+                .order_by(PerpetuoAporte.dia)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    aportes = [AporteResponse.model_validate(a) for a in aportes_rows]
+    investimento_total = sum((a.valor for a in aportes), Decimal("0"))
+
     return PerpetuoCompleto(
         perpetuo=PerpetuoResponse.model_validate(perp),
         produtos=detalhes,
+        aportes=aportes,
+        investimento_total=investimento_total,
     )
+
+
+# ============================================================
+# Aportes (histórico de investimento por dia)
+# ============================================================
+async def adicionar_aporte(
+    db: AsyncSession,
+    perpetuo_id: UUID,
+    dia: date,
+    valor: Decimal,
+    descricao: str | None,
+) -> PerpetuoAporte | None:
+    if not await db.get(Perpetuo, perpetuo_id):
+        return None
+    aporte = PerpetuoAporte(
+        perpetuo_id=perpetuo_id, dia=dia, valor=valor, descricao=descricao
+    )
+    db.add(aporte)
+    await db.commit()
+    await db.refresh(aporte)
+    return aporte
+
+
+async def remover_aporte(db: AsyncSession, aporte_id: UUID) -> bool:
+    aporte = await db.get(PerpetuoAporte, aporte_id)
+    if not aporte:
+        return False
+    await db.delete(aporte)
+    await db.commit()
+    return True
 
 
 async def _produtos_com_metricas(

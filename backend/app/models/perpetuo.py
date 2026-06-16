@@ -52,3 +52,25 @@ class PerpetuoProduto(Base):
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class PerpetuoAporte(Base):
+    """Aporte de investimento de um dia específico. Investimento total do
+    perpétuo agora é a SOMA dos aportes (o campo perpetuos.investimento
+    fica como legacy/snapshot, mas a fonte de verdade são os aportes)."""
+
+    __tablename__ = "perpetuos_aportes"
+    __table_args__ = {"schema": _SCHEMA}
+
+    id: Mapped[UUIDType] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    perpetuo_id: Mapped[UUIDType] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(f"{_SCHEMA}.perpetuos.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    dia: Mapped[date] = mapped_column(Date, nullable=False)
+    valor: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    descricao: Mapped[str | None] = mapped_column(String)
+    criado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
