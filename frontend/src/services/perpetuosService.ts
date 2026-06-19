@@ -103,4 +103,17 @@ export const perpetuosService = {
 
   removerAporte: (aporteId: string) =>
     api.delete(`/api/perpetuos/aportes/${aporteId}`).then(() => undefined),
+
+  // Sincroniza com Meta Ads (puxa gasto das campanhas filtradas e
+  // faz UPSERT em aportes). Retorna sumário com dias/total/período.
+  sincronizarMeta: (perpetuoId: string, dias = 3) =>
+    api
+      .post<{
+        dias: number
+        total: number | string
+        periodo: [string, string] | null
+      }>(`/api/perpetuos/${perpetuoId}/sync-meta`, null, {
+        params: { dias },
+      })
+      .then((r) => r.data),
 }

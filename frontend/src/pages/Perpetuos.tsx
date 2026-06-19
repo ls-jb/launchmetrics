@@ -249,6 +249,24 @@ function DetalhePerpetuo({
     await carregar(false)
   }
 
+  const sincronizarMeta = async () => {
+    try {
+      const r = await perpetuosService.sincronizarMeta(perpetuoId, 3)
+      if (r.dias === 0) {
+        alert(
+          'Nada sincronizado. Configure Meta Ads (ad account + filtro) e verifique o token no servidor.',
+        )
+      } else {
+        alert(
+          `Sincronizado: ${r.dias} dia(s), total R$ ${Number(r.total).toFixed(2)}.\nPeríodo: ${r.periodo?.[0]} → ${r.periodo?.[1]}`,
+        )
+      }
+      await carregar(false)
+    } catch (e) {
+      alert(`Erro: ${extrairErro(e)}`)
+    }
+  }
+
   if (carregando && !completo) {
     return <p style={textoMudo}>Carregando…</p>
   }
@@ -304,6 +322,15 @@ function DetalhePerpetuo({
               <button onClick={() => setModalOferta(true)} style={botaoSecundario}>
                 + Oferta
               </button>
+              {completo.perpetuo.meta_ad_account_id && (
+                <button
+                  onClick={sincronizarMeta}
+                  style={{ ...botaoSecundario, borderColor: '#3ECFB2', color: '#3ECFB2' }}
+                  title="Puxa o gasto Meta Ads dos últimos 3 dias e atualiza os aportes"
+                >
+                  ↻ Sincronizar Meta
+                </button>
+              )}
               <button onClick={() => setModalMeta(true)} style={botaoSecundario}>
                 Meta Ads
               </button>

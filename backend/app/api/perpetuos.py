@@ -1,9 +1,10 @@
 """Endpoints dos Perpétuos. Leitura: qualquer logado. Escrita: admin."""
+import os
 from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -225,3 +226,38 @@ async def remover_aporte(
 ):
     if not await svc.remover_aporte(db, aporte_id):
         raise HTTPException(status_code=404, detail="Aporte não encontrado.")
+
+
+# ============================================================
+# Sincronização Meta Ads
+# ============================================================
+@router.post("/{perpetuo_id}/sync-meta")
+async def sync_meta_perpetuo(
+    perpetuo_id: UUID,
+    dias: int = Query(default=3, ge=1, le=90),
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_admin),
+):
+    """Puxa o gasto Meta Ads dos últimos N dias pra esse perpétuo e faz
+    UPSERT em perpetuos_aportes (preserva aportes manuais). Exige Meta
+    configurado (meta_ad_account_id setado)."""
+    if not await svc.obter(db, perpetuo_id):
+        raise HTTPException(status_code=404, detail="Perpétuo não encontrado.")
+    return await svc.sincronizar_meta_perpetuo(db, perpetuo_id, dias)
+
+
+@router.get("/_cron/sync-meta")
+async def cron_sync_meta(
+    authorization: str | None = Header(default=None),
+    dias: int = Query(default=3, ge=1, le=90),
+    db: AsyncSession = Depends(get_db),
+):
+    """Endpoint chamado pelo cron do Vercel (1×/dia, GET).
+    O Vercel injeta automaticamente Authorization: Bearer ${CRON_SECRET}
+    quando essa env existe no projeto — basta cadastrar a env no Vercel."""
+    esperado = (os.getenv("CRON_SECRET") or "").strip()
+    if not esperado:
+        raise HTTPException(status_code=503, detail="CRON_SECRET não configurado")
+    if authorization != f"Bearer {esperado}":
+        raise HTTPException(status_code=403, detail="cron secret inválido")
+    return await svc.sincronizar_meta_todos(db, dias)

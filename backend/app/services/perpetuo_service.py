@@ -18,6 +18,8 @@ BR_TZ = ZoneInfo("America/Sao_Paulo")
 from sqlalchemy import Date, String, and_, case, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import delete as sql_delete
+
 from app.models import (
     OfertaPreco,
     Perpetuo,
@@ -33,6 +35,7 @@ from app.schemas.perpetuo import (
     PontoInvestimentoDia,
     PontoVendaCategoria,
 )
+from app.services import meta_ads_service
 
 
 # ============================================================
@@ -454,6 +457,85 @@ def _vendas_efetivas_subquery(codigos: list[str], inicio_dt, fim_dt):
         .where(base.c.rn == 1)
         .subquery()
     )
+
+
+DESCRICAO_META = "Meta Ads — sync automático"
+"""Marca os aportes vindos da sincronização Meta Ads. Permite diferenciar
+do que foi cadastrado manualmente (e refazer o UPSERT só nesses)."""
+
+
+async def sincronizar_meta_perpetuo(
+    db: AsyncSession,
+    perpetuo_id: UUID,
+    dias_retroativos: int = 3,
+) -> dict:
+    """
+    Puxa o gasto Meta Ads dos últimos N dias pra esse perpétuo e atualiza
+    os aportes (UPSERT). Re-puxar últimos 3 dias por default cobre o
+    delay/correção retroativa da Meta.
+
+    Idempotente — apaga só aportes da janela cuja descricao == DESCRICAO_META,
+    mantém aportes manuais. Roda mesmo se o perpétuo não tiver Meta
+    configurado: nesse caso vira no-op e retorna 0 dias.
+
+    Retorna {dias: N, total: Decimal, periodo: [inicio, fim]}.
+    """
+    perp = await db.get(Perpetuo, perpetuo_id)
+    if not perp or not perp.meta_ad_account_id:
+        return {"dias": 0, "total": Decimal("0"), "periodo": None}
+
+    fim = date.today()
+    inicio = fim - timedelta(days=max(dias_retroativos, 0))
+
+    gastos = await meta_ads_service.puxar_gasto_por_dia(
+        perp.meta_ad_account_id, inicio, fim, perp.meta_filtro_nome
+    )
+    if not gastos:
+        return {
+            "dias": 0,
+            "total": Decimal("0"),
+            "periodo": [inicio.isoformat(), fim.isoformat()],
+        }
+
+    # Apaga os aportes da sync nesses dias (preserva aportes manuais)
+    await db.execute(
+        sql_delete(PerpetuoAporte).where(
+            PerpetuoAporte.perpetuo_id == perpetuo_id,
+            PerpetuoAporte.dia >= inicio,
+            PerpetuoAporte.dia <= fim,
+            PerpetuoAporte.descricao == DESCRICAO_META,
+        )
+    )
+
+    # Insere os novos
+    for dia, valor in gastos.items():
+        db.add(
+            PerpetuoAporte(
+                perpetuo_id=perpetuo_id,
+                dia=dia,
+                valor=valor,
+                descricao=DESCRICAO_META,
+            )
+        )
+    await db.commit()
+
+    return {
+        "dias": len(gastos),
+        "total": sum(gastos.values(), Decimal("0")),
+        "periodo": [inicio.isoformat(), fim.isoformat()],
+    }
+
+
+async def sincronizar_meta_todos(db: AsyncSession, dias_retroativos: int = 3) -> dict:
+    """Roda sincronizar_meta_perpetuo() pra todo perpétuo com Meta configurado.
+    Usado pelo endpoint de cron."""
+    stmt = select(Perpetuo).where(Perpetuo.meta_ad_account_id.is_not(None))
+    perps = list((await db.execute(stmt)).scalars().all())
+    resultados = []
+    for p in perps:
+        r = await sincronizar_meta_perpetuo(db, p.id, dias_retroativos)
+        resultados.append({"perpetuo": p.nome, **r})
+    return {"perpetuos_sincronizados": len(resultados), "detalhes": resultados}
 
 
 # ============================================================
