@@ -23,6 +23,8 @@ export interface AtualizarLancamentoPayload {
   principal_inicio?: string
   principal_fim?: string
   investimento?: number | null
+  meta_ad_account_id?: string | null
+  meta_filtro_nome?: string | null
 }
 
 export interface NovaOfertaPayload {
@@ -92,4 +94,15 @@ export const lancamentosPagosService = {
     api
       .delete(`/api/lancamentos-pagos/ajustes/${ajusteId}`)
       .then(() => undefined),
+
+  // Puxa gasto Meta Ads no período do lançamento e sobrescreve o campo
+  // investimento. Janela: [ingresso_inicio, principal_fim].
+  sincronizarMeta: (lancamentoId: string) =>
+    api
+      .post<{
+        investimento: number | string
+        periodo: [string, string] | null
+        atualizado: boolean
+      }>(`/api/lancamentos-pagos/${lancamentoId}/sync-meta`)
+      .then((r) => r.data),
 }

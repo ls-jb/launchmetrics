@@ -35,6 +35,8 @@ class LancamentoPagoUpdate(BaseModel):
     principal_inicio: date | None = None
     principal_fim: date | None = None
     investimento: Money | None = Field(default=None, ge=0)
+    meta_ad_account_id: str | None = Field(default=None, max_length=64)
+    meta_filtro_nome: str | None = Field(default=None, max_length=200)
 
 
 class OfertaCreate(BaseModel):
@@ -57,6 +59,8 @@ class LancamentoPagoResponse(BaseModel):
     principal_inicio: date
     principal_fim: date
     investimento: Money = 0  # type: ignore[assignment]
+    meta_ad_account_id: str | None = None
+    meta_filtro_nome: str | None = None
 
 
 class OfertaResponse(BaseModel):

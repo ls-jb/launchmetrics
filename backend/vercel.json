@@ -12,7 +12,7 @@
   },
   "crons": [
     {
-      "path": "/api/perpetuos/_cron/sync-meta",
+      "path": "/api/cron/sync-meta",
       "schedule": "0 6 * * *"
     }
   ]

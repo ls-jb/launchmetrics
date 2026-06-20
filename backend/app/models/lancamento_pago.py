@@ -33,7 +33,13 @@ class LancamentoPago(Base):
     investimento: Mapped[Decimal] = mapped_column(
         Numeric(12, 2), nullable=False, default=0
     )
-    """Investimento em mídia para esse lançamento pago — edita inline na tela."""
+    """Investimento em mídia. Edita inline OU vem da sincronização Meta Ads
+    (quando meta_ad_account_id estiver setado)."""
+    meta_ad_account_id: Mapped[str | None] = mapped_column(String)
+    """ID numérico da ad account da Meta (ex: '628263058826646'). Opcional."""
+    meta_filtro_nome: Mapped[str | None] = mapped_column(String)
+    """Pattern (substring) pra filtrar campanhas pelo nome (ex: '[XXX]').
+    Quando null, todas as campanhas da conta entram no investimento."""
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

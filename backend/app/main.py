@@ -10,6 +10,7 @@ from fastapi import FastAPI  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 from app.api import (  # noqa: E402
+    cron,
     lancamentos,
     lancamentos_pagos,
     perpetuos,
@@ -45,6 +46,7 @@ async def sem_cache_no_api(request, call_next):
         response.headers["Cache-Control"] = "no-store"
     return response
 
+app.include_router(cron.router, prefix="/api")
 app.include_router(lancamentos.router, prefix="/api")
 app.include_router(lancamentos_pagos.router, prefix="/api")
 app.include_router(perpetuos.router, prefix="/api")

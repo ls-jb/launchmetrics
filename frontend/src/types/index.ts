@@ -210,6 +210,8 @@ export interface LancamentoPago {
   principal_inicio: string
   principal_fim: string
   investimento: number
+  meta_ad_account_id: string | null
+  meta_filtro_nome: string | null
 }
 
 export interface PontoVendaCategoria {

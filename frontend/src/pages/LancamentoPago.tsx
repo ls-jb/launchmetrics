@@ -176,6 +176,7 @@ function DetalheLancamento({
   const [atualizando, setAtualizando] = useState(false)
   const [erro, setErro] = useState('')
   const [modalOferta, setModalOferta] = useState(false)
+  const [modalMeta, setModalMeta] = useState(false)
   const [ajusteAlvo, setAjusteAlvo] = useState<LancamentoPagoOfertaDetalhe | null>(null)
 
   const carregar = useCallback(
@@ -206,6 +207,32 @@ function DetalheLancamento({
     setPlacar((prev) =>
       prev ? { ...prev, lancamento: { ...prev.lancamento, investimento: atualizado.investimento } } : prev,
     )
+  }
+
+  const salvarMeta = async (ad: string | null, filtro: string | null) => {
+    await lancamentosPagosService.atualizar(lancamentoId, {
+      meta_ad_account_id: ad,
+      meta_filtro_nome: filtro,
+    })
+    await carregar(false)
+  }
+
+  const sincronizarMeta = async () => {
+    try {
+      const r = await lancamentosPagosService.sincronizarMeta(lancamentoId)
+      if (!r.atualizado) {
+        alert(
+          'Nada sincronizado. Configure Meta Ads (ad account + filtro) e verifique o token no servidor.',
+        )
+      } else {
+        alert(
+          `Investimento atualizado: R$ ${Number(r.investimento).toFixed(2)}.\nPeríodo: ${r.periodo?.[0]} → ${r.periodo?.[1]}`,
+        )
+      }
+      await carregar(false)
+    } catch (e) {
+      alert(`Erro: ${extrairErro(e)}`)
+    }
   }
 
   useEffect(() => {
@@ -302,12 +329,24 @@ function DetalheLancamento({
             {fmtData(placar.lancamento.principal_fim)}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <BotaoAtualizar onClick={() => carregar(true)} atualizando={atualizando} />
           {isAdmin && (
             <>
               <button onClick={() => setModalOferta(true)} style={botaoSecundario}>
                 + Adicionar oferta
+              </button>
+              {placar.lancamento.meta_ad_account_id && (
+                <button
+                  onClick={sincronizarMeta}
+                  style={{ ...botaoSecundario, borderColor: '#3ECFB2', color: '#3ECFB2' }}
+                  title="Puxa o gasto Meta Ads no período do lançamento e sobrescreve o investimento"
+                >
+                  ↻ Sincronizar Meta
+                </button>
+              )}
+              <button onClick={() => setModalMeta(true)} style={botaoSecundario}>
+                Meta Ads
               </button>
               <button onClick={removerLancamento} style={{ ...botaoSecundario, color: '#EF4444' }}>
                 Remover lançamento
@@ -517,7 +556,110 @@ function DetalheLancamento({
           />
         )}
       </Modal>
+
+      <Modal
+        aberto={modalMeta}
+        titulo="Configurar Meta Ads"
+        onFechar={() => setModalMeta(false)}
+        largura={480}
+      >
+        <FormConfigurarMeta
+          adInicial={placar.lancamento.meta_ad_account_id}
+          filtroInicial={placar.lancamento.meta_filtro_nome}
+          onCancelar={() => setModalMeta(false)}
+          onSalvar={async (ad, filtro) => {
+            await salvarMeta(ad, filtro)
+            setModalMeta(false)
+          }}
+        />
+      </Modal>
     </div>
+  )
+}
+
+// ============================================================
+// Modal: configurar Meta Ads (ad_account_id + filtro)
+// ============================================================
+function FormConfigurarMeta({
+  adInicial,
+  filtroInicial,
+  onCancelar,
+  onSalvar,
+}: {
+  adInicial: string | null
+  filtroInicial: string | null
+  onCancelar: () => void
+  onSalvar: (ad: string | null, filtro: string | null) => Promise<void>
+}) {
+  const [ad, setAd] = useState(adInicial ?? '')
+  const [filtro, setFiltro] = useState(filtroInicial ?? '')
+  const [enviando, setEnviando] = useState(false)
+  const [erro, setErro] = useState('')
+
+  const enviar = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setErro('')
+    setEnviando(true)
+    try {
+      await onSalvar(ad.trim() || null, filtro.trim() || null)
+    } catch (err) {
+      setErro(extrairErro(err))
+      setEnviando(false)
+    }
+  }
+
+  return (
+    <form onSubmit={enviar} style={{ display: 'grid', gap: 14 }}>
+      <p style={{ margin: 0, fontSize: 12, color: 'var(--text-faint)' }}>
+        Vincule esse lançamento a uma Ad Account da Meta. O sync pega o
+        gasto das campanhas que tiverem o filtro no nome, no período
+        [ingresso_inicio, principal_fim], e sobrescreve o investimento.
+      </p>
+      <div>
+        <label style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Ad Account ID</label>
+        <input
+          type="text"
+          value={ad}
+          onChange={(e) => setAd(e.target.value)}
+          placeholder="Ex: 628263058826646"
+          style={inputBase}
+        />
+      </div>
+      <div>
+        <label style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Filtro de campanhas (substring no nome)</label>
+        <input
+          type="text"
+          value={filtro}
+          onChange={(e) => setFiltro(e.target.value)}
+          placeholder="Ex: [XXX]"
+          style={inputBase}
+        />
+      </div>
+
+      {erro && (
+        <div
+          style={{
+            background: '#EF444411',
+            border: '1px solid #EF444444',
+            color: 'var(--text-error)',
+            padding: '8px 12px',
+            borderRadius: 8,
+            fontSize: 13,
+          }}
+        >
+          {erro}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <button type="button" onClick={onCancelar} disabled={enviando} style={botaoSecundario}>
+          Cancelar
+        </button>
+        <button type="submit" disabled={enviando} style={botaoPrimario}>
+          {enviando ? 'Salvando…' : 'Salvar'}
+        </button>
+      </div>
+    </form>
   )
 }
 

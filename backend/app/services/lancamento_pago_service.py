@@ -17,6 +17,8 @@ BR_TZ = ZoneInfo("America/Sao_Paulo")
 from sqlalchemy import Date, String, and_, case, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services import meta_ads_service
+
 from app.models import (
     LancamentoPago,
     LancamentoPagoAjuste,
@@ -78,6 +80,10 @@ async def atualizar(
     principal_inicio: date | None,
     principal_fim: date | None,
     investimento: Decimal | None = None,
+    meta_ad_account_id: str | None = None,
+    meta_filtro_nome: str | None = None,
+    *,
+    atualizar_meta: bool = False,
 ) -> LancamentoPago | None:
     lanc = await db.get(LancamentoPago, lancamento_id)
     if not lanc:
@@ -94,6 +100,11 @@ async def atualizar(
         lanc.principal_fim = principal_fim
     if investimento is not None:
         lanc.investimento = investimento
+    # Campos Meta usam flag explícita pra permitir setar como NULL (limpar
+    # o vínculo), que `is not None` não cobre.
+    if atualizar_meta:
+        lanc.meta_ad_account_id = meta_ad_account_id
+        lanc.meta_filtro_nome = meta_filtro_nome
     await db.commit()
     await db.refresh(lanc)
     return lanc
@@ -517,3 +528,50 @@ async def remover_ajuste(db: AsyncSession, ajuste_id: UUID) -> bool:
     await db.delete(aj)
     await db.commit()
     return True
+
+
+# ============================================================
+# Sincronização Meta Ads (campo investimento)
+# ============================================================
+async def sincronizar_meta_lancamento_pago(
+    db: AsyncSession, lancamento_id: UUID
+) -> dict:
+    """Puxa o gasto Meta Ads no período do lançamento e sobrescreve o
+    campo investimento. Janela: [ingresso_inicio, principal_fim] —
+    cobre todo o lançamento. Filtra campanhas pelo nome via
+    meta_filtro_nome (substring).
+
+    No-op se o lançamento não tiver Meta configurado. Retorna sumário."""
+    lanc = await db.get(LancamentoPago, lancamento_id)
+    if not lanc or not lanc.meta_ad_account_id:
+        return {"investimento": Decimal("0"), "periodo": None, "atualizado": False}
+
+    inicio = lanc.ingresso_inicio
+    fim = lanc.principal_fim
+
+    gastos = await meta_ads_service.puxar_gasto_por_dia(
+        lanc.meta_ad_account_id, inicio, fim, lanc.meta_filtro_nome
+    )
+    total = sum(gastos.values(), Decimal("0")) if gastos else Decimal("0")
+
+    lanc.investimento = total
+    await db.commit()
+    await db.refresh(lanc)
+
+    return {
+        "investimento": total,
+        "periodo": [inicio.isoformat(), fim.isoformat()],
+        "atualizado": True,
+    }
+
+
+async def sincronizar_meta_todos(db: AsyncSession) -> dict:
+    """Roda sincronizar_meta_lancamento_pago() pra cada lançamento pago
+    com Meta configurado. Usado pelo cron."""
+    stmt = select(LancamentoPago).where(LancamentoPago.meta_ad_account_id.is_not(None))
+    lancs = list((await db.execute(stmt)).scalars().all())
+    resultados = []
+    for lp in lancs:
+        r = await sincronizar_meta_lancamento_pago(db, lp.id)
+        resultados.append({"lancamento": lp.nome, **r})
+    return {"lancamentos_pagos_sincronizados": len(resultados), "detalhes": resultados}

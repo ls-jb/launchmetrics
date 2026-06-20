@@ -90,6 +90,10 @@ async def atualizar(
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_admin),
 ):
+    atualiza_meta = (
+        "meta_ad_account_id" in dados.model_fields_set
+        or "meta_filtro_nome" in dados.model_fields_set
+    )
     lanc = await svc.atualizar(
         db,
         lancamento_id,
@@ -99,6 +103,9 @@ async def atualizar(
         dados.principal_inicio,
         dados.principal_fim,
         dados.investimento,
+        dados.meta_ad_account_id,
+        dados.meta_filtro_nome,
+        atualizar_meta=atualiza_meta,
     )
     if not lanc:
         raise HTTPException(status_code=404, detail="Lançamento não encontrado.")
@@ -177,3 +184,19 @@ async def remover_ajuste(
 ):
     if not await svc.remover_ajuste(db, ajuste_id):
         raise HTTPException(status_code=404, detail="Ajuste não encontrado.")
+
+
+# ============================================================
+# Sincronização Meta Ads — sobrescreve o campo investimento
+# ============================================================
+@router.post("/{lancamento_id}/sync-meta")
+async def sync_meta(
+    lancamento_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_admin),
+):
+    """Puxa o gasto Meta Ads no período do lançamento e sobrescreve o
+    campo investimento. Janela: [ingresso_inicio, principal_fim]."""
+    if not await svc.obter(db, lancamento_id):
+        raise HTTPException(status_code=404, detail="Lançamento não encontrado.")
+    return await svc.sincronizar_meta_lancamento_pago(db, lancamento_id)
