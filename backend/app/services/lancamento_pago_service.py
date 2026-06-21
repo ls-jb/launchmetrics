@@ -575,3 +575,24 @@ async def sincronizar_meta_todos(db: AsyncSession) -> dict:
         r = await sincronizar_meta_lancamento_pago(db, lp.id)
         resultados.append({"lancamento": lp.nome, **r})
     return {"lancamentos_pagos_sincronizados": len(resultados), "detalhes": resultados}
+
+
+async def investimento_por_dia_meta(
+    db: AsyncSession, lancamento_id: UUID
+) -> list[dict]:
+    """Retorna [{dia, valor}] do gasto Meta Ads no período do lançamento.
+    Busca direto na Meta (on-demand) — não persiste em tabela. Vazio se
+    o lançamento não tem Meta configurada ou a API falhar."""
+    lanc = await db.get(LancamentoPago, lancamento_id)
+    if not lanc or not lanc.meta_ad_account_id:
+        return []
+    gastos = await meta_ads_service.puxar_gasto_por_dia(
+        lanc.meta_ad_account_id,
+        lanc.ingresso_inicio,
+        lanc.principal_fim,
+        lanc.meta_filtro_nome,
+    )
+    return [
+        {"dia": dia.isoformat(), "valor": float(valor)}
+        for dia, valor in sorted(gastos.items())
+    ]

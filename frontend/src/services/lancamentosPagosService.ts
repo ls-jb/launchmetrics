@@ -105,4 +105,12 @@ export const lancamentosPagosService = {
         atualizado: boolean
       }>(`/api/lancamentos-pagos/${lancamentoId}/sync-meta`)
       .then((r) => r.data),
+
+  // Gasto Meta Ads por dia (on-demand). Vazio se sem Meta configurada.
+  investimentoPorDia: (lancamentoId: string) =>
+    api
+      .get<{ dia: string; valor: number }[]>(
+        `/api/lancamentos-pagos/${lancamentoId}/investimento-por-dia`,
+      )
+      .then((r) => r.data),
 }

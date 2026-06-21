@@ -200,3 +200,16 @@ async def sync_meta(
     if not await svc.obter(db, lancamento_id):
         raise HTTPException(status_code=404, detail="Lançamento não encontrado.")
     return await svc.sincronizar_meta_lancamento_pago(db, lancamento_id)
+
+
+@router.get("/{lancamento_id}/investimento-por-dia")
+async def investimento_por_dia(
+    lancamento_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(verify_token),
+):
+    """Retorna [{dia, valor}] do gasto Meta Ads no período. On-demand —
+    chama Meta a cada request. Vazio se não tem Meta configurada."""
+    if not await svc.obter(db, lancamento_id):
+        raise HTTPException(status_code=404, detail="Lançamento não encontrado.")
+    return await svc.investimento_por_dia_meta(db, lancamento_id)

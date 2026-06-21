@@ -172,6 +172,7 @@ function DetalheLancamento({
 }) {
   const [placar, setPlacar] = useState<LancamentoPagoCompleto | null>(null)
   const [vendasDia, setVendasDia] = useState<PontoVendaCategoria[]>([])
+  const [investDia, setInvestDia] = useState<{ dia: string; valor: number }[]>([])
   const [carregando, setCarregando] = useState(true)
   const [atualizando, setAtualizando] = useState(false)
   const [erro, setErro] = useState('')
@@ -184,12 +185,16 @@ function DetalheLancamento({
       if (!silencioso) setCarregando(true)
       else setAtualizando(true)
       try {
-        const [p, v] = await Promise.all([
+        // vendas + placar primeiro (sempre); investimento Meta em paralelo
+        // mas tolerante a falha (se não tiver Meta config ou der erro, vai vazio)
+        const [p, v, i] = await Promise.all([
           lancamentosPagosService.obter(lancamentoId),
           lancamentosPagosService.vendasPorDia(lancamentoId),
+          lancamentosPagosService.investimentoPorDia(lancamentoId).catch(() => []),
         ])
         setPlacar(p)
         setVendasDia(v)
+        setInvestDia(i)
       } catch (e) {
         if (!silencioso) setErro(extrairErro(e))
       } finally {
@@ -516,7 +521,7 @@ function DetalheLancamento({
         Vendas por dia
       </h3>
       <div style={{ marginBottom: '1.5rem' }}>
-        <GraficoVendasCategoria dados={vendasDia} />
+        <GraficoVendasCategoria dados={vendasDia} investimento={investDia} />
       </div>
 
       <Modal
