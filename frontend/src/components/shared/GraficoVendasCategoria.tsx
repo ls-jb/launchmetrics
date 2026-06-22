@@ -10,7 +10,7 @@ import {
   YAxis,
 } from 'recharts'
 
-import { formatBRL } from '@/lib/tokens'
+import { formatBRL, formatNum } from '@/lib/tokens'
 import type { CategoriaLancPago, PontoVendaCategoria } from '@/types'
 
 const CATEGORIAS: { valor: CategoriaLancPago; label: string; cor: string }[] = [
@@ -57,8 +57,10 @@ export function GraficoVendasCategoria({
     const porDia: Record<string, LinhaPlot> = {}
     for (const v of dados) {
       if (!porDia[v.dia]) porDia[v.dia] = { dia: v.dia }
-      const k = `receita_${v.categoria}`
-      porDia[v.dia][k] = ((porDia[v.dia][k] as number) || 0) + Number(v.receita)
+      const kr = `receita_${v.categoria}`
+      const kq = `qtd_${v.categoria}`
+      porDia[v.dia][kr] = ((porDia[v.dia][kr] as number) || 0) + Number(v.receita)
+      porDia[v.dia][kq] = ((porDia[v.dia][kq] as number) || 0) + Number(v.quantidade)
     }
     if (temInvestimento) {
       for (const i of investimento!) {
@@ -203,7 +205,10 @@ export function GraficoVendasCategoria({
               tickLine={false}
               width={50}
             />
-            <Tooltip content={<TooltipCategoria />} cursor={{ fill: 'var(--border)' }} />
+            <Tooltip
+              content={<TooltipCategoria selecionadas={selecionadas} />}
+              cursor={{ fill: 'var(--border)' }}
+            />
             {temInvestimento && mostrarInvestimento && (
               <Bar
                 yAxisId="reais"
@@ -242,18 +247,28 @@ interface TooltipItem {
   value: number
   color?: string
   name?: string
+  payload?: Record<string, number | string>
 }
 
 function TooltipCategoria({
   active,
   payload,
   label,
+  selecionadas,
 }: {
   active?: boolean
   payload?: TooltipItem[]
   label?: string
+  selecionadas?: Set<CategoriaLancPago>
 }) {
   if (!active || !payload?.length) return null
+  // soma a quantidade total do dia respeitando categorias marcadas
+  const linha = payload[0]?.payload || {}
+  const cats = selecionadas ? Array.from(selecionadas) : []
+  const qtdTotal = cats.reduce(
+    (acc, c) => acc + Number(linha[`qtd_${c}`] || 0),
+    0,
+  )
   return (
     <div
       style={{
@@ -276,6 +291,19 @@ function TooltipCategoria({
           </p>
         )
       })}
+      {qtdTotal > 0 && (
+        <p
+          style={{
+            margin: '6px 0 0',
+            paddingTop: 6,
+            borderTop: '1px solid var(--border-strong)',
+            color: 'var(--text-muted)',
+            fontWeight: 600,
+          }}
+        >
+          {formatNum(qtdTotal)} {qtdTotal === 1 ? 'venda' : 'vendas'}
+        </p>
+      )}
     </div>
   )
 }

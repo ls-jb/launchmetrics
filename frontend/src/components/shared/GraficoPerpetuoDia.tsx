@@ -10,7 +10,7 @@ import {
   YAxis,
 } from 'recharts'
 
-import { formatBRL } from '@/lib/tokens'
+import { formatBRL, formatNum } from '@/lib/tokens'
 import type {
   CategoriaPerpetuo,
   PontoInvestimentoDia,
@@ -69,8 +69,10 @@ export function GraficoPerpetuoDia({
     for (const v of vendas) {
       if (!porDia[v.dia]) porDia[v.dia] = { dia: v.dia }
       const linha = porDia[v.dia]
-      const k = `receita_${v.categoria}`
-      linha[k] = ((linha[k] as number) || 0) + Number(v.receita)
+      const kr = `receita_${v.categoria}`
+      const kq = `qtd_${v.categoria}`
+      linha[kr] = ((linha[kr] as number) || 0) + Number(v.receita)
+      linha[kq] = ((linha[kq] as number) || 0) + Number(v.quantidade)
     }
     for (const i of investimento) {
       if (!porDia[i.dia]) porDia[i.dia] = { dia: i.dia }
@@ -220,7 +222,10 @@ export function GraficoPerpetuoDia({
               tickLine={false}
               width={50}
             />
-            <Tooltip content={<TooltipPerpetuo />} cursor={{ fill: 'var(--border)' }} />
+            <Tooltip
+              content={<TooltipPerpetuo selecionadas={selecionadas} />}
+              cursor={{ fill: 'var(--border)' }}
+            />
             {mostrarInvestimento && (
               <Bar
                 yAxisId="reais"
@@ -259,18 +264,27 @@ interface TooltipItem {
   value: number
   color?: string
   name?: string
+  payload?: Record<string, number | string>
 }
 
 function TooltipPerpetuo({
   active,
   payload,
   label,
+  selecionadas,
 }: {
   active?: boolean
   payload?: TooltipItem[]
   label?: string
+  selecionadas?: Set<CategoriaPerpetuo>
 }) {
   if (!active || !payload?.length) return null
+  const linha = payload[0]?.payload || {}
+  const cats = selecionadas ? Array.from(selecionadas) : []
+  const qtdTotal = cats.reduce(
+    (acc, c) => acc + Number(linha[`qtd_${c}`] || 0),
+    0,
+  )
   return (
     <div
       style={{
@@ -298,6 +312,19 @@ function TooltipPerpetuo({
           </p>
         )
       })}
+      {qtdTotal > 0 && (
+        <p
+          style={{
+            margin: '6px 0 0',
+            paddingTop: 6,
+            borderTop: '1px solid var(--border-strong)',
+            color: 'var(--text-muted)',
+            fontWeight: 600,
+          }}
+        >
+          {formatNum(qtdTotal)} {qtdTotal === 1 ? 'venda' : 'vendas'}
+        </p>
+      )}
     </div>
   )
 }
