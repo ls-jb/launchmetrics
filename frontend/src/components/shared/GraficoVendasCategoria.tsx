@@ -205,10 +205,7 @@ export function GraficoVendasCategoria({
               tickLine={false}
               width={50}
             />
-            <Tooltip
-              content={<TooltipCategoria selecionadas={selecionadas} />}
-              cursor={{ fill: 'var(--border)' }}
-            />
+            <Tooltip content={<TooltipCategoria />} cursor={{ fill: 'var(--border)' }} />
             {temInvestimento && mostrarInvestimento && (
               <Bar
                 yAxisId="reais"
@@ -254,21 +251,13 @@ function TooltipCategoria({
   active,
   payload,
   label,
-  selecionadas,
 }: {
   active?: boolean
   payload?: TooltipItem[]
   label?: string
-  selecionadas?: Set<CategoriaLancPago>
 }) {
   if (!active || !payload?.length) return null
-  // soma a quantidade total do dia respeitando categorias marcadas
   const linha = payload[0]?.payload || {}
-  const cats = selecionadas ? Array.from(selecionadas) : []
-  const qtdTotal = cats.reduce(
-    (acc, c) => acc + Number(linha[`qtd_${c}`] || 0),
-    0,
-  )
   return (
     <div
       style={{
@@ -282,28 +271,28 @@ function TooltipCategoria({
       <p style={{ margin: '0 0 6px', color: 'var(--text-muted)' }}>{label}</p>
       {payload.map((p, i) => {
         if (!p.value) return null
+        const ehInvestimento = p.dataKey === 'investimento'
+        // se for linha de categoria (receita_X), pega a qtd correspondente
+        const qtd = ehInvestimento
+          ? null
+          : Number(
+              linha[(p.dataKey || '').replace('receita_', 'qtd_')] || 0,
+            )
         return (
           <p
             key={`${p.dataKey}-${i}`}
             style={{ margin: '2px 0', color: p.color || 'var(--text)', fontWeight: 600 }}
           >
             {p.name}: {formatBRL(p.value)}
+            {qtd !== null && qtd > 0 && (
+              <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>
+                {' · '}
+                {formatNum(qtd)} {qtd === 1 ? 'venda' : 'vendas'}
+              </span>
+            )}
           </p>
         )
       })}
-      {qtdTotal > 0 && (
-        <p
-          style={{
-            margin: '6px 0 0',
-            paddingTop: 6,
-            borderTop: '1px solid var(--border-strong)',
-            color: 'var(--text-muted)',
-            fontWeight: 600,
-          }}
-        >
-          {formatNum(qtdTotal)} {qtdTotal === 1 ? 'venda' : 'vendas'}
-        </p>
-      )}
     </div>
   )
 }

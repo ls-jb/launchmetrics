@@ -222,10 +222,7 @@ export function GraficoPerpetuoDia({
               tickLine={false}
               width={50}
             />
-            <Tooltip
-              content={<TooltipPerpetuo selecionadas={selecionadas} />}
-              cursor={{ fill: 'var(--border)' }}
-            />
+            <Tooltip content={<TooltipPerpetuo />} cursor={{ fill: 'var(--border)' }} />
             {mostrarInvestimento && (
               <Bar
                 yAxisId="reais"
@@ -271,20 +268,13 @@ function TooltipPerpetuo({
   active,
   payload,
   label,
-  selecionadas,
 }: {
   active?: boolean
   payload?: TooltipItem[]
   label?: string
-  selecionadas?: Set<CategoriaPerpetuo>
 }) {
   if (!active || !payload?.length) return null
   const linha = payload[0]?.payload || {}
-  const cats = selecionadas ? Array.from(selecionadas) : []
-  const qtdTotal = cats.reduce(
-    (acc, c) => acc + Number(linha[`qtd_${c}`] || 0),
-    0,
-  )
   return (
     <div
       style={{
@@ -299,6 +289,11 @@ function TooltipPerpetuo({
       {payload.map((p, i) => {
         if (!p.value) return null
         const ehInvestimento = p.dataKey === 'investimento'
+        const qtd = ehInvestimento
+          ? null
+          : Number(
+              linha[(p.dataKey || '').replace('receita_', 'qtd_')] || 0,
+            )
         return (
           <p
             key={`${p.dataKey}-${i}`}
@@ -309,22 +304,15 @@ function TooltipPerpetuo({
             }}
           >
             {ehInvestimento ? 'Investimento' : p.name}: {formatBRL(p.value)}
+            {qtd !== null && qtd > 0 && (
+              <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>
+                {' · '}
+                {formatNum(qtd)} {qtd === 1 ? 'venda' : 'vendas'}
+              </span>
+            )}
           </p>
         )
       })}
-      {qtdTotal > 0 && (
-        <p
-          style={{
-            margin: '6px 0 0',
-            paddingTop: 6,
-            borderTop: '1px solid var(--border-strong)',
-            color: 'var(--text-muted)',
-            fontWeight: 600,
-          }}
-        >
-          {formatNum(qtdTotal)} {qtdTotal === 1 ? 'venda' : 'vendas'}
-        </p>
-      )}
     </div>
   )
 }
