@@ -345,7 +345,7 @@ function DetalheLancamento({
                 <button
                   onClick={sincronizarMeta}
                   style={{ ...botaoSecundario, borderColor: '#3ECFB2', color: '#3ECFB2' }}
-                  title="Puxa o gasto Meta Ads no período do lançamento e sobrescreve o investimento"
+                  title="Puxa o gasto Meta Ads no período de captação (ingresso) e sobrescreve o investimento"
                 >
                   ↻ Sincronizar Meta
                 </button>
@@ -617,8 +617,9 @@ function FormConfigurarMeta({
     <form onSubmit={enviar} style={{ display: 'grid', gap: 14 }}>
       <p style={{ margin: 0, fontSize: 12, color: 'var(--text-faint)' }}>
         Vincule esse lançamento a uma Ad Account da Meta. O sync pega o
-        gasto das campanhas que tiverem o filtro no nome, no período
-        [ingresso_inicio, principal_fim], e sobrescreve o investimento.
+        gasto das campanhas que tiverem o filtro no nome, no período de
+        captação (ingresso_inicio → ingresso_fim), e sobrescreve o
+        investimento.
       </p>
       <div>
         <label style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Ad Account ID</label>

@@ -537,9 +537,9 @@ async def sincronizar_meta_lancamento_pago(
     db: AsyncSession, lancamento_id: UUID
 ) -> dict:
     """Puxa o gasto Meta Ads no período do lançamento e sobrescreve o
-    campo investimento. Janela: [ingresso_inicio, principal_fim] —
-    cobre todo o lançamento. Filtra campanhas pelo nome via
-    meta_filtro_nome (substring).
+    campo investimento. Janela: [ingresso_inicio, ingresso_fim] — só o
+    período de captação, NÃO inclui carrinho do principal. Filtra
+    campanhas pelo nome via meta_filtro_nome (substring).
 
     No-op se o lançamento não tiver Meta configurado. Retorna sumário."""
     lanc = await db.get(LancamentoPago, lancamento_id)
@@ -547,7 +547,7 @@ async def sincronizar_meta_lancamento_pago(
         return {"investimento": Decimal("0"), "periodo": None, "atualizado": False}
 
     inicio = lanc.ingresso_inicio
-    fim = lanc.principal_fim
+    fim = lanc.ingresso_fim
 
     gastos = await meta_ads_service.puxar_gasto_por_dia(
         lanc.meta_ad_account_id, inicio, fim, lanc.meta_filtro_nome
@@ -589,7 +589,7 @@ async def investimento_por_dia_meta(
     gastos = await meta_ads_service.puxar_gasto_por_dia(
         lanc.meta_ad_account_id,
         lanc.ingresso_inicio,
-        lanc.principal_fim,
+        lanc.ingresso_fim,
         lanc.meta_filtro_nome,
     )
     return [
