@@ -13,15 +13,19 @@ export interface FiltroVendas {
   fim: string // YYYY-MM-DD
   produtos?: string[]
   oferta?: string | null
+  plataforma?: string | null
+  limit?: number
 }
 
 function paramsDe(f: FiltroVendas) {
-  const params: Record<string, string | string[]> = {
+  const params: Record<string, string | string[] | number> = {
     inicio: f.inicio,
     fim: f.fim,
   }
   if (f.produtos && f.produtos.length > 0) params.produtos = f.produtos
   if (f.oferta) params.oferta = f.oferta
+  if (f.plataforma) params.plataforma = f.plataforma
+  if (f.limit) params.limit = f.limit
   // indexes:null serializa arrays como ?produtos=A&produtos=B (formato que o
   // FastAPI entende como list[str])
   return { params, paramsSerializer: { indexes: null } }

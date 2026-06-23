@@ -1230,9 +1230,11 @@ function RemoverVendasManuais({
   const carregar = () => {
     setCarregando(true)
     setErro('')
+    // plataforma=Manual + limit alto: filtro no backend pra não sumir vendas
+    // antigas quando há muito Hotmart/PagMe recente no mesmo período
     vendasService
-      .listar(filtro)
-      .then((vs) => setVendas(vs.filter((v) => v.plataforma === 'Manual')))
+      .listar({ ...filtro, plataforma: 'Manual', limit: 1000 })
+      .then(setVendas)
       .catch((e) => setErro(extrairErro(e)))
       .finally(() => setCarregando(false))
   }

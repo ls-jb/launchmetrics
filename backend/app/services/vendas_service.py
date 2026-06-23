@@ -256,6 +256,7 @@ async def listar(
     oferta: str | None,
     limit: int,
     offset: int,
+    plataforma: str | None = None,
 ) -> list[Venda]:
     """Listagem detalhada (auditoria). Mostra TODAS as vendas do período,
     inclusive recorrências seq>1 e duplicatas — sem dedup, sem override."""
@@ -270,6 +271,8 @@ async def listar(
         stmt = stmt.where(Venda.produto.in_(produtos))
     if oferta:
         stmt = stmt.where(Venda.oferta == oferta)
+    if plataforma:
+        stmt = stmt.where(Venda.plataforma == plataforma)
     stmt = stmt.offset(offset).limit(limit)
     return list((await db.execute(stmt)).scalars().all())
 
