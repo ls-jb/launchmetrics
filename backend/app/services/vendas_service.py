@@ -59,9 +59,12 @@ def _vendas_efetivas(
 ):
     """
     Monta a subquery de vendas "efetivas" do dashboard:
-    - filtra status aprovada, período, recorrência seq<=1, produtos/oferta
+    - filtra status aprovada, recorrência seq<=1, produtos/oferta
     - valor_efetivo = override de ofertas_precos OU valor da venda
-    - dedup: mantém 1 linha por (email, oferta_codigo) quando ambos não nulos
+    - dedup: mantém 1 linha por (email, oferta_codigo) considerando TODO
+      o histórico (não só o range visualizado). Filtro de data é aplicado
+      DEPOIS do dedup — assim a "venda efetiva" de uma pessoa é sempre a
+      mesma (a 1ª compra histórica), independente do filtro.
 
     Retorna uma subquery com colunas: produto, oferta_nome, oferta_codigo,
     valor_efetivo, data_venda.
@@ -87,6 +90,10 @@ def _vendas_efetivas(
         .label("rn")
     )
 
+    # base: TODAS as vendas (sem filtro de data). Status/recorrência/
+    # produtos/oferta entram aqui porque limitam o universo do dedup
+    # (não queremos uma venda cancelada virar a "rn=1" e tirar uma
+    # aprovada da janela).
     base = (
         select(
             Venda.produto.label("produto"),
@@ -99,8 +106,6 @@ def _vendas_efetivas(
         .select_from(Venda)
         .outerjoin(OfertaPreco, OfertaPreco.oferta_codigo == Venda.oferta_codigo)
         .where(
-            Venda.data_venda >= inicio_dt,
-            Venda.data_venda < fim_dt,
             Venda.status == STATUS_FATURADO,
             or_(Venda.recorrencia_seq.is_(None), Venda.recorrencia_seq == 1),
         )
@@ -111,8 +116,17 @@ def _vendas_efetivas(
         base = base.where(Venda.oferta == oferta)
 
     base_sub = base.subquery()
-    # mantém só a primeira de cada grupo de dedup
-    return select(base_sub).where(base_sub.c.rn == 1).subquery()
+    # 1) mantém só a 1ª de cada grupo histórico
+    # 2) filtra por data DEPOIS
+    return (
+        select(base_sub)
+        .where(
+            base_sub.c.rn == 1,
+            base_sub.c.data_venda >= inicio_dt,
+            base_sub.c.data_venda < fim_dt,
+        )
+        .subquery()
+    )
 
 
 # ============================================================

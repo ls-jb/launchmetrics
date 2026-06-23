@@ -328,20 +328,34 @@ async def _metricas_por_codigo(
         .over(partition_by=dedup_key, order_by=Venda.data_venda)
         .label("rn")
     )
+    # Dedup considera TODO o histórico (não só a janela do lançamento),
+    # pra que a "venda efetiva" de uma pessoa seja sempre a 1ª compra.
+    # Filtro de data é aplicado depois do dedup.
     base = (
-        select(Venda.oferta_codigo.label("codigo"), valor_efetivo, rn)
+        select(
+            Venda.oferta_codigo.label("codigo"),
+            valor_efetivo,
+            Venda.data_venda.label("data_venda"),
+            rn,
+        )
         .select_from(Venda)
         .outerjoin(OfertaPreco, OfertaPreco.oferta_codigo == Venda.oferta_codigo)
         .where(
             Venda.oferta_codigo.in_(codigos),
             Venda.status == "aprovada",
             or_(Venda.recorrencia_seq.is_(None), Venda.recorrencia_seq == 1),
-            Venda.data_venda >= inicio_dt,
-            Venda.data_venda < fim_dt,
         )
         .subquery()
     )
-    sub = select(base.c.codigo, base.c.v).where(base.c.rn == 1).subquery()
+    sub = (
+        select(base.c.codigo, base.c.v)
+        .where(
+            base.c.rn == 1,
+            base.c.data_venda >= inicio_dt,
+            base.c.data_venda < fim_dt,
+        )
+        .subquery()
+    )
     rows = (
         await db.execute(
             select(sub.c.codigo, func.count(), func.coalesce(func.sum(sub.c.v), 0))
@@ -446,11 +460,14 @@ async def _vendas_por_dia_codigos(
         .over(partition_by=dedup_key, order_by=Venda.data_venda)
         .label("rn")
     )
+    # Dedup global histórico (mesma lógica do _metricas_por_codigo) —
+    # depois filtra por data.
     base = (
         select(
             Venda.oferta_codigo.label("codigo"),
             dia_brt,
             valor_efetivo,
+            Venda.data_venda.label("data_venda"),
             rn,
         )
         .select_from(Venda)
@@ -459,12 +476,18 @@ async def _vendas_por_dia_codigos(
             Venda.oferta_codigo.in_(list(codigo_para_cat.keys())),
             Venda.status == "aprovada",
             or_(Venda.recorrencia_seq.is_(None), Venda.recorrencia_seq == 1),
-            Venda.data_venda >= inicio_dt,
-            Venda.data_venda < fim_dt,
         )
         .subquery()
     )
-    sub = select(base.c.codigo, base.c.dia, base.c.v).where(base.c.rn == 1).subquery()
+    sub = (
+        select(base.c.codigo, base.c.dia, base.c.v)
+        .where(
+            base.c.rn == 1,
+            base.c.data_venda >= inicio_dt,
+            base.c.data_venda < fim_dt,
+        )
+        .subquery()
+    )
     rows = (
         await db.execute(
             select(

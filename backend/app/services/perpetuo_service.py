@@ -417,7 +417,12 @@ def _range_utc(inicio: date, fim: date) -> tuple[datetime, datetime]:
 def _vendas_efetivas_subquery(codigos: list[str], inicio_dt, fim_dt):
     """Filtra por oferta_codigo IN codigos, aplica regra de venda real do
     dashboard (status=aprovada, recorrência seq<=1, override de ofertas_precos,
-    dedup por email+codigo)."""
+    dedup por email+codigo).
+
+    Dedup considera TODO o histórico — a 1ª compra de cada (email, oferta)
+    é a venda efetiva. Filtro de data é aplicado depois do dedup pra
+    manter coerência entre filtros (mesma venda aparece sempre no mesmo
+    dia, independente do range)."""
     valor_efetivo = func.coalesce(OfertaPreco.valor, Venda.valor).label("v")
     dedup_key = case(
         (
@@ -447,14 +452,16 @@ def _vendas_efetivas_subquery(codigos: list[str], inicio_dt, fim_dt):
             Venda.oferta_codigo.in_(codigos),
             Venda.status == "aprovada",
             or_(Venda.recorrencia_seq.is_(None), Venda.recorrencia_seq == 1),
-            Venda.data_venda >= inicio_dt,
-            Venda.data_venda < fim_dt,
         )
         .subquery()
     )
     return (
         select(base.c.oferta_codigo, base.c.v, base.c.data_venda)
-        .where(base.c.rn == 1)
+        .where(
+            base.c.rn == 1,
+            base.c.data_venda >= inicio_dt,
+            base.c.data_venda < fim_dt,
+        )
         .subquery()
     )
 
