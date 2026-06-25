@@ -77,7 +77,13 @@ async def processar_lead_ghl(db: AsyncSession, token: str, payload: dict) -> Non
         if ja is not None:
             return  # duplicado — silencia
 
-    canal_nome = _normalizar(_extrair_canal_bruto(fontes))
+    canal_bruto = _extrair_canal_bruto(fontes)
+    # Regra específica do lançamento "Semana da Profissionalização Terapêutica":
+    # o gestor de tráfego usa utm_source dinâmico ({{placement}}) gerando
+    # valores tipo meta_Instagram_Feed, meta_Facebook_Stories, fb... — tudo
+    # com "meta" ou exatamente "fb" cai em Meta Ads. Outros lançamentos
+    # seguem a normalização global padrão.
+    canal_nome = _normalizar_por_lancamento(canal_bruto, lancamento.nome)
     # WhatsApp tem duas naturezas distintas com custos diferentes: grupos
     # (orgânico, gratuito) e API (pago). Separamos pelo utm_medium pra
     # cada um virar um canal com investimento e CPL próprios.
@@ -164,6 +170,20 @@ def _normalizar(valor: str) -> str:
     if chave in NORMALIZACAO_CANAL:
         return NORMALIZACAO_CANAL[chave]
     return valor.strip() or "Sem Utm"
+
+
+def _normalizar_por_lancamento(canal_bruto: str, lancamento_nome: str) -> str:
+    """Algumas lançamentos têm regras de UTM próprias do gestor de tráfego.
+    SPT (Semana da Profissionalização Terapêutica): qualquer utm com 'meta'
+    ou exatamente 'fb' vira Meta Ads — porque o gestor manda placement
+    dinâmico no utm_source (meta_Instagram_Feed, meta_Facebook_Stories…).
+    Demais lançamentos seguem a normalização global."""
+    nome = (lancamento_nome or "").lower()
+    bruto = (canal_bruto or "").strip().lower()
+    if "profissionaliza" in nome and "terap" in nome:
+        if "meta" in bruto or bruto == "fb":
+            return "Meta Ads"
+    return _normalizar(canal_bruto)
 
 
 def _split_whatsapp(utm_medium: str | None) -> str:
