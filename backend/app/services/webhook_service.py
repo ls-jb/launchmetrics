@@ -174,14 +174,15 @@ def _normalizar(valor: str) -> str:
 
 def _normalizar_por_lancamento(canal_bruto: str, lancamento_nome: str) -> str:
     """Algumas lançamentos têm regras de UTM próprias do gestor de tráfego.
-    SPT (Semana da Profissionalização Terapêutica): qualquer utm com 'meta'
-    ou exatamente 'fb' vira Meta Ads — porque o gestor manda placement
-    dinâmico no utm_source (meta_Instagram_Feed, meta_Facebook_Stories…).
+    SPT (Semana da Profissionalização Terapêutica): qualquer utm com 'meta',
+    'instagram' ou exatamente 'fb' / 'ig' vira Meta Ads — porque o gestor
+    manda placement dinâmico no utm_source (meta_Instagram_Feed,
+    meta_Facebook_Stories…) e às vezes vem 'instagram' solto também.
     Demais lançamentos seguem a normalização global."""
     nome = (lancamento_nome or "").lower()
     bruto = (canal_bruto or "").strip().lower()
     if "profissionaliza" in nome and "terap" in nome:
-        if "meta" in bruto or bruto == "fb":
+        if "meta" in bruto or "instagram" in bruto or bruto in ("fb", "ig"):
             return "Meta Ads"
     return _normalizar(canal_bruto)
 
