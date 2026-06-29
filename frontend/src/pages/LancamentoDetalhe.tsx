@@ -95,6 +95,15 @@ export function LancamentoDetalhe() {
     setLancamento(atualizado)
   }
 
+  const salvarDatas = async (inicio: string | null, fim: string | null) => {
+    if (!id) return
+    const atualizado = await lancamentosService.atualizar(id, {
+      data_inicio: inicio,
+      data_fim: fim,
+    })
+    setLancamento(atualizado)
+  }
+
   const salvarConfigMeta = async (ad: string | null, filtro: string | null) => {
     if (!id) return
     await lancamentosService.atualizar(id, {
@@ -169,9 +178,11 @@ export function LancamentoDetalhe() {
             </h1>
             <BadgeStatus status={lancamento.status} />
           </div>
-          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>
-            {formatarData(lancamento.data_inicio)} → {formatarData(lancamento.data_fim)}
-          </p>
+          <EditorDatas
+            inicio={lancamento.data_inicio}
+            fim={lancamento.data_fim}
+            onSalvar={salvarDatas}
+          />
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <BotaoAtualizar onClick={() => carregar(true)} atualizando={atualizando} />
@@ -679,6 +690,136 @@ function DrillUtmContent({
     </div>
   )
 }
+
+// ============================================================
+// Editor inline das datas (data_inicio / data_fim do lançamento)
+// ============================================================
+function EditorDatas({
+  inicio,
+  fim,
+  onSalvar,
+}: {
+  inicio: string | null
+  fim: string | null
+  onSalvar: (inicio: string | null, fim: string | null) => Promise<void>
+}) {
+  const [editando, setEditando] = useState(false)
+  const [valInicio, setValInicio] = useState(inicio ?? '')
+  const [valFim, setValFim] = useState(fim ?? '')
+  const [salvando, setSalvando] = useState(false)
+
+  const abrir = () => {
+    setValInicio(inicio ?? '')
+    setValFim(fim ?? '')
+    setEditando(true)
+  }
+
+  const cancelar = () => {
+    setEditando(false)
+  }
+
+  const salvar = async () => {
+    const novoInicio = valInicio || null
+    const novoFim = valFim || null
+    if (novoInicio === inicio && novoFim === fim) {
+      setEditando(false)
+      return
+    }
+    setSalvando(true)
+    try {
+      await onSalvar(novoInicio, novoFim)
+      setEditando(false)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  if (!editando) {
+    return (
+      <button
+        onClick={abrir}
+        title="Editar período do lançamento"
+        style={{
+          background: 'transparent',
+          border: 'none',
+          padding: 0,
+          margin: 0,
+          color: 'var(--text-faint)',
+          fontSize: 13,
+          cursor: 'pointer',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+        }}
+      >
+        {formatarData(inicio)} → {formatarData(fim)}
+        <span style={{ color: 'var(--text-dim)', fontSize: 11 }}>✎</span>
+      </button>
+    )
+  }
+
+  const inputDate: React.CSSProperties = {
+    background: 'var(--surface-2)',
+    border: '1px solid var(--border-strong)',
+    borderRadius: 6,
+    padding: '4px 8px',
+    color: 'var(--text)',
+    fontSize: 12,
+    colorScheme: 'dark',
+  }
+
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <input
+        type="date"
+        value={valInicio}
+        onChange={(e) => setValInicio(e.target.value)}
+        disabled={salvando}
+        style={inputDate}
+      />
+      <span style={{ color: 'var(--text-faint)', fontSize: 13 }}>→</span>
+      <input
+        type="date"
+        value={valFim}
+        onChange={(e) => setValFim(e.target.value)}
+        disabled={salvando}
+        style={inputDate}
+      />
+      <button
+        onClick={salvar}
+        disabled={salvando}
+        style={{
+          background: '#7C6AF7',
+          border: 'none',
+          color: '#fff',
+          borderRadius: 6,
+          padding: '4px 10px',
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: 'pointer',
+        }}
+      >
+        {salvando ? '…' : 'Salvar'}
+      </button>
+      <button
+        onClick={cancelar}
+        disabled={salvando}
+        style={{
+          background: 'transparent',
+          border: '1px solid var(--border-strong)',
+          color: 'var(--text-muted)',
+          borderRadius: 6,
+          padding: '3px 8px',
+          fontSize: 12,
+          cursor: 'pointer',
+        }}
+      >
+        ×
+      </button>
+    </span>
+  )
+}
+
 
 // ============================================================
 // Modal: configurar Meta Ads (ad_account_id + filtro)
