@@ -74,6 +74,35 @@ async def diagnostico(
     }
     filtro = (filtro_nome or "").strip().lower()
 
+    # Diagnostico auxiliar: qual System User é esse token e quais Ad
+    # Accounts ele acessa? Resposta da própria Meta.
+    me_info: dict = {}
+    minhas_contas: list[dict] = []
+    try:
+        async with httpx.AsyncClient(timeout=TIMEOUT_S) as cli:
+            r_me = await cli.get(
+                f"{BASE_URL}/me",
+                params={"fields": "id,name", "access_token": token},
+            )
+            me_info = {
+                "status": r_me.status_code,
+                "body": r_me.text[:200],
+            }
+            r_acc = await cli.get(
+                f"{BASE_URL}/me/adaccounts",
+                params={
+                    "fields": "id,name,account_status",
+                    "limit": "50",
+                    "access_token": token,
+                },
+            )
+            if r_acc.status_code < 400:
+                minhas_contas = (r_acc.json().get("data") or [])[:50]
+            else:
+                minhas_contas = [{"erro": r_acc.text[:200]}]
+    except Exception as e:
+        me_info = {"erro": f"falha em /me: {e!r}"}
+
     try:
         async with httpx.AsyncClient(timeout=TIMEOUT_S) as cli:
             resp = await cli.get(url, params=params)
@@ -83,6 +112,8 @@ async def diagnostico(
             "ad_account_id": act_id,
             "periodo": [inicio.isoformat(), fim.isoformat()],
             "erro": f"Falha de rede: {e!r}",
+            "me": me_info,
+            "minhas_contas": minhas_contas,
         }
 
     base = {
@@ -92,6 +123,8 @@ async def diagnostico(
         "filtro": filtro_nome,
         "status_meta": resp.status_code,
         "resposta_parcial": resp.text[:300],
+        "me": me_info,
+        "minhas_contas": minhas_contas,
     }
     if resp.status_code >= 400:
         return base
