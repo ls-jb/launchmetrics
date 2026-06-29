@@ -105,3 +105,16 @@ async def atualizar_canais_lancamento(
     if not lancamento:
         raise HTTPException(status_code=404, detail="Lançamento não encontrado")
     return lancamento
+
+
+@router.post("/{id}/sync-meta")
+async def sync_meta(
+    id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(verify_token),
+):
+    """Puxa gasto Meta Ads no período [data_inicio, data_fim] e atualiza
+    o canal 'Meta Ads' do lançamento (cria se não existir)."""
+    if not await lancamento_service.obter(db, id):
+        raise HTTPException(status_code=404, detail="Lançamento não encontrado.")
+    return await lancamento_service.sincronizar_meta(db, id)

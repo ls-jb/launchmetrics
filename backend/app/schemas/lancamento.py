@@ -84,6 +84,8 @@ class LancamentoUpdate(BaseModel):
     teto_investimento: Decimal | None = Field(default=None, ge=0)
     meta_roas: Decimal | None = Field(default=None, ge=0)
     meta_receita: Decimal | None = Field(default=None, ge=0)
+    meta_ad_account_id: str | None = None
+    meta_filtro_nome: str | None = None
 
 
 class LancamentoResponse(LancamentoBase):
@@ -94,6 +96,8 @@ class LancamentoResponse(LancamentoBase):
     id: UUID
     webhook_token: str
     criado_em: datetime
+    meta_ad_account_id: str | None = None
+    meta_filtro_nome: str | None = None
 
     # métricas calculadas
     total_leads: int = 0

@@ -11,6 +11,7 @@ import { Modal } from '@/components/shared/Modal'
 import { extrairErro } from '@/lib/erro'
 import { formatBRL, formatNum, formatPct } from '@/lib/tokens'
 import { lancamentosService } from '@/services/lancamentosService'
+import { useAuthStore } from '@/store/authStore'
 import type { Canal, Lancamento, LeadsPorUtmContent, PontoVelocidade } from '@/types'
 
 export function LancamentoDetalhe() {
@@ -23,6 +24,9 @@ export function LancamentoDetalhe() {
   const [tokenCopiado, setTokenCopiado] = useState(false)
   const [canalSel, setCanalSel] = useState<Canal | null>(null)
   const [atualizando, setAtualizando] = useState(false)
+  const [modalMeta, setModalMeta] = useState(false)
+  const papel = useAuthStore((s) => s.papel)
+  const isAdmin = papel === 'admin'
 
   const carregar = useCallback(
     async (silencioso = false) => {
@@ -91,6 +95,34 @@ export function LancamentoDetalhe() {
     setLancamento(atualizado)
   }
 
+  const salvarConfigMeta = async (ad: string | null, filtro: string | null) => {
+    if (!id) return
+    await lancamentosService.atualizar(id, {
+      meta_ad_account_id: ad,
+      meta_filtro_nome: filtro,
+    })
+    await carregar(false)
+  }
+
+  const sincronizarMeta = async () => {
+    if (!id) return
+    try {
+      const r = await lancamentosService.sincronizarMeta(id)
+      if (!r.atualizado) {
+        alert(
+          'Nada sincronizado. Configure Meta Ads (ad account + filtro) e datas do lançamento, e verifique o token no servidor.',
+        )
+      } else {
+        alert(
+          `Investimento Meta Ads atualizado: R$ ${Number(r.investimento).toFixed(2)}.\nPeríodo: ${r.periodo?.[0]} → ${r.periodo?.[1]}`,
+        )
+      }
+      await carregar(false)
+    } catch (e) {
+      alert(`Erro: ${extrairErro(e)}`)
+    }
+  }
+
   const excluirLancamento = async () => {
     if (!id || !lancamento) return
     const ok = confirm(
@@ -141,8 +173,44 @@ export function LancamentoDetalhe() {
             {formatarData(lancamento.data_inicio)} → {formatarData(lancamento.data_fim)}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <BotaoAtualizar onClick={() => carregar(true)} atualizando={atualizando} />
+          {isAdmin && lancamento.meta_ad_account_id && (
+            <button
+              onClick={sincronizarMeta}
+              title="Puxa o gasto Meta Ads no período do lançamento e atualiza o canal Meta Ads"
+              style={{
+                background: 'var(--surface)',
+                border: '1px solid #3ECFB2',
+                color: '#3ECFB2',
+                padding: '8px 14px',
+                borderRadius: 8,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              ↻ Sincronizar Meta
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              onClick={() => setModalMeta(true)}
+              title="Configurar conta Meta Ads"
+              style={{
+                background: 'var(--surface)',
+                border: '1px solid var(--border-strong)',
+                color: 'var(--text)',
+                padding: '8px 14px',
+                borderRadius: 8,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Meta Ads
+            </button>
+          )}
           <button
             onClick={excluirLancamento}
             title="Excluir este lançamento"
@@ -257,6 +325,23 @@ export function LancamentoDetalhe() {
         {canalSel && lancamento && (
           <DrillUtmContent lancamentoId={lancamento.id} canal={canalSel} />
         )}
+      </Modal>
+
+      <Modal
+        aberto={modalMeta}
+        titulo="Configurar Meta Ads"
+        onFechar={() => setModalMeta(false)}
+        largura={480}
+      >
+        <FormConfigurarMeta
+          adInicial={lancamento.meta_ad_account_id}
+          filtroInicial={lancamento.meta_filtro_nome}
+          onCancelar={() => setModalMeta(false)}
+          onSalvar={async (ad, filtro) => {
+            await salvarConfigMeta(ad, filtro)
+            setModalMeta(false)
+          }}
+        />
       </Modal>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
@@ -595,3 +680,125 @@ function DrillUtmContent({
   )
 }
 
+// ============================================================
+// Modal: configurar Meta Ads (ad_account_id + filtro)
+// ============================================================
+function FormConfigurarMeta({
+  adInicial,
+  filtroInicial,
+  onCancelar,
+  onSalvar,
+}: {
+  adInicial: string | null
+  filtroInicial: string | null
+  onCancelar: () => void
+  onSalvar: (ad: string | null, filtro: string | null) => Promise<void>
+}) {
+  const [ad, setAd] = useState(adInicial ?? '')
+  const [filtro, setFiltro] = useState(filtroInicial ?? '')
+  const [enviando, setEnviando] = useState(false)
+  const [erro, setErro] = useState('')
+
+  const enviar = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setErro('')
+    setEnviando(true)
+    try {
+      await onSalvar(ad.trim() || null, filtro.trim() || null)
+    } catch (err) {
+      setErro(extrairErro(err))
+      setEnviando(false)
+    }
+  }
+
+  const inputBase: React.CSSProperties = {
+    width: '100%',
+    background: 'var(--surface-2)',
+    border: '1px solid var(--border-strong)',
+    borderRadius: 8,
+    padding: '9px 12px',
+    color: 'var(--text)',
+    fontSize: 13,
+  }
+
+  return (
+    <form onSubmit={enviar} style={{ display: 'grid', gap: 14 }}>
+      <p style={{ margin: 0, fontSize: 12, color: 'var(--text-faint)' }}>
+        Vincule esse lançamento a uma Ad Account da Meta. O sync pega o
+        gasto das campanhas que tiverem o filtro no nome, no período
+        (data_inicio → data_fim) do lançamento, e atualiza o canal
+        “Meta Ads”.
+      </p>
+      <div>
+        <label style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Ad Account ID</label>
+        <input
+          type="text"
+          value={ad}
+          onChange={(e) => setAd(e.target.value)}
+          placeholder="Ex: 628263058826646"
+          style={inputBase}
+        />
+      </div>
+      <div>
+        <label style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Filtro de campanhas (substring no nome)</label>
+        <input
+          type="text"
+          value={filtro}
+          onChange={(e) => setFiltro(e.target.value)}
+          placeholder="Ex: [SPT]"
+          style={inputBase}
+        />
+      </div>
+
+      {erro && (
+        <div
+          style={{
+            background: '#EF444411',
+            border: '1px solid #EF444444',
+            color: 'var(--text-error)',
+            padding: '8px 12px',
+            borderRadius: 8,
+            fontSize: 13,
+          }}
+        >
+          {erro}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <button
+          type="button"
+          onClick={onCancelar}
+          disabled={enviando}
+          style={{
+            background: 'transparent',
+            border: '1px solid var(--border-strong)',
+            color: 'var(--text-muted)',
+            padding: '10px 14px',
+            borderRadius: 8,
+            fontSize: 13,
+            cursor: 'pointer',
+          }}
+        >
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          disabled={enviando}
+          style={{
+            background: '#7C6AF7',
+            border: 'none',
+            color: '#fff',
+            padding: '10px 16px',
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          {enviando ? 'Salvando…' : 'Salvar'}
+        </button>
+      </div>
+    </form>
+  )
+}

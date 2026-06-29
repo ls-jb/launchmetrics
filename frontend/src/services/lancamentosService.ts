@@ -18,6 +18,14 @@ export interface LancamentoUpdatePayload {
   teto_investimento?: number | null
   meta_roas?: number | null
   meta_receita?: number | null
+  meta_ad_account_id?: string | null
+  meta_filtro_nome?: string | null
+}
+
+export interface SyncMetaLancamentoResposta {
+  investimento: number
+  periodo: [string, string] | null
+  atualizado: boolean
 }
 
 export interface CanalUpdatePayload {
@@ -56,5 +64,10 @@ export const lancamentosService = {
       .get<LeadsPorUtmContent[]>(
         `/api/lancamentos/${id}/canais/${canalId}/utm-content`,
       )
+      .then((r) => r.data),
+
+  sincronizarMeta: (id: string) =>
+    api
+      .post<SyncMetaLancamentoResposta>(`/api/lancamentos/${id}/sync-meta`)
       .then((r) => r.data),
 }

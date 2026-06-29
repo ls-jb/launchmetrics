@@ -18,6 +18,7 @@ from app.schemas.lancamento import (
     LancamentoUpdate,
     PontoVelocidade,
 )
+from app.services import meta_ads_service
 
 ZERO = Decimal("0")
 
@@ -200,6 +201,8 @@ def _montar_response(
         teto_investimento=lancamento.teto_investimento,
         meta_roas=lancamento.meta_roas,
         meta_receita=lancamento.meta_receita,
+        meta_ad_account_id=lancamento.meta_ad_account_id,
+        meta_filtro_nome=lancamento.meta_filtro_nome,
         webhook_token=lancamento.webhook_token,
         criado_em=lancamento.criado_em,
         total_leads=total_leads,
@@ -209,3 +212,69 @@ def _montar_response(
         roas=roas,
         canais=canais_resp,
     )
+
+
+# ============================================================
+# Sincronização Meta Ads — atualiza o canal "Meta Ads"
+# ============================================================
+META_ADS_CANAL_NOME = "Meta Ads"
+
+
+async def sincronizar_meta(db: AsyncSession, lancamento_id: UUID) -> dict:
+    """Puxa o gasto Meta Ads no período do lançamento e sobrescreve o
+    `investimento` do canal "Meta Ads" (cria se não existir).
+    Janela: [data_inicio, data_fim]. Filtra campanhas pelo
+    meta_filtro_nome (substring). No-op se Meta não configurado ou
+    datas faltando."""
+    lanc = await _buscar_simples(db, lancamento_id)
+    if not lanc:
+        return {"investimento": Decimal("0"), "periodo": None, "atualizado": False}
+    if not lanc.meta_ad_account_id or not lanc.data_inicio or not lanc.data_fim:
+        return {"investimento": Decimal("0"), "periodo": None, "atualizado": False}
+
+    gastos = await meta_ads_service.puxar_gasto_por_dia(
+        lanc.meta_ad_account_id,
+        lanc.data_inicio,
+        lanc.data_fim,
+        lanc.meta_filtro_nome,
+    )
+    total = sum(gastos.values(), Decimal("0")) if gastos else Decimal("0")
+
+    # Garante o canal "Meta Ads" e atualiza o investimento (sobrescreve)
+    canal = (
+        await db.execute(
+            select(Canal).where(
+                Canal.lancamento_id == lancamento_id,
+                Canal.nome == META_ADS_CANAL_NOME,
+            )
+        )
+    ).scalar_one_or_none()
+    if canal is None:
+        canal = Canal(
+            lancamento_id=lancamento_id,
+            nome=META_ADS_CANAL_NOME,
+            investimento=total,
+        )
+        db.add(canal)
+    else:
+        canal.investimento = total
+
+    await db.commit()
+
+    return {
+        "investimento": total,
+        "periodo": [lanc.data_inicio.isoformat(), lanc.data_fim.isoformat()],
+        "atualizado": True,
+    }
+
+
+async def sincronizar_meta_todos(db: AsyncSession) -> dict:
+    """Roda sincronizar_meta() pra cada lançamento com Meta configurado.
+    Usado pelo cron diário."""
+    stmt = select(Lancamento).where(Lancamento.meta_ad_account_id.is_not(None))
+    lancs = list((await db.execute(stmt)).scalars().all())
+    resultados = []
+    for l in lancs:
+        r = await sincronizar_meta(db, l.id)
+        resultados.append({"lancamento": l.nome, **r})
+    return {"lancamentos_sincronizados": len(resultados), "detalhes": resultados}

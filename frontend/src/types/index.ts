@@ -21,6 +21,8 @@ export interface Lancamento {
   teto_investimento: number | null
   meta_roas: number | null
   meta_receita: number | null
+  meta_ad_account_id: string | null
+  meta_filtro_nome: string | null
   webhook_token: string
   criado_em: string
   total_leads: number

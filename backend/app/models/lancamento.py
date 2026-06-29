@@ -24,6 +24,13 @@ class Lancamento(Base):
     teto_investimento: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     """Teto de investimento estimado pra todo o lançamento (admin define)."""
     webhook_token: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    meta_ad_account_id: Mapped[str | None] = mapped_column(String)
+    """ID numérico da ad account da Meta (ex: '628263058826646'). Opcional.
+    Quando setado, o sync Meta cria/atualiza o canal 'Meta Ads' com o gasto
+    da janela [data_inicio, data_fim] do lançamento."""
+    meta_filtro_nome: Mapped[str | None] = mapped_column(String)
+    """Pattern (substring) pra filtrar campanhas pelo nome (ex: '[SPT]').
+    Quando null, todas as campanhas da conta entram no investimento."""
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
