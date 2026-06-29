@@ -70,4 +70,9 @@ export const lancamentosService = {
     api
       .post<SyncMetaLancamentoResposta>(`/api/lancamentos/${id}/sync-meta`)
       .then((r) => r.data),
+
+  debugMeta: (id: string) =>
+    api
+      .get<Record<string, unknown>>(`/api/lancamentos/${id}/sync-meta-debug`)
+      .then((r) => r.data),
 }
