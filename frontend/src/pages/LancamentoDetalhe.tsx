@@ -132,18 +132,6 @@ export function LancamentoDetalhe() {
     }
   }
 
-  const debugMeta = async () => {
-    if (!id) return
-    try {
-      const r = await lancamentosService.debugMeta(id)
-      // print no console pra inspecionar
-      console.log('[Meta Debug]', r)
-      alert(JSON.stringify(r, null, 2))
-    } catch (e) {
-      alert(`Erro: ${extrairErro(e)}`)
-    }
-  }
-
   const excluirLancamento = async () => {
     if (!id || !lancamento) return
     const ok = confirm(
@@ -232,24 +220,6 @@ export function LancamentoDetalhe() {
               }}
             >
               Meta Ads
-            </button>
-          )}
-          {isAdmin && lancamento.meta_ad_account_id && (
-            <button
-              onClick={debugMeta}
-              title="Diagnóstico Meta Ads — mostra status do token e campanhas no período"
-              style={{
-                background: 'var(--surface)',
-                border: '1px dashed var(--border-strong)',
-                color: 'var(--text-muted)',
-                padding: '8px 14px',
-                borderRadius: 8,
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Debug Meta
             </button>
           )}
           <button

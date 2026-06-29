@@ -13,7 +13,7 @@ from app.schemas.lancamento import (
     LeadsPorUtmContent,
     PontoVelocidade,
 )
-from app.services import lancamento_service, meta_ads_service
+from app.services import lancamento_service
 
 router = APIRouter(prefix="/lancamentos", tags=["lancamentos"])
 
@@ -118,32 +118,3 @@ async def sync_meta(
     if not await lancamento_service.obter(db, id):
         raise HTTPException(status_code=404, detail="Lançamento não encontrado.")
     return await lancamento_service.sincronizar_meta(db, id)
-
-
-@router.get("/{id}/sync-meta-debug")
-async def sync_meta_debug(
-    id: UUID,
-    db: AsyncSession = Depends(get_db),
-    _: dict = Depends(verify_token),
-):
-    """Diagnóstico do sync Meta — não altera nada. Retorna: token
-    presente (sim/não), status HTTP da Meta API, primeiras 300 chars da
-    resposta, lista de campanhas no período e quais casaram com o
-    filtro. Útil pra distinguir 'token ausente' x 'token inválido' x
-    'ad account errada' x 'filtro sem match'."""
-    from app.models import Lancamento
-
-    lanc = await db.get(Lancamento, id)
-    if not lanc:
-        raise HTTPException(status_code=404, detail="Lançamento não encontrado.")
-    if not lanc.meta_ad_account_id:
-        return {"erro": "Lançamento sem ad_account_id configurado."}
-    if not lanc.data_inicio or not lanc.data_fim:
-        return {"erro": "Lançamento sem data_inicio/data_fim definidos."}
-
-    return await meta_ads_service.diagnostico(
-        lanc.meta_ad_account_id,
-        lanc.data_inicio,
-        lanc.data_fim,
-        lanc.meta_filtro_nome,
-    )
