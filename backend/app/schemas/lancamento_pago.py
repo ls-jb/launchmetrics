@@ -37,6 +37,10 @@ class LancamentoPagoUpdate(BaseModel):
     investimento: Money | None = Field(default=None, ge=0)
     meta_ad_account_id: str | None = Field(default=None, max_length=64)
     meta_filtro_nome: str | None = Field(default=None, max_length=200)
+    meta_receita: Money | None = Field(default=None, ge=0)
+    teto_investimento: Money | None = Field(default=None, ge=0)
+    meta_ingresso_qtd: int | None = Field(default=None, ge=0)
+    meta_principal_qtd: int | None = Field(default=None, ge=0)
 
 
 class OfertaCreate(BaseModel):
@@ -61,6 +65,10 @@ class LancamentoPagoResponse(BaseModel):
     investimento: Money = 0  # type: ignore[assignment]
     meta_ad_account_id: str | None = None
     meta_filtro_nome: str | None = None
+    meta_receita: Money | None = None
+    teto_investimento: Money | None = None
+    meta_ingresso_qtd: int | None = None
+    meta_principal_qtd: int | None = None
 
 
 class OfertaResponse(BaseModel):

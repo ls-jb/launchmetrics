@@ -40,6 +40,18 @@ class LancamentoPago(Base):
     meta_filtro_nome: Mapped[str | None] = mapped_column(String)
     """Pattern (substring) pra filtrar campanhas pelo nome (ex: '[XXX]').
     Quando null, todas as campanhas da conta entram no investimento."""
+    meta_receita: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    """Meta de receita total do lançamento (soma de todas as categorias).
+    Alimenta o card 'Receita total do lançamento' com % de progresso."""
+    teto_investimento: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    """Teto planejado de investimento em mídia. Alimenta o card
+    'Investimento' com % consumido."""
+    meta_ingresso_qtd: Mapped[int | None] = mapped_column()
+    """Meta de quantidade de vendas de ingresso (categorias
+    'ingresso' e 'order_bump_ingresso')."""
+    meta_principal_qtd: Mapped[int | None] = mapped_column()
+    """Meta de quantidade de vendas de produto principal (categorias
+    'principal' e 'order_bump_principal')."""
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

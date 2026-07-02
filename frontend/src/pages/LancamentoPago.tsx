@@ -2,7 +2,6 @@ import { format } from 'date-fns'
 import { useCallback, useEffect, useState } from 'react'
 
 import { BotaoAtualizar } from '@/components/shared/BotaoAtualizar'
-import { EditavelInline } from '@/components/shared/EditavelInline'
 import { GraficoVendasCategoria } from '@/components/shared/GraficoVendasCategoria'
 import { Modal } from '@/components/shared/Modal'
 import { extrairErro } from '@/lib/erro'
@@ -205,12 +204,21 @@ function DetalheLancamento({
     [lancamentoId],
   )
 
-  const salvarInvestimento = async (valor: number | null) => {
+  const salvarMetaCampo = async (
+    campo:
+      | 'meta_receita'
+      | 'teto_investimento'
+      | 'meta_ingresso_qtd'
+      | 'meta_principal_qtd',
+    valor: number | null,
+  ) => {
     const atualizado = await lancamentosPagosService.atualizar(lancamentoId, {
-      investimento: valor ?? 0,
+      [campo]: valor,
     })
     setPlacar((prev) =>
-      prev ? { ...prev, lancamento: { ...prev.lancamento, investimento: atualizado.investimento } } : prev,
+      prev
+        ? { ...prev, lancamento: { ...prev.lancamento, [campo]: atualizado[campo] ?? null } }
+        : prev,
     )
   }
 
@@ -391,6 +399,15 @@ function DetalheLancamento({
           <p style={{ margin: '4px 0 0', fontSize: 28, fontWeight: 700, color: '#3ECFB2' }}>
             {formatBRL(totalGeralReceita)}
           </p>
+          <MetaLinha
+            valor={totalGeralReceita}
+            meta={placar.lancamento.meta_receita}
+            formatar={formatBRL}
+            cor="#3ECFB2"
+            isAdmin={isAdmin}
+            aoSalvar={(v) => salvarMetaCampo('meta_receita', v)}
+            labelMeta="Meta de receita"
+          />
         </div>
         <div style={{ textAlign: 'right' }}>
           <p style={{ margin: 0, fontSize: 11, color: 'var(--text-faint)' }}>Vendas</p>
@@ -427,22 +444,18 @@ function DetalheLancamento({
           >
             Investimento
           </p>
-          <div style={{ marginTop: 4 }}>
-            {isAdmin ? (
-              <EditavelInline
-                label="Investimento"
-                valor={placar.lancamento.investimento || null}
-                formatar={formatBRL}
-                aoSalvar={salvarInvestimento}
-                destaque
-                cor="#F59E0B"
-              />
-            ) : (
-              <p style={{ margin: 0, fontSize: 28, fontWeight: 700, color: '#F59E0B' }}>
-                {formatBRL(placar.lancamento.investimento)}
-              </p>
-            )}
-          </div>
+          <p style={{ margin: '4px 0 0', fontSize: 28, fontWeight: 700, color: '#F59E0B' }}>
+            {formatBRL(placar.lancamento.investimento)}
+          </p>
+          <MetaLinha
+            valor={Number(placar.lancamento.investimento)}
+            meta={placar.lancamento.teto_investimento}
+            formatar={formatBRL}
+            cor="#F59E0B"
+            isAdmin={isAdmin}
+            aoSalvar={(v) => salvarMetaCampo('teto_investimento', v)}
+            labelMeta="Teto de investimento"
+          />
         </div>
         <div style={{ display: 'flex', gap: 36, alignItems: 'center', flexWrap: 'wrap' }}>
           <div style={{ textAlign: 'right' }}>
@@ -511,6 +524,20 @@ function DetalheLancamento({
               onRemoverOferta={removerOferta}
               onAdicionarAjuste={(o) => setAjusteAlvo(o)}
               onRemoverAjuste={removerAjuste}
+              metaQtd={
+                t.categoria === 'ingresso'
+                  ? placar.lancamento.meta_ingresso_qtd
+                  : t.categoria === 'principal'
+                    ? placar.lancamento.meta_principal_qtd
+                    : null
+              }
+              onSalvarMetaQtd={
+                t.categoria === 'ingresso'
+                  ? (v) => salvarMetaCampo('meta_ingresso_qtd', v)
+                  : t.categoria === 'principal'
+                    ? (v) => salvarMetaCampo('meta_principal_qtd', v)
+                    : undefined
+              }
             />
           ))}
         </div>
@@ -1092,6 +1119,8 @@ function CardCategoria({
   onRemoverOferta,
   onAdicionarAjuste,
   onRemoverAjuste,
+  metaQtd,
+  onSalvarMetaQtd,
 }: {
   categoria: CategoriaLancPago
   quantidade: number
@@ -1101,6 +1130,8 @@ function CardCategoria({
   onRemoverOferta: (id: string) => void
   onAdicionarAjuste: (o: LancamentoPagoOfertaDetalhe) => void
   onRemoverAjuste: (id: string) => void
+  metaQtd?: number | null
+  onSalvarMetaQtd?: (v: number | null) => Promise<void>
 }) {
   const cor = CAT_COR[categoria]
   return (
@@ -1135,6 +1166,17 @@ function CardCategoria({
         <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--text-faint)' }}>
           {formatNum(quantidade)} {quantidade === 1 ? 'venda' : 'vendas'}
         </p>
+        {onSalvarMetaQtd && (
+          <MetaLinha
+            valor={quantidade}
+            meta={metaQtd ?? null}
+            formatar={(v) => `${formatNum(v)} vendas`}
+            cor={cor}
+            isAdmin={isAdmin}
+            aoSalvar={onSalvarMetaQtd}
+            labelMeta="Meta de vendas"
+          />
+        )}
       </div>
 
       <div
@@ -1453,4 +1495,162 @@ const cardClicavel: React.CSSProperties = {
   padding: '16px 18px',
   cursor: 'pointer',
   transition: 'border-color 0.15s',
+}
+
+// ============================================================
+// MetaLinha: linha compacta "meta: X (Y%) ✎" editável inline.
+// Se meta não estiver definida e for admin, mostra "+ definir meta".
+// ============================================================
+function MetaLinha({
+  valor,
+  meta,
+  formatar,
+  cor,
+  isAdmin,
+  aoSalvar,
+  labelMeta,
+}: {
+  valor: number
+  meta: number | null
+  formatar: (v: number) => string
+  cor: string
+  isAdmin: boolean
+  aoSalvar: (v: number | null) => Promise<void>
+  labelMeta: string
+}) {
+  const [editando, setEditando] = useState(false)
+  const [texto, setTexto] = useState(meta != null ? String(meta) : '')
+  const [salvando, setSalvando] = useState(false)
+
+  const iniciar = () => {
+    setTexto(meta != null ? String(meta) : '')
+    setEditando(true)
+  }
+
+  const cancelar = () => setEditando(false)
+
+  const salvar = async () => {
+    const t = texto.trim()
+    const novo = t === '' ? null : Number(t)
+    if (novo !== null && (Number.isNaN(novo) || novo < 0)) return
+    if (novo === (meta ?? null)) {
+      setEditando(false)
+      return
+    }
+    setSalvando(true)
+    try {
+      await aoSalvar(novo)
+      setEditando(false)
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  if (editando) {
+    return (
+      <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{labelMeta}:</span>
+        <input
+          autoFocus
+          type="number"
+          step="1"
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') salvar()
+            if (e.key === 'Escape') cancelar()
+          }}
+          disabled={salvando}
+          style={{
+            width: 100,
+            background: 'var(--surface-2)',
+            border: '1px solid var(--border-strong)',
+            borderRadius: 6,
+            padding: '3px 8px',
+            color: 'var(--text)',
+            fontSize: 12,
+          }}
+        />
+        <button
+          onClick={salvar}
+          disabled={salvando}
+          style={{
+            background: '#7C6AF7',
+            border: 'none',
+            color: '#fff',
+            borderRadius: 6,
+            padding: '3px 10px',
+            fontSize: 11,
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          {salvando ? '…' : 'OK'}
+        </button>
+        <button
+          onClick={cancelar}
+          disabled={salvando}
+          style={{
+            background: 'transparent',
+            border: '1px solid var(--border-strong)',
+            color: 'var(--text-muted)',
+            borderRadius: 6,
+            padding: '2px 8px',
+            fontSize: 12,
+            cursor: 'pointer',
+          }}
+        >
+          ×
+        </button>
+      </div>
+    )
+  }
+
+  if (meta == null) {
+    if (!isAdmin) return null
+    return (
+      <button
+        onClick={iniciar}
+        style={{
+          marginTop: 4,
+          background: 'transparent',
+          border: 'none',
+          padding: 0,
+          fontSize: 11,
+          color: 'var(--text-dim)',
+          cursor: 'pointer',
+        }}
+      >
+        + definir meta
+      </button>
+    )
+  }
+
+  const pct = meta > 0 ? Math.round((valor / meta) * 100) : 0
+  return (
+    <button
+      onClick={isAdmin ? iniciar : undefined}
+      disabled={!isAdmin}
+      title={isAdmin ? `Editar ${labelMeta.toLowerCase()}` : undefined}
+      style={{
+        marginTop: 4,
+        background: 'transparent',
+        border: 'none',
+        padding: 0,
+        fontSize: 11,
+        color: 'var(--text-faint)',
+        cursor: isAdmin ? 'pointer' : 'default',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 4,
+      }}
+    >
+      <span>
+        {labelMeta}: <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{formatar(meta)}</span>
+        {' · '}
+        <span style={{ color: cor, fontWeight: 600 }}>{pct}%</span>
+      </span>
+      {isAdmin && <span style={{ color: 'var(--text-dim)', fontSize: 10 }}>✎</span>}
+    </button>
+  )
 }

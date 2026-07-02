@@ -25,6 +25,10 @@ export interface AtualizarLancamentoPayload {
   investimento?: number | null
   meta_ad_account_id?: string | null
   meta_filtro_nome?: string | null
+  meta_receita?: number | null
+  teto_investimento?: number | null
+  meta_ingresso_qtd?: number | null
+  meta_principal_qtd?: number | null
 }
 
 export interface NovaOfertaPayload {
