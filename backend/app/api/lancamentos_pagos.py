@@ -90,23 +90,7 @@ async def atualizar(
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_admin),
 ):
-    atualiza_meta = (
-        "meta_ad_account_id" in dados.model_fields_set
-        or "meta_filtro_nome" in dados.model_fields_set
-    )
-    lanc = await svc.atualizar(
-        db,
-        lancamento_id,
-        dados.nome,
-        dados.ingresso_inicio,
-        dados.ingresso_fim,
-        dados.principal_inicio,
-        dados.principal_fim,
-        dados.investimento,
-        dados.meta_ad_account_id,
-        dados.meta_filtro_nome,
-        atualizar_meta=atualiza_meta,
-    )
+    lanc = await svc.atualizar(db, lancamento_id, dados)
     if not lanc:
         raise HTTPException(status_code=404, detail="Lançamento não encontrado.")
     return lanc

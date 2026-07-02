@@ -30,10 +30,30 @@ from app.schemas.lancamento_pago import (
     AjusteResponse,
     LancamentoPagoCompleto,
     LancamentoPagoResponse,
+    LancamentoPagoUpdate,
     OfertaDetalhe,
     PontoVendaCategoria,
     TotalCategoria,
 )
+
+# Campos que aceitam ser setados explicitamente como NULL via PATCH
+# (não caem no truque "if X is not None"). Precisa ser via
+# model_fields_set — se o cliente mandou o campo no payload (mesmo que
+# null), aplicamos; senão, deixamos como está.
+_CAMPOS_ATUALIZAVEIS = frozenset({
+    "nome",
+    "ingresso_inicio",
+    "ingresso_fim",
+    "principal_inicio",
+    "principal_fim",
+    "investimento",
+    "meta_ad_account_id",
+    "meta_filtro_nome",
+    "meta_receita",
+    "teto_investimento",
+    "meta_ingresso_qtd",
+    "meta_principal_qtd",
+})
 
 CATEGORIAS_INGRESSO = {"ingresso", "order_bump_ingresso"}
 """Conta vendas no intervalo ingresso_inicio..ingresso_fim do lançamento."""
@@ -74,37 +94,17 @@ async def criar(
 async def atualizar(
     db: AsyncSession,
     lancamento_id: UUID,
-    nome: str | None,
-    ingresso_inicio: date | None,
-    ingresso_fim: date | None,
-    principal_inicio: date | None,
-    principal_fim: date | None,
-    investimento: Decimal | None = None,
-    meta_ad_account_id: str | None = None,
-    meta_filtro_nome: str | None = None,
-    *,
-    atualizar_meta: bool = False,
+    dados: LancamentoPagoUpdate,
 ) -> LancamentoPago | None:
+    """Atualiza os campos do lançamento que vieram no payload. Usa
+    model_fields_set (não .model_dump com exclude_none) pra permitir
+    setar campos como NULL — importante pra 'limpar' metas ou vínculo
+    Meta Ads."""
     lanc = await db.get(LancamentoPago, lancamento_id)
     if not lanc:
         return None
-    if nome is not None:
-        lanc.nome = nome
-    if ingresso_inicio is not None:
-        lanc.ingresso_inicio = ingresso_inicio
-    if ingresso_fim is not None:
-        lanc.ingresso_fim = ingresso_fim
-    if principal_inicio is not None:
-        lanc.principal_inicio = principal_inicio
-    if principal_fim is not None:
-        lanc.principal_fim = principal_fim
-    if investimento is not None:
-        lanc.investimento = investimento
-    # Campos Meta usam flag explícita pra permitir setar como NULL (limpar
-    # o vínculo), que `is not None` não cobre.
-    if atualizar_meta:
-        lanc.meta_ad_account_id = meta_ad_account_id
-        lanc.meta_filtro_nome = meta_filtro_nome
+    for campo in dados.model_fields_set & _CAMPOS_ATUALIZAVEIS:
+        setattr(lanc, campo, getattr(dados, campo))
     await db.commit()
     await db.refresh(lanc)
     return lanc
