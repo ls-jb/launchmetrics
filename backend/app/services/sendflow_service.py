@@ -20,10 +20,12 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://sendflow.pro/sendapi"
 TIMEOUT_S = 15.0
-CACHE_TTL_S = 60.0
-"""Cache de 60s do total/grupos por release_id. Evita queimar rate limit
-do SendFlow (que já bloqueou a key quando batemos muito). O uso do card
-é observacional — 1 min de defasagem é aceitável."""
+CACHE_TTL_S = 120.0
+"""Cache de 2min do total/grupos por release_id. Independente de quem
+clique em F5, Atualizar ou qualquer outra ação — só 1 chamada real ao
+SendFlow por release a cada 2min. Evita queimar rate limit (que já
+bloqueou a key quando batemos muito). O uso do card é observacional,
+2min de defasagem é aceitável."""
 
 _cache: dict[str, tuple[float, dict]] = {}
 """release_id → (expira_em, resultado). Simples, em memória, por
