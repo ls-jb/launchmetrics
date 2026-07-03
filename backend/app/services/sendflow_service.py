@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 
 import httpx
 
@@ -19,6 +20,14 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = "https://sendflow.pro/sendapi"
 TIMEOUT_S = 15.0
+CACHE_TTL_S = 60.0
+"""Cache de 60s do total/grupos por release_id. Evita queimar rate limit
+do SendFlow (que já bloqueou a key quando batemos muito). O uso do card
+é observacional — 1 min de defasagem é aceitável."""
+
+_cache: dict[str, tuple[float, dict]] = {}
+"""release_id → (expira_em, resultado). Simples, em memória, por
+processo. Se um resultado com erro estourar, não cacheia."""
 
 
 def _token() -> str | None:
@@ -87,12 +96,21 @@ class SendflowError(Exception):
 async def leads_no_grupo(release_id: str) -> dict:
     """Retorna {total, grupos_count, release_id} da campanha SendFlow.
     Propaga SendflowError quando algo falha — pra não confundir 'API
-    caiu' com 'campanha existe mas tem 0 leads'."""
+    caiu' com 'campanha existe mas tem 0 leads'.
+
+    Cache in-memory de CACHE_TTL_S (60s) por release_id — respostas com
+    erro NÃO são cacheadas, pra permitir recovery imediato assim que a
+    API voltar."""
     token = _token()
     if not token:
         raise SendflowError("SENDFLOW_API_TOKEN não configurado")
     if not release_id:
         return {"total": 0, "grupos_count": 0, "release_id": ""}
+
+    agora = time.monotonic()
+    cache_hit = _cache.get(release_id)
+    if cache_hit and cache_hit[0] > agora:
+        return cache_hit[1]
 
     url = f"{BASE_URL}/releases/{release_id}/groups"
     try:
@@ -121,8 +139,10 @@ async def leads_no_grupo(release_id: str) -> dict:
         raise SendflowError("resposta não é array")
 
     total = sum(int(g.get("participantsAmount") or 0) for g in grupos)
-    return {
+    resultado = {
         "total": total,
         "grupos_count": len(grupos),
         "release_id": release_id,
     }
+    _cache[release_id] = (agora + CACHE_TTL_S, resultado)
+    return resultado
