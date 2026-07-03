@@ -43,16 +43,17 @@ export function LancamentoDetalhe() {
       else setAtualizando(true)
       setErro('')
       try {
-        // sendflow é tolerante a falha — se não tem release ou API cair,
-        // volta zerado. Não deve derrubar o carregamento do resto.
+        // sendflow: se a API cair (502), MANTÉM o último valor conhecido
+        // em vez de zerar — evita mostrar 0 quando é blip momentâneo do
+        // SendFlow. Se nunca teve valor (null), fica null (mostra "…").
         const [l, v, sf] = await Promise.all([
           lancamentosService.obter(id),
           lancamentosService.velocidadeLeads(id),
-          lancamentosService.sendflowLeads(id).catch(() => null),
+          lancamentosService.sendflowLeads(id).catch(() => undefined),
         ])
         setLancamento(l)
         setVelocidade(v)
-        setSendflowLeads(sf)
+        if (sf !== undefined) setSendflowLeads(sf)
       } catch (e) {
         setErro(extrairErro(e))
       } finally {

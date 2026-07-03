@@ -78,18 +78,21 @@ async def diagnostico(release_id: str | None) -> dict:
     }
 
 
+class SendflowError(Exception):
+    """Erro semântico do SendFlow (token, rede, API). Propaga pro caller
+    decidir — em vez de mascarar como 0, o que gera dado errado no
+    card."""
+
+
 async def leads_no_grupo(release_id: str) -> dict:
     """Retorna {total, grupos_count, release_id} da campanha SendFlow.
-    On-demand. Em caso de falha (token ausente, API caiu, etc.), loga e
-    retorna zerado — nunca propaga exceção pra não derrubar o carregar
-    do LancamentoDetalhe."""
+    Propaga SendflowError quando algo falha — pra não confundir 'API
+    caiu' com 'campanha existe mas tem 0 leads'."""
     token = _token()
-    base = {"total": 0, "grupos_count": 0, "release_id": release_id}
     if not token:
-        logger.warning("SENDFLOW_API_TOKEN não configurado — leads_no_grupo pulado")
-        return base
+        raise SendflowError("SENDFLOW_API_TOKEN não configurado")
     if not release_id:
-        return base
+        return {"total": 0, "grupos_count": 0, "release_id": ""}
 
     url = f"{BASE_URL}/releases/{release_id}/groups"
     try:
@@ -97,25 +100,25 @@ async def leads_no_grupo(release_id: str) -> dict:
             resp = await cli.get(
                 url, headers={"Authorization": f"Bearer {token}"}
             )
-    except Exception:
-        logger.exception("Falha chamando SendFlow em %s", url)
-        return base
+    except Exception as e:
+        logger.exception("Falha de rede chamando SendFlow em %s", url)
+        raise SendflowError(f"rede: {e!r}") from e
 
     if resp.status_code >= 400:
         logger.error(
             "SendFlow %s pra release %s: %s",
             resp.status_code, release_id, resp.text[:300],
         )
-        return base
+        raise SendflowError(f"SendFlow HTTP {resp.status_code}")
 
     try:
         grupos = resp.json()
-    except Exception:
+    except Exception as e:
         logger.exception("SendFlow resposta não é JSON válido")
-        return base
+        raise SendflowError("resposta não é JSON") from e
 
     if not isinstance(grupos, list):
-        return base
+        raise SendflowError("resposta não é array")
 
     total = sum(int(g.get("participantsAmount") or 0) for g in grupos)
     return {

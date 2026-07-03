@@ -128,9 +128,9 @@ async def sendflow_leads(
     _: dict = Depends(verify_token),
 ):
     """Puxa on-demand o total de participantes dos grupos WhatsApp da
-    campanha SendFlow vinculada ao lançamento. Retorna zerado se o
-    lançamento não tem release vinculado ou se a API do SendFlow
-    falhar."""
+    campanha SendFlow vinculada ao lançamento. 502 se a API do
+    SendFlow falhar — o frontend usa isso pra manter o último valor
+    conhecido em vez de zerar o card."""
     from app.models import Lancamento
 
     lanc = await db.get(Lancamento, id)
@@ -138,9 +138,12 @@ async def sendflow_leads(
         raise HTTPException(status_code=404, detail="Lançamento não encontrado.")
     if not lanc.sendflow_release_id:
         return SendflowLeadsResponse(total=0, grupos_count=0, release_id="")
-    return SendflowLeadsResponse(
-        **(await sendflow_service.leads_no_grupo(lanc.sendflow_release_id))
-    )
+    try:
+        return SendflowLeadsResponse(
+            **(await sendflow_service.leads_no_grupo(lanc.sendflow_release_id))
+        )
+    except sendflow_service.SendflowError as e:
+        raise HTTPException(status_code=502, detail=f"SendFlow: {e}")
 
 
 @router.get("/{id}/sendflow-debug")
