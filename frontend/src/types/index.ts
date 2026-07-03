@@ -23,6 +23,7 @@ export interface Lancamento {
   meta_receita: number | null
   meta_ad_account_id: string | null
   meta_filtro_nome: string | null
+  sendflow_release_id: string | null
   webhook_token: string
   criado_em: string
   total_leads: number
@@ -31,6 +32,12 @@ export interface Lancamento {
   cpl: number
   roas: number
   canais: Canal[]
+}
+
+export interface SendflowLeads {
+  total: number
+  grupos_count: number
+  release_id: string
 }
 
 export interface NovoLancamentoPayload {

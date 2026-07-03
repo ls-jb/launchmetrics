@@ -203,6 +203,7 @@ def _montar_response(
         meta_receita=lancamento.meta_receita,
         meta_ad_account_id=lancamento.meta_ad_account_id,
         meta_filtro_nome=lancamento.meta_filtro_nome,
+        sendflow_release_id=lancamento.sendflow_release_id,
         webhook_token=lancamento.webhook_token,
         criado_em=lancamento.criado_em,
         total_leads=total_leads,

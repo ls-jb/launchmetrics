@@ -31,6 +31,10 @@ class Lancamento(Base):
     meta_filtro_nome: Mapped[str | None] = mapped_column(String)
     """Pattern (substring) pra filtrar campanhas pelo nome (ex: '[SPT]').
     Quando null, todas as campanhas da conta entram no investimento."""
+    sendflow_release_id: Mapped[str | None] = mapped_column(String)
+    """ID da campanha (release) do SendFlow. Quando setado, o card
+    'Leads no grupo' do LancamentoDetalhe puxa o total de participantes
+    dos grupos WhatsApp dessa campanha."""
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

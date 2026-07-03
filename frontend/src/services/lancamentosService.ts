@@ -4,6 +4,7 @@ import type {
   LeadsPorUtmContent,
   NovoLancamentoPayload,
   PontoVelocidade,
+  SendflowLeads,
   StatusLancamento,
 } from '@/types'
 
@@ -20,6 +21,7 @@ export interface LancamentoUpdatePayload {
   meta_receita?: number | null
   meta_ad_account_id?: string | null
   meta_filtro_nome?: string | null
+  sendflow_release_id?: string | null
 }
 
 export interface SyncMetaLancamentoResposta {
@@ -69,5 +71,10 @@ export const lancamentosService = {
   sincronizarMeta: (id: string) =>
     api
       .post<SyncMetaLancamentoResposta>(`/api/lancamentos/${id}/sync-meta`)
+      .then((r) => r.data),
+
+  sendflowLeads: (id: string) =>
+    api
+      .get<SendflowLeads>(`/api/lancamentos/${id}/sendflow-leads`)
       .then((r) => r.data),
 }

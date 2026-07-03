@@ -86,6 +86,7 @@ class LancamentoUpdate(BaseModel):
     meta_receita: Decimal | None = Field(default=None, ge=0)
     meta_ad_account_id: str | None = None
     meta_filtro_nome: str | None = None
+    sendflow_release_id: str | None = None
 
 
 class LancamentoResponse(LancamentoBase):
@@ -98,6 +99,7 @@ class LancamentoResponse(LancamentoBase):
     criado_em: datetime
     meta_ad_account_id: str | None = None
     meta_filtro_nome: str | None = None
+    sendflow_release_id: str | None = None
 
     # métricas calculadas
     total_leads: int = 0
@@ -106,3 +108,13 @@ class LancamentoResponse(LancamentoBase):
     cpl: Money = Decimal("0")
     roas: Money = Decimal("0")
     canais: list[CanalResponse] = []
+
+
+class SendflowLeadsResponse(BaseModel):
+    """Resposta do endpoint de leads no grupo SendFlow. On-demand."""
+
+    total: int
+    """Soma de participantsAmount de todos os grupos do release."""
+    grupos_count: int
+    """Quantos grupos existem no release."""
+    release_id: str

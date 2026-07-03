@@ -12,7 +12,13 @@ import { extrairErro } from '@/lib/erro'
 import { formatBRL, formatNum, formatPct } from '@/lib/tokens'
 import { lancamentosService } from '@/services/lancamentosService'
 import { useAuthStore } from '@/store/authStore'
-import type { Canal, Lancamento, LeadsPorUtmContent, PontoVelocidade } from '@/types'
+import type {
+  Canal,
+  Lancamento,
+  LeadsPorUtmContent,
+  PontoVelocidade,
+  SendflowLeads,
+} from '@/types'
 
 export function LancamentoDetalhe() {
   const { id } = useParams<{ id: string }>()
@@ -25,6 +31,8 @@ export function LancamentoDetalhe() {
   const [canalSel, setCanalSel] = useState<Canal | null>(null)
   const [atualizando, setAtualizando] = useState(false)
   const [modalMeta, setModalMeta] = useState(false)
+  const [modalSendflow, setModalSendflow] = useState(false)
+  const [sendflowLeads, setSendflowLeads] = useState<SendflowLeads | null>(null)
   const papel = useAuthStore((s) => s.papel)
   const isAdmin = papel === 'admin'
 
@@ -35,12 +43,16 @@ export function LancamentoDetalhe() {
       else setAtualizando(true)
       setErro('')
       try {
-        const [l, v] = await Promise.all([
+        // sendflow é tolerante a falha — se não tem release ou API cair,
+        // volta zerado. Não deve derrubar o carregamento do resto.
+        const [l, v, sf] = await Promise.all([
           lancamentosService.obter(id),
           lancamentosService.velocidadeLeads(id),
+          lancamentosService.sendflowLeads(id).catch(() => null),
         ])
         setLancamento(l)
         setVelocidade(v)
+        setSendflowLeads(sf)
       } catch (e) {
         setErro(extrairErro(e))
       } finally {
@@ -109,6 +121,14 @@ export function LancamentoDetalhe() {
     await lancamentosService.atualizar(id, {
       meta_ad_account_id: ad,
       meta_filtro_nome: filtro,
+    })
+    await carregar(false)
+  }
+
+  const salvarSendflow = async (releaseId: string | null) => {
+    if (!id) return
+    await lancamentosService.atualizar(id, {
+      sendflow_release_id: releaseId,
     })
     await carregar(false)
   }
@@ -222,6 +242,24 @@ export function LancamentoDetalhe() {
               Meta Ads
             </button>
           )}
+          {isAdmin && (
+            <button
+              onClick={() => setModalSendflow(true)}
+              title="Vincular campanha SendFlow (leads no grupo)"
+              style={{
+                background: 'var(--surface)',
+                border: '1px solid var(--border-strong)',
+                color: 'var(--text)',
+                padding: '8px 14px',
+                borderRadius: 8,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              SendFlow
+            </button>
+          )}
           <button
             onClick={excluirLancamento}
             title="Excluir este lançamento"
@@ -287,6 +325,20 @@ export function LancamentoDetalhe() {
           }
           cor="#3ECFB2"
         />
+        {lancamento.sendflow_release_id && (
+          <KPICard
+            label="Leads no grupo"
+            valor={sendflowLeads ? formatNum(sendflowLeads.total) : '…'}
+            sub={
+              sendflowLeads
+                ? `em ${formatNum(sendflowLeads.grupos_count)} ${
+                    sendflowLeads.grupos_count === 1 ? 'grupo' : 'grupos'
+                  }`
+                : 'carregando SendFlow…'
+            }
+            cor="#7C6AF7"
+          />
+        )}
         <KPICard
           label="Investimento total"
           valor={formatBRL(lancamento.investimento_total)}
@@ -351,6 +403,22 @@ export function LancamentoDetalhe() {
           onSalvar={async (ad, filtro) => {
             await salvarConfigMeta(ad, filtro)
             setModalMeta(false)
+          }}
+        />
+      </Modal>
+
+      <Modal
+        aberto={modalSendflow}
+        titulo="Vincular campanha SendFlow"
+        onFechar={() => setModalSendflow(false)}
+        largura={480}
+      >
+        <FormConfigurarSendflow
+          releaseInicial={lancamento.sendflow_release_id}
+          onCancelar={() => setModalSendflow(false)}
+          onSalvar={async (releaseId) => {
+            await salvarSendflow(releaseId)
+            setModalSendflow(false)
           }}
         />
       </Modal>
@@ -889,6 +957,130 @@ function FormConfigurarMeta({
           placeholder="Ex: [SPT]"
           style={inputBase}
         />
+      </div>
+
+      {erro && (
+        <div
+          style={{
+            background: '#EF444411',
+            border: '1px solid #EF444444',
+            color: 'var(--text-error)',
+            padding: '8px 12px',
+            borderRadius: 8,
+            fontSize: 13,
+          }}
+        >
+          {erro}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <button
+          type="button"
+          onClick={onCancelar}
+          disabled={enviando}
+          style={{
+            background: 'transparent',
+            border: '1px solid var(--border-strong)',
+            color: 'var(--text-muted)',
+            padding: '10px 14px',
+            borderRadius: 8,
+            fontSize: 13,
+            cursor: 'pointer',
+          }}
+        >
+          Cancelar
+        </button>
+        <button
+          type="submit"
+          disabled={enviando}
+          style={{
+            background: '#7C6AF7',
+            border: 'none',
+            color: '#fff',
+            padding: '10px 16px',
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          {enviando ? 'Salvando…' : 'Salvar'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+// ============================================================
+// Modal: vincular campanha (release) do SendFlow
+// ============================================================
+function FormConfigurarSendflow({
+  releaseInicial,
+  onCancelar,
+  onSalvar,
+}: {
+  releaseInicial: string | null
+  onCancelar: () => void
+  onSalvar: (releaseId: string | null) => Promise<void>
+}) {
+  const [releaseId, setReleaseId] = useState(releaseInicial ?? '')
+  const [enviando, setEnviando] = useState(false)
+  const [erro, setErro] = useState('')
+
+  const enviar = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setErro('')
+    setEnviando(true)
+    try {
+      await onSalvar(releaseId.trim() || null)
+    } catch (err) {
+      setErro(extrairErro(err))
+      setEnviando(false)
+    }
+  }
+
+  const inputBase: React.CSSProperties = {
+    width: '100%',
+    background: 'var(--surface-2)',
+    border: '1px solid var(--border-strong)',
+    borderRadius: 8,
+    padding: '9px 12px',
+    color: 'var(--text)',
+    fontSize: 13,
+  }
+
+  return (
+    <form onSubmit={enviar} style={{ display: 'grid', gap: 14 }}>
+      <p style={{ margin: 0, fontSize: 12, color: 'var(--text-faint)' }}>
+        Vincule este lançamento a uma campanha (release) do SendFlow.
+        O card “Leads no grupo” vai puxar o total de participantes dos
+        grupos WhatsApp dessa campanha (on-demand, atualiza a cada
+        F5/refresh).
+      </p>
+      <div>
+        <label
+          style={{
+            display: 'block',
+            fontSize: 11,
+            color: 'var(--text-muted)',
+            marginBottom: 6,
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+          }}
+        >
+          Release ID
+        </label>
+        <input
+          type="text"
+          value={releaseId}
+          onChange={(e) => setReleaseId(e.target.value)}
+          placeholder="Ex: YqhRkLzp80pAcXABX1GJ"
+          style={inputBase}
+        />
+        <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--text-dim)' }}>
+          Deixe vazio pra desvincular.
+        </p>
       </div>
 
       {erro && (

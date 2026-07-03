@@ -12,8 +12,9 @@ from app.schemas.lancamento import (
     LancamentoUpdate,
     LeadsPorUtmContent,
     PontoVelocidade,
+    SendflowLeadsResponse,
 )
-from app.services import lancamento_service
+from app.services import lancamento_service, sendflow_service
 
 router = APIRouter(prefix="/lancamentos", tags=["lancamentos"])
 
@@ -118,3 +119,25 @@ async def sync_meta(
     if not await lancamento_service.obter(db, id):
         raise HTTPException(status_code=404, detail="Lançamento não encontrado.")
     return await lancamento_service.sincronizar_meta(db, id)
+
+
+@router.get("/{id}/sendflow-leads", response_model=SendflowLeadsResponse)
+async def sendflow_leads(
+    id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(verify_token),
+):
+    """Puxa on-demand o total de participantes dos grupos WhatsApp da
+    campanha SendFlow vinculada ao lançamento. Retorna zerado se o
+    lançamento não tem release vinculado ou se a API do SendFlow
+    falhar."""
+    from app.models import Lancamento
+
+    lanc = await db.get(Lancamento, id)
+    if not lanc:
+        raise HTTPException(status_code=404, detail="Lançamento não encontrado.")
+    if not lanc.sendflow_release_id:
+        return SendflowLeadsResponse(total=0, grupos_count=0, release_id="")
+    return SendflowLeadsResponse(
+        **(await sendflow_service.leads_no_grupo(lanc.sendflow_release_id))
+    )
