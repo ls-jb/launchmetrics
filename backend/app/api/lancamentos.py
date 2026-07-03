@@ -141,3 +141,21 @@ async def sendflow_leads(
     return SendflowLeadsResponse(
         **(await sendflow_service.leads_no_grupo(lanc.sendflow_release_id))
     )
+
+
+@router.get("/{id}/sendflow-debug")
+async def sendflow_debug(
+    id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(verify_token),
+):
+    """Diagnóstico do SendFlow — não expõe o token, retorna: token
+    presente sim/não, URL chamada, status HTTP e primeiros 300 chars da
+    resposta. Pra distinguir 'token ausente' x 'release_id vazio' x
+    'API errada'."""
+    from app.models import Lancamento
+
+    lanc = await db.get(Lancamento, id)
+    if not lanc:
+        raise HTTPException(status_code=404, detail="Lançamento não encontrado.")
+    return await sendflow_service.diagnostico(lanc.sendflow_release_id)

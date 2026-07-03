@@ -133,6 +133,17 @@ export function LancamentoDetalhe() {
     await carregar(false)
   }
 
+  const debugSendflow = async () => {
+    if (!id) return
+    try {
+      const r = await lancamentosService.debugSendflow(id)
+      console.log('[SendFlow Debug]', r)
+      alert(JSON.stringify(r, null, 2))
+    } catch (e) {
+      alert(`Erro: ${extrairErro(e)}`)
+    }
+  }
+
   const sincronizarMeta = async () => {
     if (!id) return
     try {
@@ -240,6 +251,24 @@ export function LancamentoDetalhe() {
               }}
             >
               Meta Ads
+            </button>
+          )}
+          {isAdmin && lancamento.sendflow_release_id && (
+            <button
+              onClick={debugSendflow}
+              title="Diagnóstico SendFlow — mostra status do token e resposta da API"
+              style={{
+                background: 'var(--surface)',
+                border: '1px dashed var(--border-strong)',
+                color: 'var(--text-muted)',
+                padding: '8px 14px',
+                borderRadius: 8,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Debug SendFlow
             </button>
           )}
           {isAdmin && (

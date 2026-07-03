@@ -77,4 +77,9 @@ export const lancamentosService = {
     api
       .get<SendflowLeads>(`/api/lancamentos/${id}/sendflow-leads`)
       .then((r) => r.data),
+
+  debugSendflow: (id: string) =>
+    api
+      .get<Record<string, unknown>>(`/api/lancamentos/${id}/sendflow-debug`)
+      .then((r) => r.data),
 }
