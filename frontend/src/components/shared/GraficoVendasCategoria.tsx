@@ -29,9 +29,12 @@ type LinhaPlot = Record<string, number | string>
 export function GraficoVendasCategoria({
   dados,
   investimento,
+  onClickDia,
 }: {
   dados: PontoVendaCategoria[]
   investimento?: { dia: string; valor: number }[]
+  /** Chamado quando o usuário clica num ponto do gráfico. `dia` é YYYY-MM-DD. */
+  onClickDia?: (dia: string) => void
 }) {
   // Categorias presentes no dataset
   const categoriasPresentes = useMemo(() => {
@@ -188,7 +191,23 @@ export function GraficoVendasCategoria({
         }}
       >
         <ResponsiveContainer width="100%" height={300}>
-          <ComposedChart data={dadosPlot} barSize={dadosPlot.length > 30 ? 6 : 14}>
+          <ComposedChart
+            data={dadosPlot}
+            barSize={dadosPlot.length > 30 ? 6 : 14}
+            onClick={
+              onClickDia
+                ? (state) => {
+                    const dia = (
+                      state &&
+                      state.activePayload &&
+                      state.activePayload[0]?.payload?.dia
+                    ) as string | undefined
+                    if (dia) onClickDia(dia)
+                  }
+                : undefined
+            }
+            style={onClickDia ? { cursor: 'pointer' } : undefined}
+          >
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
             <XAxis
               dataKey="data"

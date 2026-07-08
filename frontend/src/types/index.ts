@@ -234,6 +234,15 @@ export interface PontoVendaCategoria {
   receita: number
 }
 
+export interface OfertaDoDia {
+  produto: string
+  oferta_nome: string | null
+  oferta_codigo: string | null
+  categoria: CategoriaLancPago
+  quantidade: number
+  receita: number
+}
+
 // ============================================================
 // Perpétuos
 // ============================================================

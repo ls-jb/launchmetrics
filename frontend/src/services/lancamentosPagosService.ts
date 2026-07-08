@@ -5,6 +5,7 @@ import type {
   LancamentoPagoAjuste,
   LancamentoPagoCompleto,
   LancamentoPagoOferta,
+  OfertaDoDia,
   PontoVendaCategoria,
 } from '@/types'
 
@@ -67,6 +68,14 @@ export const lancamentosPagosService = {
     api
       .get<PontoVendaCategoria[]>(
         `/api/lancamentos-pagos/${id}/vendas-por-dia`,
+      )
+      .then((r) => r.data),
+
+  vendasDoDia: (id: string, dia: string) =>
+    api
+      .get<OfertaDoDia[]>(
+        `/api/lancamentos-pagos/${id}/vendas-do-dia`,
+        { params: { dia } },
       )
       .then((r) => r.data),
 

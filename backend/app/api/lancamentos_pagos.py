@@ -1,7 +1,8 @@
 """Endpoints do Lançamento Pago. Leitura: qualquer logado. Cadastro: admin."""
+from datetime import date
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -14,6 +15,7 @@ from app.schemas.lancamento_pago import (
     LancamentoPagoResponse,
     LancamentoPagoUpdate,
     OfertaCreate,
+    OfertaDoDia,
     OfertaResponse,
     PontoVendaCategoria,
 )
@@ -58,6 +60,22 @@ async def vendas_por_dia(
     principal / order_bump_principal / upsell / downsell). O front decide
     quais categorias plotar via checkboxes."""
     return await svc.vendas_por_dia_categoria(db, lancamento_id)
+
+
+@router.get(
+    "/{lancamento_id}/vendas-do-dia",
+    response_model=list[OfertaDoDia],
+)
+async def vendas_do_dia(
+    lancamento_id: UUID,
+    dia: date = Query(..., description="Data no formato YYYY-MM-DD (BRT)"),
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(verify_token),
+):
+    """Drill-down do gráfico: dado um dia BR, retorna quais ofertas
+    venderam nesse dia dentro do lançamento (uma linha por produto ×
+    oferta × categoria)."""
+    return await svc.vendas_do_dia(db, lancamento_id, dia)
 
 
 # ============================================================

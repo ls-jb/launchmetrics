@@ -18,6 +18,7 @@ import type {
   LancamentoPagoCompleto,
   LancamentoPagoOfertaDetalhe,
   OfertaBreakdown,
+  OfertaDoDia,
   PontoVendaCategoria,
 } from '@/types'
 
@@ -178,6 +179,9 @@ function DetalheLancamento({
   const [modalOferta, setModalOferta] = useState(false)
   const [modalMeta, setModalMeta] = useState(false)
   const [ajusteAlvo, setAjusteAlvo] = useState<LancamentoPagoOfertaDetalhe | null>(null)
+  const [diaDetalhe, setDiaDetalhe] = useState<string | null>(null)
+  const [ofertasDoDia, setOfertasDoDia] = useState<OfertaDoDia[] | null>(null)
+  const [erroDia, setErroDia] = useState('')
 
   const carregar = useCallback(
     async (silencioso = false) => {
@@ -548,7 +552,25 @@ function DetalheLancamento({
         Vendas por dia
       </h3>
       <div style={{ marginBottom: '1.5rem' }}>
-        <GraficoVendasCategoria dados={vendasDia} investimento={investDia} />
+        <GraficoVendasCategoria
+          dados={vendasDia}
+          investimento={investDia}
+          onClickDia={async (dia) => {
+            setDiaDetalhe(dia)
+            setOfertasDoDia(null)
+            setErroDia('')
+            try {
+              const ofertas = await lancamentosPagosService.vendasDoDia(
+                lancamentoId,
+                dia,
+              )
+              setOfertasDoDia(ofertas)
+            } catch (e) {
+              setErroDia(extrairErro(e))
+              setOfertasDoDia([])
+            }
+          }}
+        />
       </div>
 
       <Modal
@@ -605,6 +627,140 @@ function DetalheLancamento({
           }}
         />
       </Modal>
+
+      <Modal
+        aberto={diaDetalhe !== null}
+        titulo={diaDetalhe ? `Vendas de ${fmtDiaBR(diaDetalhe)}` : ''}
+        onFechar={() => {
+          setDiaDetalhe(null)
+          setOfertasDoDia(null)
+          setErroDia('')
+        }}
+        largura={640}
+      >
+        <DetalheDia ofertas={ofertasDoDia} erro={erroDia} />
+      </Modal>
+    </div>
+  )
+}
+
+function fmtDiaBR(dia: string): string {
+  // YYYY-MM-DD -> DD/MM/YYYY
+  return dia.slice(8, 10) + '/' + dia.slice(5, 7) + '/' + dia.slice(0, 4)
+}
+
+function DetalheDia({
+  ofertas,
+  erro,
+}: {
+  ofertas: OfertaDoDia[] | null
+  erro: string
+}) {
+  if (erro) {
+    return (
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--text-error)' }}>{erro}</p>
+    )
+  }
+  if (ofertas === null) {
+    return (
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>Carregando…</p>
+    )
+  }
+  if (ofertas.length === 0) {
+    return (
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>
+        Sem vendas nesse dia (dentro das janelas do lançamento).
+      </p>
+    )
+  }
+  const totalQtd = ofertas.reduce((a, o) => a + o.quantidade, 0)
+  const totalReceita = ofertas.reduce((a, o) => a + Number(o.receita), 0)
+  return (
+    <div>
+      <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-faint)' }}>
+        Total: <b style={{ color: 'var(--text)' }}>{formatNum(totalQtd)}</b>{' '}
+        {totalQtd === 1 ? 'venda' : 'vendas'} ·{' '}
+        <b style={{ color: 'var(--text)' }}>{formatBRL(totalReceita)}</b>
+      </p>
+      <div style={{ display: 'grid', gap: 8 }}>
+        {ofertas.map((o, i) => (
+          <div
+            key={`${o.produto}-${o.oferta_codigo ?? i}`}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: '10px 12px',
+              background: 'var(--surface-2)',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              minWidth: 0,
+            }}
+          >
+            <span
+              style={{
+                width: 3,
+                alignSelf: 'stretch',
+                background: CAT_COR[o.categoria],
+                borderRadius: 2,
+              }}
+            />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: 'var(--text)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                title={o.produto}
+              >
+                {o.produto}
+              </p>
+              <p
+                style={{
+                  margin: '2px 0 0',
+                  fontSize: 11,
+                  color: 'var(--text-faint)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                title={o.oferta_nome ?? undefined}
+              >
+                {CAT_LABEL[o.categoria]}
+                {o.oferta_nome ? ` · ${o.oferta_nome}` : ''}
+              </p>
+            </div>
+            <span
+              style={{
+                fontSize: 12,
+                color: 'var(--text-faint)',
+                whiteSpace: 'nowrap',
+                width: 80,
+                textAlign: 'right',
+              }}
+            >
+              {formatNum(o.quantidade)} {o.quantidade === 1 ? 'venda' : 'vendas'}
+            </span>
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: 'var(--text)',
+                whiteSpace: 'nowrap',
+                width: 100,
+                textAlign: 'right',
+              }}
+            >
+              {formatBRL(Number(o.receita))}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

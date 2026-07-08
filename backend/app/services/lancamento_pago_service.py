@@ -32,6 +32,7 @@ from app.schemas.lancamento_pago import (
     LancamentoPagoResponse,
     LancamentoPagoUpdate,
     OfertaDetalhe,
+    OfertaDoDia,
     PontoVendaCategoria,
     TotalCategoria,
 )
@@ -517,6 +518,136 @@ async def _vendas_por_dia_codigos(
             receita=receita,
         )
         for (dia, cat), (qtd, receita) in sorted(agregado.items())
+    ]
+
+
+async def vendas_do_dia(
+    db: AsyncSession, lancamento_id: UUID, dia: date
+) -> list[OfertaDoDia]:
+    """Retorna as ofertas que venderam num dia BR específico dentro do
+    lançamento. Uma linha por (produto, oferta_nome, categoria) —
+    agrupamento de vários oferta_codigo que caem no mesmo bucket.
+    Aplica mesma regra do dashboard (aprovada + seq<=1 + dedup histórico
+    global + override de preço). Respeita as janelas de ingresso e
+    principal — se `dia` cai fora dos dois ranges, retorna [].
+    """
+    ofertas = list(
+        (
+            await db.execute(
+                select(LancamentoPagoOferta).where(
+                    LancamentoPagoOferta.lancamento_id == lancamento_id,
+                    LancamentoPagoOferta.oferta_codigo.is_not(None),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not ofertas:
+        return []
+
+    lanc = await db.get(LancamentoPago, lancamento_id)
+    if not lanc:
+        return []
+
+    # Filtra ofertas cuja janela contém o dia solicitado
+    ofertas_no_dia: list[LancamentoPagoOferta] = []
+    for o in ofertas:
+        if o.categoria in CATEGORIAS_INGRESSO:
+            if lanc.ingresso_inicio <= dia <= lanc.ingresso_fim:
+                ofertas_no_dia.append(o)
+        elif o.categoria in CATEGORIAS_PRINCIPAL:
+            if lanc.principal_inicio <= dia <= lanc.principal_fim:
+                ofertas_no_dia.append(o)
+    if not ofertas_no_dia:
+        return []
+
+    codigo_para_meta = {
+        o.oferta_codigo: (o.produto, o.oferta_nome, o.categoria)
+        for o in ofertas_no_dia
+    }
+
+    inicio_dt = datetime.combine(
+        dia, datetime.min.time(), tzinfo=BR_TZ
+    ).astimezone(timezone.utc)
+    fim_dt = datetime.combine(
+        dia + timedelta(days=1), datetime.min.time(), tzinfo=BR_TZ
+    ).astimezone(timezone.utc)
+
+    valor_efetivo = func.coalesce(OfertaPreco.valor, Venda.valor).label("v")
+    dedup_key = case(
+        (
+            and_(
+                Venda.comprador_email.is_not(None),
+                Venda.oferta_codigo.is_not(None),
+            ),
+            Venda.comprador_email + cast(Venda.oferta_codigo, String),
+        ),
+        else_=cast(Venda.id, String),
+    )
+    rn = (
+        func.row_number()
+        .over(partition_by=dedup_key, order_by=Venda.data_venda)
+        .label("rn")
+    )
+    base = (
+        select(
+            Venda.oferta_codigo.label("codigo"),
+            valor_efetivo,
+            Venda.data_venda.label("data_venda"),
+            rn,
+        )
+        .select_from(Venda)
+        .outerjoin(OfertaPreco, OfertaPreco.oferta_codigo == Venda.oferta_codigo)
+        .where(
+            Venda.oferta_codigo.in_(list(codigo_para_meta.keys())),
+            Venda.status == "aprovada",
+            or_(Venda.recorrencia_seq.is_(None), Venda.recorrencia_seq == 1),
+        )
+        .subquery()
+    )
+    sub = (
+        select(base.c.codigo, base.c.v)
+        .where(
+            base.c.rn == 1,
+            base.c.data_venda >= inicio_dt,
+            base.c.data_venda < fim_dt,
+        )
+        .subquery()
+    )
+    rows = (
+        await db.execute(
+            select(
+                sub.c.codigo,
+                func.count(),
+                func.coalesce(func.sum(sub.c.v), 0),
+            ).group_by(sub.c.codigo)
+        )
+    ).all()
+
+    # Agrega por (produto, oferta_nome, categoria) — vários oferta_codigo
+    # podem cair na mesma tripla.
+    agregado: dict[tuple[str, str | None, str], tuple[int, Decimal, str | None]] = {}
+    for codigo, qtd, receita in rows:
+        produto, oferta_nome, categoria = codigo_para_meta[codigo]
+        chave = (produto, oferta_nome, categoria)
+        if chave in agregado:
+            ant_qtd, ant_rec, ant_cod = agregado[chave]
+            agregado[chave] = (ant_qtd + int(qtd), ant_rec + Decimal(receita), ant_cod)
+        else:
+            agregado[chave] = (int(qtd), Decimal(receita), codigo)
+
+    return [
+        OfertaDoDia(
+            produto=produto,
+            oferta_nome=oferta_nome,
+            oferta_codigo=codigo,
+            categoria=categoria,  # type: ignore[arg-type]
+            quantidade=qtd,
+            receita=receita,
+        )
+        for (produto, oferta_nome, categoria), (qtd, receita, codigo) in
+        sorted(agregado.items(), key=lambda kv: (-kv[1][1], kv[0][0]))
     ]
 
 
