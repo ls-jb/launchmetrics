@@ -25,6 +25,7 @@ import type {
 const CATEGORIAS: { valor: CategoriaLancPago; label: string; cor: string }[] = [
   { valor: 'ingresso', label: 'Ingresso', cor: '#3ECFB2' },
   { valor: 'order_bump_ingresso', label: 'Order Bump (Ingresso)', cor: '#F59E0B' },
+  { valor: 'upsell_ingresso', label: 'Upsell (Ingresso)', cor: '#EC4899' },
   { valor: 'principal', label: 'Principal', cor: '#7C6AF7' },
   { valor: 'order_bump_principal', label: 'Order Bump (Principal)', cor: '#F59E0B' },
   { valor: 'upsell', label: 'Upsell', cor: '#60A5FA' },
@@ -314,9 +315,14 @@ function DetalheLancamento({
     (acc, t) => acc + t.quantidade,
     0,
   )
-  // Ingresso + Order Bump Ingresso = "fase de captação paga"
+  // Ingresso + Order Bump Ingresso + Upsell Ingresso = "fase de captação paga"
   const receitaIngressos = placar.totais_por_categoria
-    .filter((t) => t.categoria === 'ingresso' || t.categoria === 'order_bump_ingresso')
+    .filter(
+      (t) =>
+        t.categoria === 'ingresso' ||
+        t.categoria === 'order_bump_ingresso' ||
+        t.categoria === 'upsell_ingresso',
+    )
     .reduce((acc, t) => acc + Number(t.receita), 0)
 
   return (

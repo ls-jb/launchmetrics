@@ -10,6 +10,7 @@ from app.schemas._types import Money
 Categoria = Literal[
     "ingresso",
     "order_bump_ingresso",
+    "upsell_ingresso",
     "principal",
     "order_bump_principal",
     "upsell",

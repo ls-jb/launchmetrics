@@ -16,8 +16,9 @@ import type { CategoriaLancPago, PontoVendaCategoria } from '@/types'
 const CATEGORIAS: { valor: CategoriaLancPago; label: string; cor: string }[] = [
   { valor: 'ingresso', label: 'Ingresso', cor: '#3ECFB2' },
   { valor: 'order_bump_ingresso', label: 'Order Bump (Ingresso)', cor: '#F59E0B' },
+  { valor: 'upsell_ingresso', label: 'Upsell (Ingresso)', cor: '#EC4899' },
   { valor: 'principal', label: 'Principal', cor: '#7C6AF7' },
-  { valor: 'order_bump_principal', label: 'Order Bump (Principal)', cor: '#EC4899' },
+  { valor: 'order_bump_principal', label: 'Order Bump (Principal)', cor: '#F472B6' },
   { valor: 'upsell', label: 'Upsell', cor: '#60A5FA' },
   { valor: 'downsell', label: 'Downsell', cor: 'var(--text-muted)' },
 ]

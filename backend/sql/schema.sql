@@ -267,7 +267,7 @@ create table if not exists launchmetrics.lancamentos_pagos_ofertas (
     oferta_nome text,
     oferta_codigo text,
     categoria text not null check (categoria in (
-        'ingresso','order_bump_ingresso','principal',
+        'ingresso','order_bump_ingresso','upsell_ingresso','principal',
         'order_bump_principal','upsell','downsell'
     )),
     criado_em timestamptz not null default now()

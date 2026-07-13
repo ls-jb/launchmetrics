@@ -206,6 +206,7 @@ export interface PlacarCompleto {
 export type CategoriaLancPago =
   | 'ingresso'
   | 'order_bump_ingresso'
+  | 'upsell_ingresso'
   | 'principal'
   | 'order_bump_principal'
   | 'upsell'

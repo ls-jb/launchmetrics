@@ -56,7 +56,7 @@ _CAMPOS_ATUALIZAVEIS = frozenset({
     "meta_principal_qtd",
 })
 
-CATEGORIAS_INGRESSO = {"ingresso", "order_bump_ingresso"}
+CATEGORIAS_INGRESSO = {"ingresso", "order_bump_ingresso", "upsell_ingresso"}
 """Conta vendas no intervalo ingresso_inicio..ingresso_fim do lançamento."""
 
 CATEGORIAS_PRINCIPAL = {"principal", "order_bump_principal", "upsell", "downsell"}
@@ -266,6 +266,7 @@ async def _totais_por_categoria(
     ordem = [
         "ingresso",
         "order_bump_ingresso",
+        "upsell_ingresso",
         "principal",
         "order_bump_principal",
         "upsell",
