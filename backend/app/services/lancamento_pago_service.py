@@ -159,8 +159,13 @@ async def remover_oferta(db: AsyncSession, oferta_id: UUID) -> bool:
 # Detalhe completo (com totais reais por categoria)
 # ============================================================
 async def obter(
-    db: AsyncSession, lancamento_id: UUID
+    db: AsyncSession,
+    lancamento_id: UUID,
+    inicio: date | None = None,
+    fim: date | None = None,
 ) -> LancamentoPagoCompleto | None:
+    """Retorna o placar. Quando `inicio`/`fim` vêm, restringe as métricas
+    ao sub-range dentro das janelas do lançamento (interseção)."""
     lanc = await db.get(LancamentoPago, lancamento_id)
     if not lanc:
         return None
@@ -177,7 +182,7 @@ async def obter(
         .all()
     )
 
-    totais = await _totais_por_categoria(db, lanc, ofertas)
+    totais = await _totais_por_categoria(db, lanc, ofertas, inicio, fim)
 
     return LancamentoPagoCompleto(
         lancamento=LancamentoPagoResponse.model_validate(lanc),
@@ -185,10 +190,28 @@ async def obter(
     )
 
 
+def _clip(
+    janela_ini: date,
+    janela_fim: date,
+    filtro_ini: date | None,
+    filtro_fim: date | None,
+) -> tuple[date, date] | None:
+    """Interseção entre a janela nativa e o filtro do usuário. Se o filtro
+    não vem, devolve a janela; se a interseção é vazia (fim < inicio),
+    devolve None (o caller pula a categoria)."""
+    ini = max(janela_ini, filtro_ini) if filtro_ini else janela_ini
+    fim = min(janela_fim, filtro_fim) if filtro_fim else janela_fim
+    if fim < ini:
+        return None
+    return ini, fim
+
+
 async def _totais_por_categoria(
     db: AsyncSession,
     lanc: LancamentoPago,
     ofertas: list[LancamentoPagoOferta],
+    filtro_inicio: date | None = None,
+    filtro_fim: date | None = None,
 ) -> list[TotalCategoria]:
     """Totais por categoria + breakdown por oferta (real + ajustes manuais).
 
@@ -211,14 +234,25 @@ async def _totais_por_categoria(
         for o in ofertas
         if o.categoria in CATEGORIAS_PRINCIPAL and o.oferta_codigo
     ]
-    metricas = await _metricas_por_codigo(
-        db, codigos_ingresso, lanc.ingresso_inicio, lanc.ingresso_fim
+    metricas: dict[str, tuple[int, Decimal]] = {}
+    janela_ing = _clip(
+        lanc.ingresso_inicio, lanc.ingresso_fim, filtro_inicio, filtro_fim
     )
-    metricas.update(
-        await _metricas_por_codigo(
-            db, codigos_principal, lanc.principal_inicio, lanc.principal_fim
+    if janela_ing and codigos_ingresso:
+        metricas.update(
+            await _metricas_por_codigo(
+                db, codigos_ingresso, janela_ing[0], janela_ing[1]
+            )
         )
+    janela_pri = _clip(
+        lanc.principal_inicio, lanc.principal_fim, filtro_inicio, filtro_fim
     )
+    if janela_pri and codigos_principal:
+        metricas.update(
+            await _metricas_por_codigo(
+                db, codigos_principal, janela_pri[0], janela_pri[1]
+            )
+        )
 
     # 2) Ajustes manuais por oferta (lancamento_pagos_ajustes).
     ids = [o.id for o in ofertas]
@@ -371,12 +405,18 @@ async def _metricas_por_codigo(
 # Vendas diárias por categoria (alimenta o gráfico com checkboxes)
 # ============================================================
 async def vendas_por_dia_categoria(
-    db: AsyncSession, lancamento_id: UUID
+    db: AsyncSession,
+    lancamento_id: UUID,
+    filtro_inicio: date | None = None,
+    filtro_fim: date | None = None,
 ) -> list[PontoVendaCategoria]:
     """Retorna [{ dia, categoria, quantidade, receita }] — uma linha por
     (dia BRT × categoria), considerando todas as ofertas cadastradas no
     lançamento. O front cruza com os checkboxes para somar só o que está
-    marcado. Aplica a mesma regra de venda real do dashboard."""
+    marcado. Aplica a mesma regra de venda real do dashboard.
+
+    Quando `filtro_inicio`/`filtro_fim` vêm, clipa as janelas nativas
+    do lançamento com o filtro (interseção)."""
     ofertas = list(
         (
             await db.execute(
@@ -399,27 +439,27 @@ async def vendas_por_dia_categoria(
     pontos: list[PontoVendaCategoria] = []
 
     # Ingressos e Principais usam janelas diferentes — processo cada bloco
-    # com sua janela e merge no fim.
+    # com sua janela clipada pelo filtro e merge no fim.
     blocos = [
         (
             CATEGORIAS_INGRESSO,
-            lanc.ingresso_inicio,
-            lanc.ingresso_fim,
+            _clip(lanc.ingresso_inicio, lanc.ingresso_fim, filtro_inicio, filtro_fim),
         ),
         (
             CATEGORIAS_PRINCIPAL,
-            lanc.principal_inicio,
-            lanc.principal_fim,
+            _clip(lanc.principal_inicio, lanc.principal_fim, filtro_inicio, filtro_fim),
         ),
     ]
-    for cats_bloco, inicio, fim in blocos:
+    for cats_bloco, janela in blocos:
+        if not janela:
+            continue
         ofertas_bloco = [o for o in ofertas if o.categoria in cats_bloco]
         if not ofertas_bloco:
             continue
         codigo_para_cat = {o.oferta_codigo: o.categoria for o in ofertas_bloco}
         pontos.extend(
             await _vendas_por_dia_codigos(
-                db, codigo_para_cat, inicio, fim
+                db, codigo_para_cat, janela[0], janela[1]
             )
         )
     return pontos
@@ -733,18 +773,27 @@ async def sincronizar_meta_todos(db: AsyncSession) -> dict:
 
 
 async def investimento_por_dia_meta(
-    db: AsyncSession, lancamento_id: UUID
+    db: AsyncSession,
+    lancamento_id: UUID,
+    filtro_inicio: date | None = None,
+    filtro_fim: date | None = None,
 ) -> list[dict]:
     """Retorna [{dia, valor}] do gasto Meta Ads no período do lançamento.
     Busca direto na Meta (on-demand) — não persiste em tabela. Vazio se
-    o lançamento não tem Meta configurada ou a API falhar."""
+    o lançamento não tem Meta configurada ou a API falhar. Quando
+    `filtro_inicio`/`filtro_fim` vêm, clipa a janela de ingresso."""
     lanc = await db.get(LancamentoPago, lancamento_id)
     if not lanc or not lanc.meta_ad_account_id:
         return []
+    janela = _clip(
+        lanc.ingresso_inicio, lanc.ingresso_fim, filtro_inicio, filtro_fim
+    )
+    if not janela:
+        return []
     gastos = await meta_ads_service.puxar_gasto_por_dia(
         lanc.meta_ad_account_id,
-        lanc.ingresso_inicio,
-        lanc.ingresso_fim,
+        janela[0],
+        janela[1],
         lanc.meta_filtro_nome,
     )
     return [

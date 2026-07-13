@@ -38,10 +38,12 @@ async def listar(
 @router.get("/{lancamento_id}", response_model=LancamentoPagoCompleto)
 async def obter(
     lancamento_id: UUID,
+    inicio: date | None = Query(default=None, description="Filtro início (YYYY-MM-DD)"),
+    fim: date | None = Query(default=None, description="Filtro fim (YYYY-MM-DD)"),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(verify_token),
 ):
-    lanc = await svc.obter(db, lancamento_id)
+    lanc = await svc.obter(db, lancamento_id, inicio, fim)
     if not lanc:
         raise HTTPException(status_code=404, detail="Lançamento não encontrado.")
     return lanc
@@ -53,13 +55,16 @@ async def obter(
 )
 async def vendas_por_dia(
     lancamento_id: UUID,
+    inicio: date | None = Query(default=None),
+    fim: date | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(verify_token),
 ):
     """Pontos diários por categoria (ingresso / order_bump_ingresso /
     principal / order_bump_principal / upsell / downsell). O front decide
-    quais categorias plotar via checkboxes."""
-    return await svc.vendas_por_dia_categoria(db, lancamento_id)
+    quais categorias plotar via checkboxes. Aceita inicio/fim opcionais
+    para restringir ao sub-range."""
+    return await svc.vendas_por_dia_categoria(db, lancamento_id, inicio, fim)
 
 
 @router.get(
@@ -207,11 +212,14 @@ async def sync_meta(
 @router.get("/{lancamento_id}/investimento-por-dia")
 async def investimento_por_dia(
     lancamento_id: UUID,
+    inicio: date | None = Query(default=None),
+    fim: date | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(verify_token),
 ):
     """Retorna [{dia, valor}] do gasto Meta Ads no período. On-demand —
-    chama Meta a cada request. Vazio se não tem Meta configurada."""
+    chama Meta a cada request. Vazio se não tem Meta configurada.
+    Aceita inicio/fim opcionais para restringir ao sub-range."""
     if not await svc.obter(db, lancamento_id):
         raise HTTPException(status_code=404, detail="Lançamento não encontrado.")
-    return await svc.investimento_por_dia_meta(db, lancamento_id)
+    return await svc.investimento_por_dia_meta(db, lancamento_id, inicio, fim)

@@ -183,18 +183,27 @@ function DetalheLancamento({
   const [diaDetalhe, setDiaDetalhe] = useState<string | null>(null)
   const [ofertasDoDia, setOfertasDoDia] = useState<OfertaDoDia[] | null>(null)
   const [erroDia, setErroDia] = useState('')
+  // Filtro de data — bounds ficam limitados a [ingresso_inicio, principal_fim]
+  // via inputs min/max. Vazio = "sem filtro" (usa janelas nativas do
+  // lançamento). Cache defaults via useRef pra não recarregar em loop.
+  const [filtroInicio, setFiltroInicio] = useState<string>('')
+  const [filtroFim, setFiltroFim] = useState<string>('')
 
   const carregar = useCallback(
     async (silencioso = false) => {
       if (!silencioso) setCarregando(true)
       else setAtualizando(true)
       try {
+        const filtro = {
+          inicio: filtroInicio || undefined,
+          fim: filtroFim || undefined,
+        }
         // vendas + placar primeiro (sempre); investimento Meta em paralelo
         // mas tolerante a falha (se não tiver Meta config ou der erro, vai vazio)
         const [p, v, i] = await Promise.all([
-          lancamentosPagosService.obter(lancamentoId),
-          lancamentosPagosService.vendasPorDia(lancamentoId),
-          lancamentosPagosService.investimentoPorDia(lancamentoId).catch(() => []),
+          lancamentosPagosService.obter(lancamentoId, filtro),
+          lancamentosPagosService.vendasPorDia(lancamentoId, filtro),
+          lancamentosPagosService.investimentoPorDia(lancamentoId, filtro).catch(() => []),
         ])
         setPlacar(p)
         setVendasDia(v)
@@ -206,7 +215,7 @@ function DetalheLancamento({
         else setAtualizando(false)
       }
     },
-    [lancamentoId],
+    [lancamentoId, filtroInicio, filtroFim],
   )
 
   const salvarMetaCampo = async (
@@ -378,6 +387,18 @@ function DetalheLancamento({
           )}
         </div>
       </header>
+
+      {/* Filtro de data — limitado ao intervalo do lançamento */}
+      <FiltroData
+        min={placar.lancamento.ingresso_inicio}
+        max={placar.lancamento.principal_fim}
+        inicio={filtroInicio}
+        fim={filtroFim}
+        onMudar={(ini, f) => {
+          setFiltroInicio(ini)
+          setFiltroFim(f)
+        }}
+      />
 
       {/* Card de total geral */}
       <div
@@ -1272,6 +1293,115 @@ function FormAjusteManual({
 // ============================================================
 // Sub-componentes e estilos
 // ============================================================
+// ============================================================
+// Filtro de data (Início / Fim) — bounded ao intervalo do lançamento
+// ============================================================
+function FiltroData({
+  min,
+  max,
+  inicio,
+  fim,
+  onMudar,
+}: {
+  min: string
+  max: string
+  inicio: string
+  fim: string
+  onMudar: (inicio: string, fim: string) => void
+}) {
+  const inputStyle: React.CSSProperties = {
+    background: 'var(--surface-2)',
+    border: '1px solid var(--border-strong)',
+    borderRadius: 6,
+    padding: '6px 10px',
+    color: 'var(--text)',
+    fontSize: 12,
+    colorScheme: 'dark',
+  }
+  const labelStyle: React.CSSProperties = {
+    fontSize: 11,
+    color: 'var(--text-faint)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+    marginRight: 6,
+  }
+  const chipStyle: React.CSSProperties = {
+    background: 'transparent',
+    border: '1px solid var(--border-strong)',
+    color: 'var(--text-muted)',
+    padding: '6px 10px',
+    borderRadius: 6,
+    fontSize: 11,
+    fontWeight: 600,
+    cursor: 'pointer',
+  }
+  const temFiltro = Boolean(inicio) || Boolean(fim)
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        flexWrap: 'wrap',
+        marginBottom: '0.75rem',
+        padding: '10px 14px',
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 10,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <span style={labelStyle}>Início</span>
+        <input
+          type="date"
+          value={inicio}
+          min={min}
+          max={fim || max}
+          onChange={(e) => onMudar(e.target.value, fim)}
+          style={inputStyle}
+        />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <span style={labelStyle}>Fim</span>
+        <input
+          type="date"
+          value={fim}
+          min={inicio || min}
+          max={max}
+          onChange={(e) => onMudar(inicio, e.target.value)}
+          style={inputStyle}
+        />
+      </div>
+      {temFiltro && (
+        <button
+          type="button"
+          onClick={() => onMudar('', '')}
+          style={chipStyle}
+          title="Ver o lançamento inteiro"
+        >
+          Limpar filtro
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => onMudar(min, max)}
+        style={chipStyle}
+      >
+        Lançamento inteiro
+      </button>
+      <span
+        style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-faint)' }}
+      >
+        Janela: {fmtBR(min)} → {fmtBR(max)}
+      </span>
+    </div>
+  )
+}
+
+function fmtBR(dia: string): string {
+  return dia.slice(8, 10) + '/' + dia.slice(5, 7) + '/' + dia.slice(0, 4)
+}
+
 function CardCategoria({
   categoria,
   quantidade,

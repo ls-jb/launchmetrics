@@ -49,9 +49,14 @@ export const lancamentosPagosService = {
   listar: () =>
     api.get<LancamentoPago[]>('/api/lancamentos-pagos').then((r) => r.data),
 
-  obter: (id: string) =>
+  obter: (id: string, filtro?: { inicio?: string; fim?: string }) =>
     api
-      .get<LancamentoPagoCompleto>(`/api/lancamentos-pagos/${id}`)
+      .get<LancamentoPagoCompleto>(`/api/lancamentos-pagos/${id}`, {
+        params: {
+          ...(filtro?.inicio ? { inicio: filtro.inicio } : {}),
+          ...(filtro?.fim ? { fim: filtro.fim } : {}),
+        },
+      })
       .then((r) => r.data),
 
   criar: (dados: NovoLancamentoPayload) =>
@@ -64,10 +69,16 @@ export const lancamentosPagosService = {
       .patch<LancamentoPago>(`/api/lancamentos-pagos/${id}`, dados)
       .then((r) => r.data),
 
-  vendasPorDia: (id: string) =>
+  vendasPorDia: (id: string, filtro?: { inicio?: string; fim?: string }) =>
     api
       .get<PontoVendaCategoria[]>(
         `/api/lancamentos-pagos/${id}/vendas-por-dia`,
+        {
+          params: {
+            ...(filtro?.inicio ? { inicio: filtro.inicio } : {}),
+            ...(filtro?.fim ? { fim: filtro.fim } : {}),
+          },
+        },
       )
       .then((r) => r.data),
 
@@ -120,10 +131,19 @@ export const lancamentosPagosService = {
       .then((r) => r.data),
 
   // Gasto Meta Ads por dia (on-demand). Vazio se sem Meta configurada.
-  investimentoPorDia: (lancamentoId: string) =>
+  investimentoPorDia: (
+    lancamentoId: string,
+    filtro?: { inicio?: string; fim?: string },
+  ) =>
     api
       .get<{ dia: string; valor: number }[]>(
         `/api/lancamentos-pagos/${lancamentoId}/investimento-por-dia`,
+        {
+          params: {
+            ...(filtro?.inicio ? { inicio: filtro.inicio } : {}),
+            ...(filtro?.fim ? { fim: filtro.fim } : {}),
+          },
+        },
       )
       .then((r) => r.data),
 }
