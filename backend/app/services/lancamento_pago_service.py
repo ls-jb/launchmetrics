@@ -184,8 +184,28 @@ async def obter(
 
     totais = await _totais_por_categoria(db, lanc, ofertas, inicio, fim)
 
+    resposta_lanc = LancamentoPagoResponse.model_validate(lanc)
+    # Quando o filtro tá aplicado, sobrescreve o investimento com a soma
+    # do Meta apenas no sub-range (interseção com a janela de ingresso).
+    # Isso deixa o ROAS filtrado coerente com receita filtrada. Sem filtro
+    # ou sem Meta configurado, mantém o valor persistido.
+    if (inicio or fim) and lanc.meta_ad_account_id:
+        janela = _clip(
+            lanc.ingresso_inicio, lanc.ingresso_fim, inicio, fim
+        )
+        if janela:
+            gastos = await meta_ads_service.puxar_gasto_por_dia(
+                lanc.meta_ad_account_id,
+                janela[0],
+                janela[1],
+                lanc.meta_filtro_nome,
+            )
+            resposta_lanc.investimento = sum(gastos.values(), Decimal("0"))
+        else:
+            resposta_lanc.investimento = Decimal("0")
+
     return LancamentoPagoCompleto(
-        lancamento=LancamentoPagoResponse.model_validate(lanc),
+        lancamento=resposta_lanc,
         totais_por_categoria=totais,
     )
 
