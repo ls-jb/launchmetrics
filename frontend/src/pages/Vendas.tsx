@@ -15,6 +15,7 @@ import type {
   ProdutoRanking,
   ResumoVendas,
   Venda,
+  VendaDuplicada,
   VendaManualCreatePayload,
 } from '@/types'
 
@@ -46,6 +47,7 @@ export function Vendas() {
   const [modalVenda, setModalVenda] = useState(false)
   // Modal de remoção de venda manual
   const [modalRemover, setModalRemover] = useState(false)
+  const [modalDuplicadas, setModalDuplicadas] = useState(false)
 
   const abrirOfertas = (nomeProduto: string) => {
     setProdutoModal(nomeProduto)
@@ -198,6 +200,22 @@ export function Vendas() {
             }}
           >
             Remover venda
+          </button>
+          <button
+            onClick={() => setModalDuplicadas(true)}
+            title="Ver vendas 2ª+ do mesmo cliente e escolher quais forçar no dashboard"
+            style={{
+              background: 'transparent',
+              border: '1px solid var(--border-strong)',
+              color: 'var(--text-muted)',
+              padding: '10px 14px',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: 'pointer',
+            }}
+          >
+            Duplicadas
           </button>
           <button
             onClick={() => setModalVenda(true)}
@@ -442,6 +460,17 @@ export function Vendas() {
         <RemoverVendasManuais
           filtro={filtro}
           onRemoveu={() => setRefreshKey((k) => k + 1)}
+        />
+      </Modal>
+
+      <Modal
+        aberto={modalDuplicadas}
+        titulo="Vendas duplicadas"
+        onFechar={() => setModalDuplicadas(false)}
+        largura={860}
+      >
+        <VendasDuplicadas
+          onMudou={() => setRefreshKey((k) => k + 1)}
         />
       </Modal>
     </div>
@@ -1361,5 +1390,238 @@ function IconeAtualizar({ girando }: { girando: boolean }) {
       <path d="M8 16H3v5" />
     </svg>
   )
+}
+
+// ============================================================
+// Modal: lista paginada de vendas duplicadas (2ª+ compra do mesmo
+// email+oferta_codigo). Toggle "forçar no dash" por linha.
+// ============================================================
+function VendasDuplicadas({ onMudou }: { onMudou: () => void }) {
+  const [dados, setDados] = useState<VendaDuplicada[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [carregando, setCarregando] = useState(true)
+  const [erro, setErro] = useState('')
+  const [alternando, setAlternando] = useState<string | null>(null)
+  const size = 15
+  const totalPaginas = Math.max(1, Math.ceil(total / size))
+
+  const carregar = (p: number) => {
+    setCarregando(true)
+    setErro('')
+    vendasService
+      .duplicadas(p, size)
+      .then((r) => {
+        setDados(r.items)
+        setTotal(r.total)
+      })
+      .catch((e) => setErro(extrairErro(e)))
+      .finally(() => setCarregando(false))
+  }
+
+  useEffect(() => {
+    carregar(page)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page])
+
+  const alternar = async (v: VendaDuplicada) => {
+    setAlternando(v.id)
+    try {
+      const novo = !v.forcar_no_dash
+      await vendasService.forcarNoDash(v.id, novo)
+      setDados((atual) =>
+        atual.map((x) => (x.id === v.id ? { ...x, forcar_no_dash: novo } : x)),
+      )
+      onMudou()
+    } catch (e) {
+      alert(extrairErro(e))
+    } finally {
+      setAlternando(null)
+    }
+  }
+
+  if (carregando && dados.length === 0) {
+    return (
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>
+        Carregando…
+      </p>
+    )
+  }
+  if (erro) {
+    return (
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--text-error)' }}>{erro}</p>
+    )
+  }
+  if (total === 0) {
+    return (
+      <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>
+        Nenhuma venda duplicada encontrada — o dedup está limpo.
+      </p>
+    )
+  }
+
+  return (
+    <div>
+      <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-faint)' }}>
+        {formatBRL_num(total)} venda{total === 1 ? '' : 's'} em que o cliente
+        já tinha comprado o mesmo produto antes. Marque{' '}
+        <b style={{ color: 'var(--text)' }}>Contar no dash</b> pra forçar essa
+        venda específica a aparecer no dashboard.
+      </p>
+      <div style={{ display: 'grid', gap: 6, opacity: carregando ? 0.5 : 1 }}>
+        {dados.map((v) => (
+          <div
+            key={v.id}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: '10px 12px',
+              background: 'var(--surface-2)',
+              border: `1px solid ${v.forcar_no_dash ? '#3ECFB2' : 'var(--border)'}`,
+              borderRadius: 8,
+              minWidth: 0,
+            }}
+          >
+            <span
+              style={{
+                fontSize: 11,
+                color: 'var(--text-muted)',
+                fontFamily: 'monospace',
+                width: 44,
+              }}
+            >
+              {v.data_venda.slice(8, 10)}/{v.data_venda.slice(5, 7)}
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 13,
+                  color: 'var(--text)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                title={v.produto + (v.oferta_nome ? ' · ' + v.oferta_nome : '')}
+              >
+                {v.produto}
+                {v.oferta_nome && (
+                  <span style={{ color: 'var(--text-faint)' }}>
+                    {' · '}
+                    {v.oferta_nome}
+                  </span>
+                )}
+              </p>
+              <p
+                style={{
+                  margin: '2px 0 0',
+                  fontSize: 11,
+                  color: 'var(--text-faint)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                title={v.comprador_email ?? undefined}
+              >
+                {v.comprador_email}
+              </p>
+            </div>
+            <span
+              style={{
+                fontSize: 11,
+                color:
+                  v.status === 'aprovada'
+                    ? 'var(--text-muted)'
+                    : v.status === 'reembolsada'
+                      ? '#EF4444'
+                      : 'var(--text-faint)',
+                width: 84,
+              }}
+            >
+              {v.status}
+            </span>
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: 'var(--text)',
+                width: 90,
+                textAlign: 'right',
+              }}
+            >
+              {formatBRL(v.valor)}
+            </span>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 11,
+                color: v.forcar_no_dash ? '#3ECFB2' : 'var(--text-muted)',
+                cursor: alternando === v.id ? 'wait' : 'pointer',
+                width: 130,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={v.forcar_no_dash}
+                disabled={alternando === v.id}
+                onChange={() => alternar(v)}
+                style={{ accentColor: '#3ECFB2' }}
+              />
+              Contar no dash
+            </label>
+          </div>
+        ))}
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginTop: 14,
+        }}
+      >
+        <p style={{ margin: 0, fontSize: 11, color: 'var(--text-faint)' }}>
+          Página {page} de {totalPaginas}
+        </p>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1 || carregando}
+            style={paginacaoBotao(page <= 1)}
+          >
+            ‹ Anterior
+          </button>
+          <button
+            onClick={() => setPage((p) => Math.min(totalPaginas, p + 1))}
+            disabled={page >= totalPaginas || carregando}
+            style={paginacaoBotao(page >= totalPaginas)}
+          >
+            Próxima ›
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function formatBRL_num(n: number): string {
+  return new Intl.NumberFormat('pt-BR').format(n)
+}
+
+function paginacaoBotao(desabilitado: boolean): React.CSSProperties {
+  return {
+    background: 'transparent',
+    border: '1px solid var(--border-strong)',
+    color: desabilitado ? 'var(--text-dim)' : 'var(--text-muted)',
+    padding: '5px 10px',
+    borderRadius: 6,
+    fontSize: 11,
+    fontWeight: 600,
+    cursor: desabilitado ? 'not-allowed' : 'pointer',
+  }
 }
 

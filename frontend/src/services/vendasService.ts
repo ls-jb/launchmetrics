@@ -1,5 +1,6 @@
 import { api } from './api'
 import type {
+  DuplicadasPaginado,
   OfertaBreakdown,
   PontoReceita,
   ProdutoRanking,
@@ -71,5 +72,22 @@ export const vendasService = {
   ) =>
     api
       .put('/api/vendas/ofertas/preco', { oferta_codigo, oferta_nome, valor })
+      .then((r) => r.data),
+
+  duplicadas: (page: number, size = 15, produtos?: string[]) =>
+    api
+      .get<DuplicadasPaginado>('/api/vendas/duplicadas', {
+        params: {
+          page,
+          size,
+          ...(produtos && produtos.length > 0 ? { produtos } : {}),
+        },
+        paramsSerializer: { indexes: null },
+      })
+      .then((r) => r.data),
+
+  forcarNoDash: (id: string, forcar: boolean) =>
+    api
+      .patch<Venda>(`/api/vendas/${id}/forcar-no-dash`, { forcar })
       .then((r) => r.data),
 }

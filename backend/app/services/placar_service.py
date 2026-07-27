@@ -276,6 +276,7 @@ async def _total_real(
 
     valor_efetivo = func.coalesce(OfertaPreco.valor, Venda.valor).label("v")
     dedup_key = case(
+        (Venda.forcar_no_dash.is_(True), cast(Venda.id, String)),
         (
             and_(Venda.comprador_email.is_not(None), Venda.oferta_codigo.is_not(None)),
             Venda.comprador_email + cast(Venda.oferta_codigo, String),

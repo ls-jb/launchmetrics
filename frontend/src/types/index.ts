@@ -88,6 +88,28 @@ export interface Venda {
   comprador_email: string | null
   data_venda: string
   criado_em: string
+  forcar_no_dash: boolean
+}
+
+export interface VendaDuplicada {
+  id: string
+  data_venda: string
+  produto: string
+  oferta_nome: string | null
+  oferta_codigo: string | null
+  valor: number
+  status: StatusVenda
+  plataforma: Plataforma
+  comprador_email: string | null
+  comprador_nome: string | null
+  forcar_no_dash: boolean
+}
+
+export interface DuplicadasPaginado {
+  items: VendaDuplicada[]
+  total: number
+  page: number
+  size: number
 }
 
 export type Papel = 'admin' | 'viewer'

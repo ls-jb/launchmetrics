@@ -42,6 +42,34 @@ class VendaResponse(BaseModel):
     comprador_email: str | None = None
     data_venda: datetime
     criado_em: datetime
+    forcar_no_dash: bool = False
+
+
+class VendaDuplicada(BaseModel):
+    """Uma venda 2ª+ do mesmo (email, oferta_codigo) — lista de duplicadas."""
+
+    id: UUID
+    data_venda: datetime
+    produto: str
+    oferta_nome: str | None = None
+    oferta_codigo: str | None = None
+    valor: Money
+    status: StatusVenda
+    plataforma: Plataforma
+    comprador_email: str | None = None
+    comprador_nome: str | None = None
+    forcar_no_dash: bool
+
+
+class DuplicadasPaginado(BaseModel):
+    items: list[VendaDuplicada]
+    total: int
+    page: int
+    size: int
+
+
+class ForcarNoDashUpdate(BaseModel):
+    forcar: bool
 
 
 class VendaManualCreate(BaseModel):

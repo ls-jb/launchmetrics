@@ -425,6 +425,7 @@ def _vendas_efetivas_subquery(codigos: list[str], inicio_dt, fim_dt):
     dia, independente do range)."""
     valor_efetivo = func.coalesce(OfertaPreco.valor, Venda.valor).label("v")
     dedup_key = case(
+        (Venda.forcar_no_dash.is_(True), cast(Venda.id, String)),
         (
             and_(
                 Venda.comprador_email.is_not(None),

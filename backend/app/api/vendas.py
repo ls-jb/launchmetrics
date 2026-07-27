@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.middleware.auth import verify_token
 from app.schemas.venda import (
+    DuplicadasPaginado,
+    ForcarNoDashUpdate,
     OfertaBreakdown,
     OfertaPrecoResponse,
     OfertaPrecoUpsert,
@@ -47,6 +49,37 @@ async def remover_venda(
     venda manual reembolsada fora da plataforma."""
     if not await vendas_service.remover(db, venda_id):
         raise HTTPException(status_code=404, detail="Venda não encontrada.")
+
+
+@router.get("/duplicadas", response_model=DuplicadasPaginado)
+async def listar_duplicadas(
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=15, ge=1, le=100),
+    produtos: list[str] | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(verify_token),
+):
+    """Lista vendas 2ª+ do mesmo (email, oferta_codigo) — as que o dedup
+    do dashboard normalmente suprime. Cada item tem a flag
+    forcar_no_dash: quando true, a venda escapa do dedup e conta
+    no dashboard."""
+    return await vendas_service.listar_duplicadas(db, page, size, produtos)
+
+
+@router.patch("/{venda_id}/forcar-no-dash", response_model=VendaResponse)
+async def atualizar_forcar_no_dash(
+    venda_id: UUID,
+    dados: ForcarNoDashUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(verify_token),
+):
+    """Alterna a flag forcar_no_dash de uma venda."""
+    if not await vendas_service.atualizar_forcar_no_dash(db, venda_id, dados.forcar):
+        raise HTTPException(status_code=404, detail="Venda não encontrada.")
+    from app.models import Venda
+
+    venda = await db.get(Venda, venda_id)
+    return venda
 
 
 @router.get("", response_model=list[VendaResponse])

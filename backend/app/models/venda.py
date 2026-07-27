@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID as UUIDType, uuid4
 
-from sqlalchemy import DateTime, Numeric, String, func
+from sqlalchemy import Boolean, DateTime, Numeric, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -71,6 +71,14 @@ class Venda(Base):
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+    forcar_no_dash: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false", default=False
+    )
+    """Se True, essa venda escapa do dedup e SEMPRE aparece no dashboard,
+    mesmo sendo 2ª/3ª+ compra do mesmo (email, oferta_codigo). Editado
+    manualmente pelo admin via tela de duplicadas — pra cobrir os casos
+    em que o mesmo cliente comprou 2x de verdade."""
 
     # Auditoria: payload original do webhook
     payload_bruto: Mapped[dict[str, Any] | None] = mapped_column(JSONB)

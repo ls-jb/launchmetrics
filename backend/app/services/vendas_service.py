@@ -75,9 +75,13 @@ def _vendas_efetivas(
 
     valor_efetivo = func.coalesce(OfertaPreco.valor, Venda.valor).label("valor_efetivo")
 
-    # Chave de dedup: email|oferta quando ambos existem; senão, o id da venda
-    # (cada linha vira seu próprio grupo → nunca é deduplicada).
+    # Chave de dedup:
+    #   - forcar_no_dash=true → id da venda (isola em partição própria,
+    #     rn=1 sempre, escapa do dedup mesmo sendo 2ª+ compra)
+    #   - email + oferta quando ambos existem
+    #   - id da venda (fallback: cada linha vira seu grupo, não é deduplicada)
     dedup_key = case(
+        (Venda.forcar_no_dash.is_(True), cast(Venda.id, String)),
         (
             and_(Venda.comprador_email.is_not(None), Venda.oferta_codigo.is_not(None)),
             Venda.comprador_email + cast(Venda.oferta_codigo, String),
@@ -370,6 +374,98 @@ async def remover_preco_oferta(db: AsyncSession, oferta_codigo: str) -> bool:
     if not preco:
         return False
     await db.delete(preco)
+    await db.commit()
+    return True
+
+
+# ============================================================
+# Duplicadas — listagem paginada + toggle forcar_no_dash
+# ============================================================
+async def listar_duplicadas(
+    db: AsyncSession,
+    page: int,
+    size: int,
+    produtos: list[str] | None = None,
+) -> dict:
+    """Lista vendas duplicadas — 2ª+ compra do mesmo (email, oferta_codigo).
+    Retorna {items, total, page, size}. Ordena da mais recente pra mais
+    antiga. Só considera vendas com email e oferta_codigo (dedup faz
+    sentido). Ignora status — deixa o front decidir/mostrar."""
+    dedup_key = Venda.comprador_email + cast(Venda.oferta_codigo, String)
+    rn = (
+        func.row_number()
+        .over(partition_by=dedup_key, order_by=Venda.data_venda)
+        .label("rn")
+    )
+    base = (
+        select(
+            Venda.id.label("id"),
+            Venda.data_venda.label("data_venda"),
+            Venda.produto.label("produto"),
+            Venda.oferta_nome.label("oferta_nome"),
+            Venda.oferta_codigo.label("oferta_codigo"),
+            Venda.valor.label("valor"),
+            Venda.status.label("status"),
+            Venda.plataforma.label("plataforma"),
+            Venda.comprador_email.label("comprador_email"),
+            Venda.comprador_nome.label("comprador_nome"),
+            Venda.forcar_no_dash.label("forcar_no_dash"),
+            rn,
+        )
+        .where(
+            Venda.comprador_email.is_not(None),
+            Venda.oferta_codigo.is_not(None),
+        )
+    )
+    if produtos:
+        base = base.where(Venda.produto.in_(produtos))
+
+    base_sub = base.subquery()
+    filtro_duplicadas = select(base_sub).where(base_sub.c.rn > 1).subquery()
+
+    total = (
+        await db.execute(select(func.count()).select_from(filtro_duplicadas))
+    ).scalar_one()
+
+    offset = max(0, (page - 1) * size)
+    rows = (
+        await db.execute(
+            select(filtro_duplicadas)
+            .order_by(filtro_duplicadas.c.data_venda.desc())
+            .offset(offset)
+            .limit(size)
+        )
+    ).all()
+
+    items = [
+        {
+            "id": str(r.id),
+            "data_venda": r.data_venda,
+            "produto": r.produto,
+            "oferta_nome": r.oferta_nome,
+            "oferta_codigo": r.oferta_codigo,
+            "valor": r.valor,
+            "status": r.status,
+            "plataforma": r.plataforma,
+            "comprador_email": r.comprador_email,
+            "comprador_nome": r.comprador_nome,
+            "forcar_no_dash": r.forcar_no_dash,
+        }
+        for r in rows
+    ]
+    return {"items": items, "total": int(total), "page": page, "size": size}
+
+
+async def atualizar_forcar_no_dash(
+    db: AsyncSession, venda_id, forcar: bool
+) -> bool:
+    """Alterna a flag forcar_no_dash de uma venda. Retorna False se não
+    encontrou. Quando forcar=True, essa venda escapa do dedup e SEMPRE
+    aparece no dashboard, mesmo sendo 2ª+ compra do mesmo cliente."""
+    venda = await db.get(Venda, venda_id)
+    if not venda:
+        return False
+    venda.forcar_no_dash = forcar
     await db.commit()
     return True
 
