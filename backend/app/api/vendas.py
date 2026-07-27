@@ -59,15 +59,19 @@ async def listar_duplicadas(
     email: str | None = Query(default=None, description="Busca parcial no email"),
     inicio: date | None = Query(default=None),
     fim: date | None = Query(default=None),
+    status: str | None = Query(
+        default=None, description="aprovada | pendente | cancelada | reembolsada"
+    ),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(verify_token),
 ):
     """Lista vendas 2ª+ do mesmo (email, oferta_codigo) — as que o dedup
     do dashboard normalmente suprime. Cada item tem a flag
     forcar_no_dash: quando true, a venda escapa do dedup e conta
-    no dashboard. Filtros opcionais: produtos, email (ILIKE), inicio/fim."""
+    no dashboard. Filtros opcionais: produtos, email (ILIKE), inicio/fim,
+    status."""
     return await vendas_service.listar_duplicadas(
-        db, page, size, produtos, email, inicio, fim
+        db, page, size, produtos, email, inicio, fim, status
     )
 
 

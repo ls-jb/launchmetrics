@@ -389,6 +389,7 @@ async def listar_duplicadas(
     email: str | None = None,
     inicio: date | None = None,
     fim: date | None = None,
+    status: str | None = None,
 ) -> dict:
     """Lista vendas duplicadas — 2ª+ compra do mesmo (email, oferta_codigo).
     Retorna {items, total, page, size}. Ordena da mais recente pra mais
@@ -448,6 +449,8 @@ async def listar_duplicadas(
             fim + timedelta(days=1), time.min, tzinfo=BR_TZ
         ).astimezone(timezone.utc)
         filtros.append(base.c.data_venda < fim_dt)
+    if status:
+        filtros.append(base.c.status == status)
 
     filtro_duplicadas = select(base).where(*filtros).subquery()
 
