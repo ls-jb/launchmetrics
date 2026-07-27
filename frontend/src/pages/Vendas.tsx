@@ -1409,7 +1409,6 @@ function VendasDuplicadas({ onMudou }: { onMudou: () => void }) {
   const [email, setEmail] = useState('')
   const [inicio, setInicio] = useState('')
   const [fim, setFim] = useState('')
-  const [status, setStatus] = useState('')
   const size = 15
   const totalPaginas = Math.max(1, Math.ceil(total / size))
 
@@ -1427,7 +1426,6 @@ function VendasDuplicadas({ onMudou }: { onMudou: () => void }) {
           email: email.trim() || undefined,
           inicio: inicio || undefined,
           fim: fim || undefined,
-          status: status || undefined,
         })
         .then((r) => {
           setDados(r.items)
@@ -1436,7 +1434,7 @@ function VendasDuplicadas({ onMudou }: { onMudou: () => void }) {
         .catch((e) => setErro(extrairErro(e)))
         .finally(() => setCarregando(false))
     },
-    [produtos, email, inicio, fim, status],
+    [produtos, email, inicio, fim],
   )
 
   useEffect(() => {
@@ -1447,7 +1445,7 @@ function VendasDuplicadas({ onMudou }: { onMudou: () => void }) {
   useEffect(() => {
     setPage(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [produtos, email, inicio, fim, status])
+  }, [produtos, email, inicio, fim])
 
   const alternar = async (v: VendaDuplicada) => {
     setAlternando(v.id)
@@ -1481,7 +1479,7 @@ function VendasDuplicadas({ onMudou }: { onMudou: () => void }) {
     letterSpacing: '0.06em',
     marginRight: 6,
   }
-  const temFiltro = produtos.length > 0 || email || inicio || fim || status
+  const temFiltro = produtos.length > 0 || email || inicio || fim
 
   return (
     <div>
@@ -1546,27 +1544,6 @@ function VendasDuplicadas({ onMudou }: { onMudou: () => void }) {
             style={{ ...inputStyle, flex: 1 }}
           />
         </div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            gridColumn: 'span 2',
-          }}
-        >
-          <span style={labelStyle}>Status</span>
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            style={{ ...inputStyle, flex: 1 }}
-          >
-            <option value="">Todos</option>
-            <option value="aprovada">Aprovada</option>
-            <option value="pendente">Pendente</option>
-            <option value="cancelada">Cancelada</option>
-            <option value="reembolsada">Reembolsada</option>
-          </select>
-        </div>
         {temFiltro && (
           <button
             type="button"
@@ -1575,7 +1552,6 @@ function VendasDuplicadas({ onMudou }: { onMudou: () => void }) {
               setEmail('')
               setInicio('')
               setFim('')
-              setStatus('')
             }}
             style={{
               gridColumn: 'span 2',
@@ -1683,20 +1659,6 @@ function VendasDuplicadas({ onMudou }: { onMudou: () => void }) {
                 {v.comprador_email}
               </p>
             </div>
-            <span
-              style={{
-                fontSize: 11,
-                color:
-                  v.status === 'aprovada'
-                    ? 'var(--text-muted)'
-                    : v.status === 'reembolsada'
-                      ? '#EF4444'
-                      : 'var(--text-faint)',
-                width: 84,
-              }}
-            >
-              {v.status}
-            </span>
             <span
               style={{
                 fontSize: 13,

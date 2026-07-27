@@ -82,7 +82,6 @@ export const vendasService = {
       email?: string
       inicio?: string
       fim?: string
-      status?: string
     },
   ) =>
     api
@@ -96,7 +95,6 @@ export const vendasService = {
           ...(filtros?.email ? { email: filtros.email } : {}),
           ...(filtros?.inicio ? { inicio: filtros.inicio } : {}),
           ...(filtros?.fim ? { fim: filtros.fim } : {}),
-          ...(filtros?.status ? { status: filtros.status } : {}),
         },
         paramsSerializer: { indexes: null },
       })
