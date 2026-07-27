@@ -386,17 +386,30 @@ async def listar_duplicadas(
     page: int,
     size: int,
     produtos: list[str] | None = None,
+    email: str | None = None,
+    inicio: date | None = None,
+    fim: date | None = None,
 ) -> dict:
     """Lista vendas duplicadas — 2ª+ compra do mesmo (email, oferta_codigo).
     Retorna {items, total, page, size}. Ordena da mais recente pra mais
     antiga. Só considera vendas com email e oferta_codigo (dedup faz
-    sentido). Ignora status — deixa o front decidir/mostrar."""
+    sentido). Ignora status — deixa o front decidir/mostrar.
+
+    Filtros (todos opcionais):
+      - produtos: lista de produtos
+      - email: busca parcial (ILIKE) no comprador_email
+      - inicio/fim: filtra data_venda (BRT) da 2ª compra
+    IMPORTANTE: o dedup considera SEMPRE o histórico global — os filtros
+    de produto/email/data restringem só quais 'linhas duplicadas' aparecem
+    na listagem, não o cálculo de duplicidade em si."""
     dedup_key = Venda.comprador_email + cast(Venda.oferta_codigo, String)
     rn = (
         func.row_number()
         .over(partition_by=dedup_key, order_by=Venda.data_venda)
         .label("rn")
     )
+    # Dedup histórico global: todas as vendas com email+oferta_codigo
+    # entram, sem nenhum filtro. Os filtros vão só na consulta FINAL.
     base = (
         select(
             Venda.id.label("id"),
@@ -416,12 +429,27 @@ async def listar_duplicadas(
             Venda.comprador_email.is_not(None),
             Venda.oferta_codigo.is_not(None),
         )
+        .subquery()
     )
-    if produtos:
-        base = base.where(Venda.produto.in_(produtos))
 
-    base_sub = base.subquery()
-    filtro_duplicadas = select(base_sub).where(base_sub.c.rn > 1).subquery()
+    # Só duplicadas (rn > 1) + filtros do usuário
+    filtros = [base.c.rn > 1]
+    if produtos:
+        filtros.append(base.c.produto.in_(produtos))
+    if email:
+        filtros.append(base.c.comprador_email.ilike(f"%{email.strip()}%"))
+    if inicio:
+        inicio_dt = datetime.combine(inicio, time.min, tzinfo=BR_TZ).astimezone(
+            timezone.utc
+        )
+        filtros.append(base.c.data_venda >= inicio_dt)
+    if fim:
+        fim_dt = datetime.combine(
+            fim + timedelta(days=1), time.min, tzinfo=BR_TZ
+        ).astimezone(timezone.utc)
+        filtros.append(base.c.data_venda < fim_dt)
+
+    filtro_duplicadas = select(base).where(*filtros).subquery()
 
     total = (
         await db.execute(select(func.count()).select_from(filtro_duplicadas))

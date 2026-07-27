@@ -1403,26 +1403,49 @@ function VendasDuplicadas({ onMudou }: { onMudou: () => void }) {
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [alternando, setAlternando] = useState<string | null>(null)
+  // Filtros — quando qualquer um muda, reseta pra página 1
+  const [produtos, setProdutos] = useState<string[]>([])
+  const [produtosDisp, setProdutosDisp] = useState<string[]>([])
+  const [email, setEmail] = useState('')
+  const [inicio, setInicio] = useState('')
+  const [fim, setFim] = useState('')
   const size = 15
   const totalPaginas = Math.max(1, Math.ceil(total / size))
 
-  const carregar = (p: number) => {
-    setCarregando(true)
-    setErro('')
-    vendasService
-      .duplicadas(p, size)
-      .then((r) => {
-        setDados(r.items)
-        setTotal(r.total)
-      })
-      .catch((e) => setErro(extrairErro(e)))
-      .finally(() => setCarregando(false))
-  }
+  useEffect(() => {
+    vendasService.produtos().then(setProdutosDisp).catch(() => {})
+  }, [])
+
+  const carregar = useCallback(
+    (p: number) => {
+      setCarregando(true)
+      setErro('')
+      vendasService
+        .duplicadas(p, size, {
+          produtos: produtos.length > 0 ? produtos : undefined,
+          email: email.trim() || undefined,
+          inicio: inicio || undefined,
+          fim: fim || undefined,
+        })
+        .then((r) => {
+          setDados(r.items)
+          setTotal(r.total)
+        })
+        .catch((e) => setErro(extrairErro(e)))
+        .finally(() => setCarregando(false))
+    },
+    [produtos, email, inicio, fim],
+  )
 
   useEffect(() => {
     carregar(page)
+  }, [page, carregar])
+
+  // Reset pra página 1 quando filtro muda
+  useEffect(() => {
+    setPage(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page])
+  }, [produtos, email, inicio, fim])
 
   const alternar = async (v: VendaDuplicada) => {
     setAlternando(v.id)
@@ -1440,34 +1463,143 @@ function VendasDuplicadas({ onMudou }: { onMudou: () => void }) {
     }
   }
 
-  if (carregando && dados.length === 0) {
-    return (
-      <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>
-        Carregando…
-      </p>
-    )
+  const inputStyle: React.CSSProperties = {
+    background: 'var(--surface-2)',
+    border: '1px solid var(--border-strong)',
+    borderRadius: 6,
+    padding: '6px 10px',
+    color: 'var(--text)',
+    fontSize: 12,
+    colorScheme: 'dark',
   }
-  if (erro) {
-    return (
-      <p style={{ margin: 0, fontSize: 13, color: 'var(--text-error)' }}>{erro}</p>
-    )
+  const labelStyle: React.CSSProperties = {
+    fontSize: 11,
+    color: 'var(--text-faint)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+    marginRight: 6,
   }
-  if (total === 0) {
-    return (
-      <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>
-        Nenhuma venda duplicada encontrada — o dedup está limpo.
-      </p>
-    )
-  }
+  const temFiltro = produtos.length > 0 || email || inicio || fim
 
   return (
     <div>
-      <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-faint)' }}>
-        {formatBRL_num(total)} venda{total === 1 ? '' : 's'} em que o cliente
-        já tinha comprado o mesmo produto antes. Marque{' '}
-        <b style={{ color: 'var(--text)' }}>Contar no dash</b> pra forçar essa
-        venda específica a aparecer no dashboard.
-      </p>
+      {/* Filtros */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: 10,
+          marginBottom: 12,
+          padding: '10px 12px',
+          background: 'var(--surface-2)',
+          border: '1px solid var(--border)',
+          borderRadius: 8,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={labelStyle}>Email</span>
+          <input
+            type="text"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="buscar por email…"
+            style={{ ...inputStyle, flex: 1 }}
+          />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={labelStyle}>Produto</span>
+          <select
+            multiple={false}
+            value={produtos[0] ?? ''}
+            onChange={(e) =>
+              setProdutos(e.target.value ? [e.target.value] : [])
+            }
+            style={{ ...inputStyle, flex: 1 }}
+          >
+            <option value="">Todos</option>
+            {produtosDisp.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={labelStyle}>Início</span>
+          <input
+            type="date"
+            value={inicio}
+            max={fim || undefined}
+            onChange={(e) => setInicio(e.target.value)}
+            style={{ ...inputStyle, flex: 1 }}
+          />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={labelStyle}>Fim</span>
+          <input
+            type="date"
+            value={fim}
+            min={inicio || undefined}
+            onChange={(e) => setFim(e.target.value)}
+            style={{ ...inputStyle, flex: 1 }}
+          />
+        </div>
+        {temFiltro && (
+          <button
+            type="button"
+            onClick={() => {
+              setProdutos([])
+              setEmail('')
+              setInicio('')
+              setFim('')
+            }}
+            style={{
+              gridColumn: 'span 2',
+              background: 'transparent',
+              border: '1px solid var(--border-strong)',
+              color: 'var(--text-muted)',
+              padding: '6px 10px',
+              borderRadius: 6,
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: 'pointer',
+              justifySelf: 'end',
+            }}
+          >
+            Limpar filtros
+          </button>
+        )}
+      </div>
+
+      {erro && (
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-error)' }}>
+          {erro}
+        </p>
+      )}
+
+      {!erro && carregando && dados.length === 0 && (
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>
+          Carregando…
+        </p>
+      )}
+
+      {!erro && !carregando && total === 0 && (
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>
+          {temFiltro
+            ? 'Nenhuma duplicada bate com os filtros.'
+            : 'Nenhuma venda duplicada encontrada — o dedup está limpo.'}
+        </p>
+      )}
+
+      {!erro && total > 0 && (
+        <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-faint)' }}>
+          {formatBRL_num(total)} venda{total === 1 ? '' : 's'} em que o cliente
+          já tinha comprado o mesmo produto antes. Marque{' '}
+          <b style={{ color: 'var(--text)' }}>Contar no dash</b> pra forçar essa
+          venda específica a aparecer no dashboard.
+        </p>
+      )}
+
       <div style={{ display: 'grid', gap: 6, opacity: carregando ? 0.5 : 1 }}>
         {dados.map((v) => (
           <div
@@ -1576,34 +1708,36 @@ function VendasDuplicadas({ onMudou }: { onMudou: () => void }) {
         ))}
       </div>
 
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginTop: 14,
-        }}
-      >
-        <p style={{ margin: 0, fontSize: 11, color: 'var(--text-faint)' }}>
-          Página {page} de {totalPaginas}
-        </p>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page <= 1 || carregando}
-            style={paginacaoBotao(page <= 1)}
-          >
-            ‹ Anterior
-          </button>
-          <button
-            onClick={() => setPage((p) => Math.min(totalPaginas, p + 1))}
-            disabled={page >= totalPaginas || carregando}
-            style={paginacaoBotao(page >= totalPaginas)}
-          >
-            Próxima ›
-          </button>
+      {total > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginTop: 14,
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 11, color: 'var(--text-faint)' }}>
+            Página {page} de {totalPaginas}
+          </p>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1 || carregando}
+              style={paginacaoBotao(page <= 1)}
+            >
+              ‹ Anterior
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPaginas, p + 1))}
+              disabled={page >= totalPaginas || carregando}
+              style={paginacaoBotao(page >= totalPaginas)}
+            >
+              Próxima ›
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

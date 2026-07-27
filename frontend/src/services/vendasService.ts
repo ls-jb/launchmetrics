@@ -74,13 +74,27 @@ export const vendasService = {
       .put('/api/vendas/ofertas/preco', { oferta_codigo, oferta_nome, valor })
       .then((r) => r.data),
 
-  duplicadas: (page: number, size = 15, produtos?: string[]) =>
+  duplicadas: (
+    page: number,
+    size = 15,
+    filtros?: {
+      produtos?: string[]
+      email?: string
+      inicio?: string
+      fim?: string
+    },
+  ) =>
     api
       .get<DuplicadasPaginado>('/api/vendas/duplicadas', {
         params: {
           page,
           size,
-          ...(produtos && produtos.length > 0 ? { produtos } : {}),
+          ...(filtros?.produtos && filtros.produtos.length > 0
+            ? { produtos: filtros.produtos }
+            : {}),
+          ...(filtros?.email ? { email: filtros.email } : {}),
+          ...(filtros?.inicio ? { inicio: filtros.inicio } : {}),
+          ...(filtros?.fim ? { fim: filtros.fim } : {}),
         },
         paramsSerializer: { indexes: null },
       })
