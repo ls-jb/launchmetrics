@@ -41,9 +41,12 @@ type LinhaPlot = Record<string, number | string>
 export function GraficoPerpetuoDia({
   vendas,
   investimento,
+  onClickDia,
 }: {
   vendas: PontoVendaCategoriaPerp[]
   investimento: PontoInvestimentoDia[]
+  /** Chamado quando o usuário clica num ponto do gráfico. `dia` é YYYY-MM-DD. */
+  onClickDia?: (dia: string) => void
 }) {
   // Categorias presentes no dataset (pra montar checkboxes)
   const categoriasPresentes = useMemo(() => {
@@ -205,7 +208,23 @@ export function GraficoPerpetuoDia({
         }}
       >
         <ResponsiveContainer width="100%" height={300}>
-          <ComposedChart data={dadosPlot} barSize={dadosPlot.length > 30 ? 6 : 14}>
+          <ComposedChart
+            data={dadosPlot}
+            barSize={dadosPlot.length > 30 ? 6 : 14}
+            onClick={
+              onClickDia
+                ? (state) => {
+                    const dia = (
+                      state &&
+                      state.activePayload &&
+                      state.activePayload[0]?.payload?.dia
+                    ) as string | undefined
+                    if (dia) onClickDia(dia)
+                  }
+                : undefined
+            }
+            style={onClickDia ? { cursor: 'pointer' } : undefined}
+          >
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
             <XAxis
               dataKey="data"

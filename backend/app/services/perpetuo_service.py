@@ -30,6 +30,7 @@ from app.models import (
 from app.schemas.perpetuo import (
     AporteResponse,
     OfertaDetalhe,
+    OfertaDoDia,
     PerpetuoCompleto,
     PerpetuoResponse,
     PontoInvestimentoDia,
@@ -367,6 +368,83 @@ async def vendas_por_dia_categoria(
             receita=receita,
         )
         for (dia, cat), (qtd, receita) in sorted(agregado.items())
+    ]
+
+
+async def vendas_do_dia(
+    db: AsyncSession, perpetuo_id: UUID, dia: date
+) -> list[OfertaDoDia]:
+    """Drill-down do gráfico: dado um dia BR, retorna quais ofertas
+    venderam nesse dia no perpétuo. Uma linha por (produto, oferta_nome,
+    categoria) — agrupamento de vários oferta_codigo que caem no mesmo
+    bucket. Aplica a mesma regra de venda real do dashboard."""
+    perp = await db.get(Perpetuo, perpetuo_id)
+    if not perp:
+        return []
+
+    ofertas = list(
+        (
+            await db.execute(
+                select(PerpetuoOferta).where(
+                    PerpetuoOferta.perpetuo_id == perpetuo_id,
+                    PerpetuoOferta.oferta_codigo.is_not(None),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not ofertas:
+        return []
+
+    codigo_para_meta = {
+        o.oferta_codigo: (o.produto, o.oferta_nome, _categoria_da_oferta(o.oferta_nome))
+        for o in ofertas
+    }
+
+    inicio_dt, fim_dt = _range_utc(dia, dia)
+    sub = _vendas_efetivas_subquery(
+        list(codigo_para_meta.keys()), inicio_dt, fim_dt
+    )
+
+    rows = (
+        await db.execute(
+            select(
+                sub.c.oferta_codigo,
+                func.count().label("qtd"),
+                func.coalesce(func.sum(sub.c.v), 0).label("receita"),
+            ).group_by(sub.c.oferta_codigo)
+        )
+    ).all()
+
+    # Agrega por (produto, oferta_nome, categoria) — vários oferta_codigo
+    # podem cair na mesma tripla.
+    agregado: dict[tuple[str, str | None, str], tuple[int, Decimal, str | None]] = {}
+    for r in rows:
+        produto, oferta_nome, categoria = codigo_para_meta[r.oferta_codigo]
+        chave = (produto, oferta_nome, categoria)
+        if chave in agregado:
+            ant_qtd, ant_rec, ant_cod = agregado[chave]
+            agregado[chave] = (
+                ant_qtd + int(r.qtd),
+                ant_rec + Decimal(r.receita),
+                ant_cod,
+            )
+        else:
+            agregado[chave] = (int(r.qtd), Decimal(r.receita), r.oferta_codigo)
+
+    return [
+        OfertaDoDia(
+            produto=produto,
+            oferta_nome=oferta_nome,
+            oferta_codigo=codigo,
+            categoria=categoria,  # type: ignore[arg-type]
+            quantidade=qtd,
+            receita=receita,
+        )
+        for (produto, oferta_nome, categoria), (qtd, receita, codigo) in sorted(
+            agregado.items(), key=lambda kv: (-kv[1][1], kv[0][0])
+        )
     ]
 
 

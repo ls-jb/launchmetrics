@@ -89,6 +89,18 @@ class PontoVendaCategoria(BaseModel):
     receita: Money
 
 
+class OfertaDoDia(BaseModel):
+    """Uma oferta que teve venda em um dia específico. Alimenta o
+    drill-down do gráfico (clicar na barra → ver detalhes do dia)."""
+
+    produto: str
+    oferta_nome: str | None
+    oferta_codigo: str | None
+    categoria: Categoria
+    quantidade: int
+    receita: Money
+
+
 class PontoInvestimentoDia(BaseModel):
     """Ponto de investimento por dia (soma dos aportes do dia)."""
 

@@ -1,6 +1,7 @@
 import { api } from './api'
 import type {
   OfertaDisponivel,
+  OfertaDoDiaPerp,
   Perpetuo,
   PerpetuoAporte,
   PerpetuoCompleto,
@@ -93,6 +94,13 @@ export const perpetuosService = {
         `/api/perpetuos/${id}/investimento-por-dia`,
         paramsPeriodo(inicio, fim),
       )
+      .then((r) => r.data),
+
+  vendasDoDia: (id: string, dia: string) =>
+    api
+      .get<OfertaDoDiaPerp[]>(`/api/perpetuos/${id}/vendas-do-dia`, {
+        params: { dia },
+      })
       .then((r) => r.data),
 
   // Aportes

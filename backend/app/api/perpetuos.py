@@ -12,6 +12,7 @@ from app.schemas.perpetuo import (
     AporteCreate,
     AporteResponse,
     OfertaCreate,
+    OfertaDoDia,
     PerpetuoCompleto,
     PerpetuoCreate,
     PerpetuoOfertaResponse,
@@ -63,6 +64,22 @@ async def vendas_por_dia(
     """Pontos diários por categoria (Principal / Order Bump / Upsell /
     Downsell / Outros) pro gráfico — filtrado pelo período."""
     return await svc.vendas_por_dia_categoria(db, perpetuo_id, inicio, fim)
+
+
+@router.get(
+    "/{perpetuo_id}/vendas-do-dia",
+    response_model=list[OfertaDoDia],
+)
+async def vendas_do_dia(
+    perpetuo_id: UUID,
+    dia: date = Query(..., description="Data no formato YYYY-MM-DD (BRT)"),
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(verify_token),
+):
+    """Drill-down do gráfico: dado um dia BR, retorna quais ofertas
+    venderam nesse dia no perpétuo (uma linha por produto × oferta ×
+    categoria)."""
+    return await svc.vendas_do_dia(db, perpetuo_id, dia)
 
 
 @router.get(

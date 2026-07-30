@@ -319,6 +319,15 @@ export interface PontoVendaCategoriaPerp {
   receita: number
 }
 
+export interface OfertaDoDiaPerp {
+  produto: string
+  oferta_nome: string | null
+  oferta_codigo: string | null
+  categoria: CategoriaPerpetuo
+  quantidade: number
+  receita: number
+}
+
 export interface PontoInvestimentoDia {
   dia: string
   valor: number
