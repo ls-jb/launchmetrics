@@ -377,7 +377,11 @@ async def vendas_do_dia(
     """Drill-down do gráfico: dado um dia BR, retorna quais ofertas
     venderam nesse dia no perpétuo. Uma linha por (produto, oferta_nome,
     categoria) — agrupamento de vários oferta_codigo que caem no mesmo
-    bucket. Aplica a mesma regra de venda real do dashboard."""
+    bucket. Aplica a mesma regra de venda real do dashboard.
+
+    Diferente de LancamentoPagoOferta, PerpetuoOferta NÃO guarda o
+    `produto` — ele vem da tabela vendas (pegamos qualquer venda daquela
+    oferta_codigo pra descobrir o nome do produto)."""
     perp = await db.get(Perpetuo, perpetuo_id)
     if not perp:
         return []
@@ -397,16 +401,17 @@ async def vendas_do_dia(
     if not ofertas:
         return []
 
+    codigos = [o.oferta_codigo for o in ofertas]
     codigo_para_meta = {
-        o.oferta_codigo: (o.produto, o.oferta_nome, _categoria_da_oferta(o.oferta_nome))
+        o.oferta_codigo: (o.oferta_nome, _categoria_da_oferta(o.oferta_nome))
         for o in ofertas
     }
 
     inicio_dt, fim_dt = _range_utc(dia, dia)
-    sub = _vendas_efetivas_subquery(
-        list(codigo_para_meta.keys()), inicio_dt, fim_dt
-    )
+    sub = _vendas_efetivas_subquery(codigos, inicio_dt, fim_dt)
 
+    # Agrega vendas do dia por oferta_codigo (sem produto — ele vem em
+    # query separada pra não multiplicar as contagens no join).
     rows = (
         await db.execute(
             select(
@@ -417,11 +422,27 @@ async def vendas_do_dia(
         )
     ).all()
 
+    # Pega o produto de cada oferta_codigo (qualquer venda serve — todas
+    # da mesma oferta têm o mesmo produto). MAX pra devolver 1 valor por
+    # código sem risco de erro.
+    codigos_com_venda = [r.oferta_codigo for r in rows]
+    produto_por_codigo: dict[str, str] = {}
+    if codigos_com_venda:
+        rows_prod = (
+            await db.execute(
+                select(Venda.oferta_codigo, func.max(Venda.produto).label("produto"))
+                .where(Venda.oferta_codigo.in_(codigos_com_venda))
+                .group_by(Venda.oferta_codigo)
+            )
+        ).all()
+        produto_por_codigo = {rp.oferta_codigo: rp.produto for rp in rows_prod}
+
     # Agrega por (produto, oferta_nome, categoria) — vários oferta_codigo
     # podem cair na mesma tripla.
     agregado: dict[tuple[str, str | None, str], tuple[int, Decimal, str | None]] = {}
     for r in rows:
-        produto, oferta_nome, categoria = codigo_para_meta[r.oferta_codigo]
+        oferta_nome, categoria = codigo_para_meta[r.oferta_codigo]
+        produto = produto_por_codigo.get(r.oferta_codigo, "—")
         chave = (produto, oferta_nome, categoria)
         if chave in agregado:
             ant_qtd, ant_rec, ant_cod = agregado[chave]
