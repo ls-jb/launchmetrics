@@ -230,6 +230,14 @@ function DetalhePerpetuo({
     }
   }
 
+  const alterarCategoriaOferta = async (
+    id: string,
+    categoria: CategoriaPerpetuo,
+  ) => {
+    await perpetuosService.atualizarOferta(id, { categoria })
+    await carregar(false)
+  }
+
   const removerPerpetuo = async () => {
     if (!completo) return
     if (
@@ -407,7 +415,13 @@ function DetalhePerpetuo({
           }}
         >
           {completo.ofertas.map((o) => (
-            <CardOferta key={o.id} detalhe={o} isAdmin={isAdmin} onRemover={removerOferta} />
+            <CardOferta
+              key={o.id}
+              detalhe={o}
+              isAdmin={isAdmin}
+              onRemover={removerOferta}
+              onAlterarCategoria={alterarCategoriaOferta}
+            />
           ))}
         </div>
       )}
@@ -503,10 +517,12 @@ function CardOferta({
   detalhe,
   isAdmin,
   onRemover,
+  onAlterarCategoria,
 }: {
   detalhe: PerpetuoOfertaDetalhe
   isAdmin: boolean
   onRemover: (id: string) => void
+  onAlterarCategoria: (id: string, cat: CategoriaPerpetuo) => Promise<void>
 }) {
   const cpv =
     detalhe.quantidade > 0 ? Number(detalhe.receita) / detalhe.quantidade : 0
@@ -517,6 +533,26 @@ function CardOferta({
     Downsell: '#EC4899',
     Outros: '#6B7280',
   }
+  const [editandoCat, setEditandoCat] = useState(false)
+  const [salvando, setSalvando] = useState(false)
+  const cor = corCategoria[detalhe.categoria] || '#6B7280'
+
+  const escolher = async (nova: CategoriaPerpetuo) => {
+    if (nova === detalhe.categoria) {
+      setEditandoCat(false)
+      return
+    }
+    setSalvando(true)
+    try {
+      await onAlterarCategoria(detalhe.id, nova)
+      setEditandoCat(false)
+    } catch (e) {
+      alert(extrairErro(e))
+    } finally {
+      setSalvando(false)
+    }
+  }
+
   return (
     <div
       style={{
@@ -528,22 +564,52 @@ function CardOferta({
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <span
-            style={{
-              display: 'inline-block',
-              fontSize: 10,
-              fontWeight: 700,
-              color: corCategoria[detalhe.categoria] || '#6B7280',
-              background: `${corCategoria[detalhe.categoria] || '#6B7280'}22`,
-              padding: '2px 8px',
-              borderRadius: 99,
-              marginBottom: 6,
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-            }}
-          >
-            {detalhe.categoria}
-          </span>
+          {editandoCat && isAdmin ? (
+            <select
+              autoFocus
+              disabled={salvando}
+              value={detalhe.categoria}
+              onChange={(e) => escolher(e.target.value as CategoriaPerpetuo)}
+              onBlur={() => setEditandoCat(false)}
+              style={{
+                ...selectInline,
+                marginBottom: 6,
+                borderColor: cor,
+                color: cor,
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+              }}
+            >
+              <option value="Principal">Principal</option>
+              <option value="Order Bump">Order Bump</option>
+              <option value="Upsell">Upsell</option>
+              <option value="Downsell">Downsell</option>
+              <option value="Outros">Outros</option>
+            </select>
+          ) : (
+            <button
+              type="button"
+              onClick={() => isAdmin && setEditandoCat(true)}
+              title={isAdmin ? 'Clique pra alterar' : ''}
+              style={{
+                display: 'inline-block',
+                fontSize: 10,
+                fontWeight: 700,
+                color: cor,
+                background: `${cor}22`,
+                padding: '2px 8px',
+                borderRadius: 99,
+                marginBottom: 6,
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                border: 'none',
+                cursor: isAdmin ? 'pointer' : 'default',
+              }}
+            >
+              {detalhe.categoria}
+            </button>
+          )}
           <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {detalhe.oferta_nome || detalhe.oferta_codigo}
           </p>
@@ -669,6 +735,11 @@ function FormAdicionarOferta({
   const [disponiveis, setDisponiveis] = useState<OfertaDisponivel[]>([])
   const [filtro, setFiltro] = useState('')
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set())
+  // Categoria manual por oferta_codigo. null (chave ausente) = "auto"
+  // (heurística no backend); presença = override explícito.
+  const [categorias, setCategorias] = useState<
+    Record<string, CategoriaPerpetuo>
+  >({})
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState('')
 
@@ -697,6 +768,15 @@ function FormAdicionarOferta({
     })
   }
 
+  const setCategoria = (codigo: string, cat: CategoriaPerpetuo | '') => {
+    setCategorias((prev) => {
+      const novo = { ...prev }
+      if (cat === '') delete novo[codigo]
+      else novo[codigo] = cat
+      return novo
+    })
+  }
+
   const enviar = async () => {
     if (selecionados.size === 0) return
     setErro('')
@@ -707,6 +787,7 @@ function FormAdicionarOferta({
         await perpetuosService.adicionarOferta(perpetuoId, {
           oferta_codigo: cod,
           oferta_nome: oferta?.oferta_nome ?? null,
+          categoria: categorias[cod] ?? null,
         })
       }
       onCriou()
@@ -741,35 +822,63 @@ function FormAdicionarOferta({
             {disponiveis.length === 0 ? 'Carregando…' : 'Nenhuma oferta disponível.'}
           </p>
         ) : (
-          filtrados.map((o) => (
-            <label
-              key={o.oferta_codigo}
-              style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: 10,
-                padding: '6px 8px',
-                fontSize: 13,
-                color: 'var(--text)',
-                cursor: 'pointer',
-                borderRadius: 4,
-                background: selecionados.has(o.oferta_codigo) ? 'var(--border)' : 'transparent',
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={selecionados.has(o.oferta_codigo)}
-                onChange={() => alternar(o.oferta_codigo)}
-                style={{ marginTop: 3 }}
-              />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ margin: 0, fontWeight: 500 }}>{o.oferta_nome || '(sem nome)'}</p>
-                <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--text-faint)' }}>
-                  {o.produto || '—'} · cód {o.oferta_codigo}
-                </p>
-              </div>
-            </label>
-          ))
+          filtrados.map((o) => {
+            const marcado = selecionados.has(o.oferta_codigo)
+            return (
+              <label
+                key={o.oferta_codigo}
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 10,
+                  padding: '6px 8px',
+                  fontSize: 13,
+                  color: 'var(--text)',
+                  cursor: 'pointer',
+                  borderRadius: 4,
+                  background: marcado ? 'var(--border)' : 'transparent',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={marcado}
+                  onChange={() => alternar(o.oferta_codigo)}
+                  style={{ marginTop: 3 }}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontWeight: 500 }}>{o.oferta_nome || '(sem nome)'}</p>
+                  <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--text-faint)' }}>
+                    {o.produto || '—'} · cód {o.oferta_codigo}
+                  </p>
+                  {marcado && (
+                    <div
+                      style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}
+                      onClick={(e) => e.preventDefault()}
+                    >
+                      <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>Categoria:</span>
+                      <select
+                        value={categorias[o.oferta_codigo] ?? ''}
+                        onChange={(e) =>
+                          setCategoria(
+                            o.oferta_codigo,
+                            e.target.value as CategoriaPerpetuo | '',
+                          )
+                        }
+                        style={selectInline}
+                      >
+                        <option value="">Auto (pelo nome)</option>
+                        <option value="Principal">Principal</option>
+                        <option value="Order Bump">Order Bump</option>
+                        <option value="Upsell">Upsell</option>
+                        <option value="Downsell">Downsell</option>
+                        <option value="Outros">Outros</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </label>
+            )
+          })
         )}
       </div>
 
@@ -1070,6 +1179,17 @@ const inputBase: React.CSSProperties = {
   color: 'var(--text)',
   fontSize: 13,
   colorScheme: 'dark',
+}
+
+const selectInline: React.CSSProperties = {
+  background: 'var(--surface-2)',
+  border: '1px solid var(--border-strong)',
+  borderRadius: 6,
+  padding: '3px 6px',
+  color: 'var(--text)',
+  fontSize: 11,
+  colorScheme: 'dark',
+  cursor: 'pointer',
 }
 
 const botaoPrimario: React.CSSProperties = {

@@ -64,6 +64,11 @@ class PerpetuoOferta(Base):
     oferta_codigo: Mapped[str] = mapped_column(String, nullable=False)
     oferta_nome: Mapped[str | None] = mapped_column(String)
     """Denormalizado pra UI mostrar nome sem precisar joinar com vendas."""
+    categoria: Mapped[str | None] = mapped_column(String)
+    """Categoria explícita (Principal/Order Bump/Upsell/Downsell/Outros).
+    Quando NULL, cai na heurística pelo nome. Setada quando o nome não
+    deixa claro qual é o tipo (ex: um order bump do Agenda Cheia que se
+    chama só 'Complemento X')."""
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

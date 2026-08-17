@@ -1,5 +1,6 @@
 import { api } from './api'
 import type {
+  CategoriaPerpetuo,
   OfertaDisponivel,
   OfertaDoDiaPerp,
   Perpetuo,
@@ -32,6 +33,14 @@ export interface NovoAportePayload {
 export interface NovaOfertaPayload {
   oferta_codigo: string
   oferta_nome?: string | null
+  /** Categoria explícita. Se omitida ou null, o backend usa a heurística
+   * pelo nome (Principal / Order Bump / etc). */
+  categoria?: CategoriaPerpetuo | null
+}
+
+export interface AtualizarOfertaPayload {
+  /** null limpa a categoria explícita — volta à heurística. */
+  categoria: CategoriaPerpetuo | null
 }
 
 function paramsPeriodo(inicio?: string, fim?: string) {
@@ -66,6 +75,16 @@ export const perpetuosService = {
         `/api/perpetuos/${perpetuoId}/ofertas`,
         dados,
       )
+      .then((r) => r.data),
+
+  atualizarOferta: (ofertaId: string, dados: AtualizarOfertaPayload) =>
+    api
+      .patch<{
+        id: string
+        oferta_codigo: string
+        oferta_nome: string | null
+        categoria: CategoriaPerpetuo | null
+      }>(`/api/perpetuos/ofertas/${ofertaId}`, dados)
       .then((r) => r.data),
 
   removerOferta: (ofertaId: string) =>

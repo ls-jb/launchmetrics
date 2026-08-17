@@ -13,6 +13,7 @@ from app.schemas.perpetuo import (
     AporteResponse,
     OfertaCreate,
     OfertaDoDia,
+    OfertaUpdate,
     PerpetuoCompleto,
     PerpetuoCreate,
     PerpetuoOfertaResponse,
@@ -187,10 +188,27 @@ async def adicionar_oferta(
     _: dict = Depends(require_admin),
 ):
     item = await svc.adicionar_oferta(
-        db, perpetuo_id, dados.oferta_codigo, dados.oferta_nome
+        db, perpetuo_id, dados.oferta_codigo, dados.oferta_nome, dados.categoria
     )
     if not item:
         raise HTTPException(status_code=404, detail="Perpétuo não encontrado.")
+    return item
+
+
+@router.patch(
+    "/ofertas/{oferta_id}", response_model=PerpetuoOfertaResponse
+)
+async def atualizar_oferta(
+    oferta_id: UUID,
+    dados: OfertaUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_admin),
+):
+    """Atualiza a categoria de uma oferta cadastrada. Passar
+    categoria=null limpa a categoria explícita (volta à heurística)."""
+    item = await svc.atualizar_oferta(db, oferta_id, dados.categoria)
+    if not item:
+        raise HTTPException(status_code=404, detail="Oferta não encontrada.")
     return item
 
 

@@ -294,6 +294,10 @@ export interface PerpetuoOfertaDetalhe {
   receita: number
 }
 
+/** Categoria da oferta cadastrada: se null, o backend deriva pelo nome
+ * (heurística). Se setada, sobrescreve. */
+export type CategoriaPerpetuoOpcional = CategoriaPerpetuo | null
+
 export interface PerpetuoAporte {
   id: string
   dia: string // YYYY-MM-DD

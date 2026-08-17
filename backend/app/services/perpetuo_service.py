@@ -56,6 +56,11 @@ def _categoria_da_oferta(oferta_nome: str | None) -> str:
     return "Outros"
 
 
+def _categoria_efetiva(oferta: PerpetuoOferta) -> str:
+    """Categoria explícita (se cadastrada) OU heurística pelo nome."""
+    return oferta.categoria or _categoria_da_oferta(oferta.oferta_nome)
+
+
 # ============================================================
 # CRUD do perpétuo
 # ============================================================
@@ -132,6 +137,7 @@ async def adicionar_oferta(
     perpetuo_id: UUID,
     oferta_codigo: str,
     oferta_nome: str | None,
+    categoria: str | None = None,
 ) -> PerpetuoOferta | None:
     if not await db.get(Perpetuo, perpetuo_id):
         return None
@@ -139,8 +145,25 @@ async def adicionar_oferta(
         perpetuo_id=perpetuo_id,
         oferta_codigo=oferta_codigo.strip(),
         oferta_nome=(oferta_nome or "").strip() or None,
+        categoria=categoria,
     )
     db.add(item)
+    await db.commit()
+    await db.refresh(item)
+    return item
+
+
+async def atualizar_oferta(
+    db: AsyncSession,
+    oferta_id: UUID,
+    categoria: str | None,
+) -> PerpetuoOferta | None:
+    """Atualiza a categoria de uma oferta. categoria=None limpa a
+    categoria explícita — volta à heurística pelo nome."""
+    item = await db.get(PerpetuoOferta, oferta_id)
+    if not item:
+        return None
+    item.categoria = categoria
     await db.commit()
     await db.refresh(item)
     return item
@@ -288,7 +311,7 @@ async def _ofertas_com_metricas(
                 id=o.id,
                 oferta_codigo=o.oferta_codigo,
                 oferta_nome=o.oferta_nome,
-                categoria=_categoria_da_oferta(o.oferta_nome),  # type: ignore[arg-type]
+                categoria=_categoria_efetiva(o),  # type: ignore[arg-type]
                 quantidade=qtd,
                 receita=receita,
             )
@@ -327,9 +350,7 @@ async def vendas_por_dia_categoria(
     )
     if not ofertas:
         return []
-    codigo_para_cat = {
-        o.oferta_codigo: _categoria_da_oferta(o.oferta_nome) for o in ofertas
-    }
+    codigo_para_cat = {o.oferta_codigo: _categoria_efetiva(o) for o in ofertas}
 
     inicio_dt, fim_dt = _range_utc(inicio_efetivo, fim_efetivo)
     sub = _vendas_efetivas_subquery(list(codigo_para_cat.keys()), inicio_dt, fim_dt)
@@ -403,7 +424,7 @@ async def vendas_do_dia(
 
     codigos = [o.oferta_codigo for o in ofertas]
     codigo_para_meta = {
-        o.oferta_codigo: (o.oferta_nome, _categoria_da_oferta(o.oferta_nome))
+        o.oferta_codigo: (o.oferta_nome, _categoria_efetiva(o))
         for o in ofertas
     }
 

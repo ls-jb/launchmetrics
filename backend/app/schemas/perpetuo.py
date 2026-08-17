@@ -36,10 +36,19 @@ class PerpetuoUpdate(BaseModel):
 
 
 class OfertaCreate(BaseModel):
-    """Adiciona uma oferta ao perpétuo."""
+    """Adiciona uma oferta ao perpétuo. Se categoria for None, o backend
+    cai na heurística pelo nome (Principal/Order Bump/etc)."""
 
     oferta_codigo: str = Field(..., min_length=1, max_length=200)
     oferta_nome: str | None = Field(default=None, max_length=200)
+    categoria: Categoria | None = None
+
+
+class OfertaUpdate(BaseModel):
+    """Atualiza uma oferta do perpétuo (só categoria por enquanto).
+    categoria=None limpa a categoria explícita — volta à heurística."""
+
+    categoria: Categoria | None = None
 
 
 # ============================================================
@@ -64,6 +73,7 @@ class PerpetuoOfertaResponse(BaseModel):
     id: UUID
     oferta_codigo: str
     oferta_nome: str | None = None
+    categoria: Categoria | None = None
 
 
 class OfertaDetalhe(BaseModel):
