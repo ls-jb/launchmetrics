@@ -22,6 +22,7 @@ const CORES: Record<CategoriaPerpetuo, string> = {
   Principal: '#7C6AF7',
   'Order Bump': '#F59E0B',
   Upsell: '#60A5FA',
+  UpUpsell: '#06B6D4',
   Downsell: '#EC4899',
   Outros: '#6B7280',
 }
@@ -30,6 +31,7 @@ const CATEGORIAS_FIXAS: CategoriaPerpetuo[] = [
   'Principal',
   'Order Bump',
   'Upsell',
+  'UpUpsell',
   'Downsell',
   'Outros',
 ]

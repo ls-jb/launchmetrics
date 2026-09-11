@@ -12,7 +12,7 @@ from app.schemas._types import Money
 # Categoria de oferta (heurística pelo nome — mesma do guru_service)
 # ============================================================
 Categoria = Literal[
-    "Principal", "Order Bump", "Upsell", "Downsell", "Outros"
+    "Principal", "Order Bump", "Upsell", "UpUpsell", "Downsell", "Outros"
 ]
 
 

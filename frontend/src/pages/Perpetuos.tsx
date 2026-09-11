@@ -530,6 +530,7 @@ function CardOferta({
     Principal: '#7C6AF7',
     'Order Bump': '#F59E0B',
     Upsell: '#60A5FA',
+    UpUpsell: '#06B6D4',
     Downsell: '#EC4899',
     Outros: '#6B7280',
   }
@@ -584,6 +585,7 @@ function CardOferta({
               <option value="Principal">Principal</option>
               <option value="Order Bump">Order Bump</option>
               <option value="Upsell">Upsell</option>
+              <option value="UpUpsell">UpUpsell</option>
               <option value="Downsell">Downsell</option>
               <option value="Outros">Outros</option>
             </select>
@@ -870,6 +872,7 @@ function FormAdicionarOferta({
                         <option value="Principal">Principal</option>
                         <option value="Order Bump">Order Bump</option>
                         <option value="Upsell">Upsell</option>
+                        <option value="UpUpsell">UpUpsell</option>
                         <option value="Downsell">Downsell</option>
                         <option value="Outros">Outros</option>
                       </select>
@@ -1291,6 +1294,7 @@ const CAT_COR_PERP: Record<CategoriaPerpetuo, string> = {
   Principal: '#7C6AF7',
   'Order Bump': '#F59E0B',
   Upsell: '#60A5FA',
+  UpUpsell: '#06B6D4',
   Downsell: '#EC4899',
   Outros: '#6B7280',
 }

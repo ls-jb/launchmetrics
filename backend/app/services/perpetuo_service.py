@@ -43,10 +43,13 @@ from app.services import meta_ads_service
 # Heurística de categoria (mesma do guru_service, pra consistência)
 # ============================================================
 def _categoria_da_oferta(oferta_nome: str | None) -> str:
-    """Mapeia nome da oferta pra Principal/Order Bump/Upsell/Downsell/Outros."""
+    """Mapeia nome da oferta pra Principal/Order Bump/Upsell/UpUpsell/Downsell/Outros."""
     nome = (oferta_nome or "").lower()
     if "order bump" in nome or "orderbump" in nome:
         return "Order Bump"
+    # UpUpsell precisa vir ANTES do Upsell pra pegar o nome completo
+    if "upupsell" in nome or "up upsell" in nome:
+        return "UpUpsell"
     if "upsell" in nome:
         return "Upsell"
     if "downsell" in nome:

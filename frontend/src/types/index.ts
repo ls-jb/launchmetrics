@@ -273,6 +273,7 @@ export type CategoriaPerpetuo =
   | 'Principal'
   | 'Order Bump'
   | 'Upsell'
+  | 'UpUpsell'
   | 'Downsell'
   | 'Outros'
 
