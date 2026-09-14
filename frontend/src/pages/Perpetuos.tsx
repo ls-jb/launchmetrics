@@ -375,7 +375,8 @@ function DetalhePerpetuo({
         />
       </div>
 
-      {/* 4 KPIs */}
+      {/* 5 KPIs — Lucro = Faturamento - Investimento, verde se positivo,
+          vermelho se negativo (prejuízo) */}
       <div
         style={{
           display: 'grid',
@@ -386,6 +387,11 @@ function DetalhePerpetuo({
       >
         <KPICard label="Investimento" valor={formatBRL(invest)} cor="#F59E0B" />
         <KPICard label="Faturamento" valor={formatBRL(receita)} cor="#3ECFB2" />
+        <KPICard
+          label="Lucro"
+          valor={formatBRL(receita - invest)}
+          cor={receita - invest >= 0 ? '#3ECFB2' : '#EF4444'}
+        />
         <KPICard label="Vendas" valor={formatNum(qtd)} cor="var(--text)" />
         <KPICard
           label="ROAS"
