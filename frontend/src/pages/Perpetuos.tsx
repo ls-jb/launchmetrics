@@ -174,6 +174,11 @@ function DetalhePerpetuo({
   const [modalAportes, setModalAportes] = useState(false)
   const [modalMeta, setModalMeta] = useState(false)
 
+  // Filtro de categoria pros KPIs. null = ainda não inicializado (a 1ª
+  // carga popula com todas as categorias existentes). Investimento fica
+  // sempre o total — só receita/qtd/ROAS refletem as marcadas.
+  const [categoriasKPI, setCategoriasKPI] = useState<Set<CategoriaPerpetuo> | null>(null)
+
   const carregar = useCallback(
     async (silencioso = false) => {
       if (!silencioso) setCarregando(true)
@@ -288,10 +293,42 @@ function DetalhePerpetuo({
   }
   if (!completo) return null
 
-  const receita = Number(completo.receita_total)
+  // Categorias que existem nas ofertas cadastradas — só essas viram
+  // opção do filtro (não polui a UI com opções sem venda).
+  const categoriasDisponiveis: CategoriaPerpetuo[] = (() => {
+    const ordem: CategoriaPerpetuo[] = [
+      'Principal',
+      'Order Bump',
+      'Upsell',
+      'UpUpsell',
+      'Downsell',
+      'Outros',
+    ]
+    const set = new Set(completo.ofertas.map((o) => o.categoria))
+    return ordem.filter((c) => set.has(c))
+  })()
+
+  // Inicializa "todas marcadas" na 1ª renderização e mantém sincronizado
+  // caso apareça uma categoria nova (nova oferta cadastrada).
+  const catsAtivas = categoriasKPI ?? new Set(categoriasDisponiveis)
+
   const invest = Number(completo.investimento_total)
-  const qtd = completo.quantidade_total
+  // Receita/qtd só das categorias marcadas
+  const receita = completo.ofertas
+    .filter((o) => catsAtivas.has(o.categoria))
+    .reduce((s, o) => s + Number(o.receita), 0)
+  const qtd = completo.ofertas
+    .filter((o) => catsAtivas.has(o.categoria))
+    .reduce((s, o) => s + o.quantidade, 0)
   const roas = invest > 0 ? receita / invest : 0
+
+  const alternarCategoriaKPI = (cat: CategoriaPerpetuo) => {
+    const base = categoriasKPI ?? new Set(categoriasDisponiveis)
+    const novo = new Set(base)
+    if (novo.has(cat)) novo.delete(cat)
+    else novo.add(cat)
+    setCategoriasKPI(novo)
+  }
 
   return (
     <div>
@@ -374,6 +411,68 @@ function DetalhePerpetuo({
           }}
         />
       </div>
+
+      {/* Filtro de categoria pros KPIs. Investimento nunca muda — é o
+          gasto total de anúncio. Marcando só "Principal" você tem o
+          ROAS de front (spend total / receita do principal). */}
+      {categoriasDisponiveis.length > 1 && (
+        <div
+          style={{
+            display: 'flex',
+            gap: 10,
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            marginBottom: 12,
+            padding: '10px 14px',
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 10,
+          }}
+        >
+          <span style={{ fontSize: 11, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Considerar:
+          </span>
+          {categoriasDisponiveis.map((cat) => {
+            const marcado = catsAtivas.has(cat)
+            const cor = CAT_COR_PERP[cat]
+            return (
+              <label
+                key={cat}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  color: marcado ? cor : 'var(--text-faint)',
+                  opacity: marcado ? 1 : 0.55,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={marcado}
+                  onChange={() => alternarCategoriaKPI(cat)}
+                  style={{ accentColor: cor }}
+                />
+                <span
+                  style={{
+                    background: marcado ? `${cor}22` : 'transparent',
+                    border: `1px solid ${marcado ? cor : 'var(--border-strong)'}`,
+                    padding: '2px 8px',
+                    borderRadius: 99,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                  }}
+                >
+                  {cat}
+                </span>
+              </label>
+            )
+          })}
+        </div>
+      )}
 
       {/* 5 KPIs — Lucro = Faturamento - Investimento, verde se positivo,
           vermelho se negativo (prejuízo) */}
