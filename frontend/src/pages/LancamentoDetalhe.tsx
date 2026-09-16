@@ -152,26 +152,6 @@ export function LancamentoDetalhe() {
     }
   }
 
-  const debugMeta = async () => {
-    if (!id) return
-    try {
-      const r = await lancamentosService.debugMeta(id)
-      console.log('[Meta Debug]', r)
-      // Console tem tudo. Alert mostra só um resumo curto.
-      const resultados = (r.resultados_por_conta as Array<Record<string, unknown>>) || []
-      const linhas = resultados.map((x, i) => {
-        const total = x.total_gasto_filtrado ?? '?'
-        const enc = x.campanhas_encontradas ?? '?'
-        const apos = x.campanhas_apos_filtro ?? '?'
-        const status = x.ok ? '✅' : `❌ ${x.erro ?? 'erro'}`
-        return `Conta ${i + 1} (${x.ad_account_id}): ${status}\n  campanhas encontradas: ${enc}, após filtro "${x.filtro_nome ?? '—'}": ${apos}\n  gasto filtrado: R$ ${total}`
-      }).join('\n\n')
-      alert(`Debug Meta (detalhes no console):\n\n${linhas}`)
-    } catch (e) {
-      alert(`Erro: ${extrairErro(e)}`)
-    }
-  }
-
   const sincronizarMeta = async () => {
     if (!id) return
     try {
@@ -261,24 +241,6 @@ export function LancamentoDetalhe() {
               }}
             >
               ↻ Sincronizar Meta
-            </button>
-          )}
-          {isAdmin && lancamento.meta_ad_account_id && (
-            <button
-              onClick={debugMeta}
-              title="Diagnóstico Meta — mostra o que cada conta configurada retorna"
-              style={{
-                background: 'var(--surface)',
-                border: '1px dashed var(--border-strong)',
-                color: 'var(--text-muted)',
-                padding: '8px 14px',
-                borderRadius: 8,
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Debug Meta
             </button>
           )}
           {isAdmin && (
