@@ -73,6 +73,15 @@ class LancamentoCreate(BaseModel):
     teto_investimento: Money | None = Field(default=None, ge=0)
 
 
+class MetaContaExtra(BaseModel):
+    """Par (ad_account, filtro) extra pro sync Meta. Usado quando o
+    lançamento consome mais de uma Ad Account (ex: trocou de conta
+    no meio, ou splitting entre 2 gerentes de tráfego)."""
+
+    ad_account_id: str = Field(..., min_length=1, max_length=64)
+    filtro_nome: str | None = Field(default=None, max_length=200)
+
+
 class LancamentoUpdate(BaseModel):
     """Todos os campos são opcionais para permitir patch parcial."""
 
@@ -86,6 +95,7 @@ class LancamentoUpdate(BaseModel):
     meta_receita: Decimal | None = Field(default=None, ge=0)
     meta_ad_account_id: str | None = None
     meta_filtro_nome: str | None = None
+    meta_contas_extras: list[MetaContaExtra] | None = None
     sendflow_release_id: str | None = None
 
 
@@ -99,6 +109,7 @@ class LancamentoResponse(LancamentoBase):
     criado_em: datetime
     meta_ad_account_id: str | None = None
     meta_filtro_nome: str | None = None
+    meta_contas_extras: list[MetaContaExtra] | None = None
     sendflow_release_id: str | None = None
 
     # métricas calculadas

@@ -5,7 +5,7 @@ Todos os cálculos ficam aqui — nunca no router e nunca no frontend.
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from sqlalchemy import Date, cast, func, select
+from sqlalchemy import Date, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -203,6 +203,7 @@ def _montar_response(
         meta_receita=lancamento.meta_receita,
         meta_ad_account_id=lancamento.meta_ad_account_id,
         meta_filtro_nome=lancamento.meta_filtro_nome,
+        meta_contas_extras=lancamento.meta_contas_extras,  # type: ignore[arg-type]
         sendflow_release_id=lancamento.sendflow_release_id,
         webhook_token=lancamento.webhook_token,
         criado_em=lancamento.criado_em,
@@ -225,21 +226,43 @@ async def sincronizar_meta(db: AsyncSession, lancamento_id: UUID) -> dict:
     """Puxa o gasto Meta Ads no período do lançamento e sobrescreve o
     `investimento` do canal "Meta Ads" (cria se não existir).
     Janela: [data_inicio, data_fim]. Filtra campanhas pelo
-    meta_filtro_nome (substring). No-op se Meta não configurado ou
-    datas faltando."""
+    meta_filtro_nome (substring).
+
+    Quando o lançamento tem `meta_contas_extras` populado (ex: trocou
+    de ad account no meio do tráfego), soma o gasto do par principal
+    + de todos os pares extras. Cada par (ad_account, filtro) puxa
+    independente; qualquer par que falhar (token, permissão) devolve
+    0 daquele par mas os outros seguem — meta_ads_service já engole.
+
+    No-op se nenhum par válido ou datas faltando."""
     lanc = await _buscar_simples(db, lancamento_id)
     if not lanc:
         return {"investimento": Decimal("0"), "periodo": None, "atualizado": False}
-    if not lanc.meta_ad_account_id or not lanc.data_inicio or not lanc.data_fim:
+    if not lanc.data_inicio or not lanc.data_fim:
         return {"investimento": Decimal("0"), "periodo": None, "atualizado": False}
 
-    gastos = await meta_ads_service.puxar_gasto_por_dia(
-        lanc.meta_ad_account_id,
-        lanc.data_inicio,
-        lanc.data_fim,
-        lanc.meta_filtro_nome,
-    )
-    total = sum(gastos.values(), Decimal("0")) if gastos else Decimal("0")
+    # Monta a lista de pares (principal + extras). Ignora entradas sem
+    # ad_account_id (defensivo — não deveria chegar assim do JSONB).
+    pares: list[tuple[str, str | None]] = []
+    if lanc.meta_ad_account_id:
+        pares.append((lanc.meta_ad_account_id, lanc.meta_filtro_nome))
+    for extra in (lanc.meta_contas_extras or []):
+        ad = (extra.get("ad_account_id") or "").strip() if isinstance(extra, dict) else ""
+        if not ad:
+            continue
+        filtro = extra.get("filtro_nome") if isinstance(extra, dict) else None
+        pares.append((ad, filtro))
+
+    if not pares:
+        return {"investimento": Decimal("0"), "periodo": None, "atualizado": False}
+
+    total = Decimal("0")
+    for ad_id, filtro in pares:
+        gastos = await meta_ads_service.puxar_gasto_por_dia(
+            ad_id, lanc.data_inicio, lanc.data_fim, filtro,
+        )
+        if gastos:
+            total += sum(gastos.values(), Decimal("0"))
 
     # Garante o canal "Meta Ads" e atualiza o investimento (sobrescreve)
     canal = (
@@ -270,9 +293,14 @@ async def sincronizar_meta(db: AsyncSession, lancamento_id: UUID) -> dict:
 
 
 async def sincronizar_meta_todos(db: AsyncSession) -> dict:
-    """Roda sincronizar_meta() pra cada lançamento com Meta configurado.
-    Usado pelo cron diário."""
-    stmt = select(Lancamento).where(Lancamento.meta_ad_account_id.is_not(None))
+    """Roda sincronizar_meta() pra cada lançamento com Meta configurado
+    (principal OU extras). Usado pelo cron diário."""
+    stmt = select(Lancamento).where(
+        or_(
+            Lancamento.meta_ad_account_id.is_not(None),
+            Lancamento.meta_contas_extras.is_not(None),
+        )
+    )
     lancs = list((await db.execute(stmt)).scalars().all())
     resultados = []
     for l in lancs:

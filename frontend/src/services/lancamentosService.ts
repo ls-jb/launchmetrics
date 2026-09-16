@@ -21,6 +21,7 @@ export interface LancamentoUpdatePayload {
   meta_receita?: number | null
   meta_ad_account_id?: string | null
   meta_filtro_nome?: string | null
+  meta_contas_extras?: { ad_account_id: string; filtro_nome: string | null }[] | null
   sendflow_release_id?: string | null
 }
 

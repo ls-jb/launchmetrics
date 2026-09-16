@@ -2,8 +2,10 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID as UUIDType, uuid4
 
+from typing import Any
+
 from sqlalchemy import Date, DateTime, Integer, Numeric, String, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -31,6 +33,11 @@ class Lancamento(Base):
     meta_filtro_nome: Mapped[str | None] = mapped_column(String)
     """Pattern (substring) pra filtrar campanhas pelo nome (ex: '[SPT]').
     Quando null, todas as campanhas da conta entram no investimento."""
+    meta_contas_extras: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
+    """Ad Accounts adicionais quando o lançamento roda em >1 conta (ex:
+    troca de conta no meio do tráfego). Array de {ad_account_id, filtro_nome}.
+    O sync soma o gasto do par principal + todos os extras. Quando null,
+    só o par principal conta."""
     sendflow_release_id: Mapped[str | None] = mapped_column(String)
     """ID da campanha (release) do SendFlow. Quando setado, o card
     'Leads no grupo' do LancamentoDetalhe puxa o total de participantes

@@ -117,11 +117,18 @@ export function LancamentoDetalhe() {
     setLancamento(atualizado)
   }
 
-  const salvarConfigMeta = async (ad: string | null, filtro: string | null) => {
+  const salvarConfigMeta = async (
+    contas: { ad_account_id: string; filtro_nome: string | null }[],
+  ) => {
     if (!id) return
+    // Primeira entrada vai pros campos principais (backward compat com sync);
+    // demais vão pra meta_contas_extras. Se a lista estiver vazia, limpa tudo.
+    const principal = contas[0]
+    const extras = contas.slice(1)
     await lancamentosService.atualizar(id, {
-      meta_ad_account_id: ad,
-      meta_filtro_nome: filtro,
+      meta_ad_account_id: principal?.ad_account_id ?? null,
+      meta_filtro_nome: principal?.filtro_nome ?? null,
+      meta_contas_extras: extras.length > 0 ? extras : null,
     })
     await carregar(false)
   }
@@ -427,11 +434,22 @@ export function LancamentoDetalhe() {
         largura={480}
       >
         <FormConfigurarMeta
-          adInicial={lancamento.meta_ad_account_id}
-          filtroInicial={lancamento.meta_filtro_nome}
+          contasIniciais={(() => {
+            const arr: { ad_account_id: string; filtro_nome: string | null }[] = []
+            if (lancamento.meta_ad_account_id) {
+              arr.push({
+                ad_account_id: lancamento.meta_ad_account_id,
+                filtro_nome: lancamento.meta_filtro_nome,
+              })
+            }
+            for (const e of lancamento.meta_contas_extras ?? []) {
+              arr.push(e)
+            }
+            return arr
+          })()}
           onCancelar={() => setModalMeta(false)}
-          onSalvar={async (ad, filtro) => {
-            await salvarConfigMeta(ad, filtro)
+          onSalvar={async (contas) => {
+            await salvarConfigMeta(contas)
             setModalMeta(false)
           }}
         />
@@ -922,28 +940,57 @@ function EditorDatas({
 // ============================================================
 // Modal: configurar Meta Ads (ad_account_id + filtro)
 // ============================================================
+type ContaMeta = { ad_account_id: string; filtro_nome: string | null }
+
 function FormConfigurarMeta({
-  adInicial,
-  filtroInicial,
+  contasIniciais,
   onCancelar,
   onSalvar,
 }: {
-  adInicial: string | null
-  filtroInicial: string | null
+  contasIniciais: ContaMeta[]
   onCancelar: () => void
-  onSalvar: (ad: string | null, filtro: string | null) => Promise<void>
+  onSalvar: (contas: ContaMeta[]) => Promise<void>
 }) {
-  const [ad, setAd] = useState(adInicial ?? '')
-  const [filtro, setFiltro] = useState(filtroInicial ?? '')
+  // Sempre pelo menos 1 slot pra edição — se não veio nada do banco,
+  // arranca com um vazio pro usuário preencher.
+  const [contas, setContas] = useState<ContaMeta[]>(
+    contasIniciais.length > 0
+      ? contasIniciais
+      : [{ ad_account_id: '', filtro_nome: '' }],
+  )
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState('')
+
+  const atualizar = (i: number, campo: 'ad_account_id' | 'filtro_nome', valor: string) => {
+    setContas((prev) => {
+      const novo = [...prev]
+      novo[i] = { ...novo[i], [campo]: valor }
+      return novo
+    })
+  }
+
+  const adicionarConta = () => {
+    setContas((prev) => [...prev, { ad_account_id: '', filtro_nome: '' }])
+  }
+
+  const removerConta = (i: number) => {
+    setContas((prev) => prev.filter((_, idx) => idx !== i))
+  }
 
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault()
     setErro('')
     setEnviando(true)
     try {
-      await onSalvar(ad.trim() || null, filtro.trim() || null)
+      // Descarta linhas sem ad_account_id (usuário limpou pra apagar).
+      // Se sobrar zero, salva vazio → limpa a config.
+      const limpas = contas
+        .map((c) => ({
+          ad_account_id: (c.ad_account_id || '').trim(),
+          filtro_nome: (c.filtro_nome || '').trim() || null,
+        }))
+        .filter((c) => c.ad_account_id !== '')
+      await onSalvar(limpas)
     } catch (err) {
       setErro(extrairErro(err))
       setEnviando(false)
@@ -963,31 +1010,86 @@ function FormConfigurarMeta({
   return (
     <form onSubmit={enviar} style={{ display: 'grid', gap: 14 }}>
       <p style={{ margin: 0, fontSize: 12, color: 'var(--text-faint)' }}>
-        Vincule esse lançamento a uma Ad Account da Meta. O sync pega o
-        gasto das campanhas que tiverem o filtro no nome, no período
-        (data_inicio → data_fim) do lançamento, e atualiza o canal
-        “Meta Ads”.
+        Vincule esse lançamento a uma ou mais Ad Accounts da Meta. O
+        sync soma o gasto de <b>todas</b> as contas (filtradas pelo
+        respectivo padrão de nome), no período do lançamento, e
+        sobrescreve o canal “Meta Ads”. Use múltiplas contas se você
+        trocou a conta de anúncio no meio do tráfego.
       </p>
-      <div>
-        <label style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Ad Account ID</label>
-        <input
-          type="text"
-          value={ad}
-          onChange={(e) => setAd(e.target.value)}
-          placeholder="Ex: 628263058826646"
-          style={inputBase}
-        />
+
+      <div style={{ display: 'grid', gap: 10 }}>
+        {contas.map((c, i) => (
+          <div
+            key={i}
+            style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 10,
+              padding: 12,
+              display: 'grid',
+              gap: 8,
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 11, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>
+                Conta {i + 1}{i === 0 && contas.length > 1 ? ' (principal)' : ''}
+              </span>
+              {contas.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removerConta(i)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#EF4444',
+                    fontSize: 11,
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                >
+                  × Remover
+                </button>
+              )}
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 10, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Ad Account ID</label>
+              <input
+                type="text"
+                value={c.ad_account_id}
+                onChange={(e) => atualizar(i, 'ad_account_id', e.target.value)}
+                placeholder="Ex: 628263058826646"
+                style={inputBase}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 10, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Filtro de campanhas (substring no nome)</label>
+              <input
+                type="text"
+                value={c.filtro_nome ?? ''}
+                onChange={(e) => atualizar(i, 'filtro_nome', e.target.value)}
+                placeholder="Ex: [FF3]"
+                style={inputBase}
+              />
+            </div>
+          </div>
+        ))}
       </div>
-      <div>
-        <label style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Filtro de campanhas (substring no nome)</label>
-        <input
-          type="text"
-          value={filtro}
-          onChange={(e) => setFiltro(e.target.value)}
-          placeholder="Ex: [SPT]"
-          style={inputBase}
-        />
-      </div>
+
+      <button
+        type="button"
+        onClick={adicionarConta}
+        style={{
+          background: 'transparent',
+          border: '1px dashed var(--border-strong)',
+          color: 'var(--text-muted)',
+          padding: '9px 12px',
+          borderRadius: 8,
+          fontSize: 12,
+          cursor: 'pointer',
+        }}
+      >
+        + Adicionar outra conta
+      </button>
 
       {erro && (
         <div

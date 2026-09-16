@@ -11,6 +11,11 @@ export interface Canal {
   investimento: number
 }
 
+export interface MetaContaExtra {
+  ad_account_id: string
+  filtro_nome: string | null
+}
+
 export interface Lancamento {
   id: string
   nome: string
@@ -23,6 +28,7 @@ export interface Lancamento {
   meta_receita: number | null
   meta_ad_account_id: string | null
   meta_filtro_nome: string | null
+  meta_contas_extras: MetaContaExtra[] | null
   sendflow_release_id: string | null
   webhook_token: string
   criado_em: string
