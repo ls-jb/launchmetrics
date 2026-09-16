@@ -114,3 +114,128 @@ async def puxar_gasto_por_dia(
         return {}
 
     return dict(agregado)
+
+
+async def debug_conta(
+    ad_account_id: str,
+    inicio: date,
+    fim: date,
+    filtro_nome: str | None = None,
+) -> dict:
+    """Igual `puxar_gasto_por_dia`, mas devolve TUDO que aconteceu — status
+    HTTP, mensagem de erro, campanhas encontradas, quantas passaram no
+    filtro, gasto total. Use pra diagnosticar quando o sync devolve 0."""
+    token = _token()
+    if not token:
+        return {"ok": False, "erro": "META_ACCESS_TOKEN não configurado"}
+    if fim < inicio:
+        return {"ok": False, "erro": f"fim ({fim}) anterior a inicio ({inicio})"}
+
+    act_id = ad_account_id if ad_account_id.startswith("act_") else f"act_{ad_account_id}"
+    url = f"{BASE_URL}/{act_id}/insights"
+    params = {
+        "level": "campaign",
+        "fields": "spend,campaign_name",
+        "time_increment": "1",
+        "time_range": f'{{"since":"{inicio.isoformat()}","until":"{fim.isoformat()}"}}',
+        "limit": "500",
+        "access_token": token,
+    }
+    filtro = (filtro_nome or "").strip().lower()
+
+    campanhas_todas: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+    campanhas_filtradas: dict[str, Decimal] = defaultdict(lambda: Decimal("0"))
+    total_filtrado = Decimal("0")
+    linhas_processadas = 0
+
+    try:
+        async with httpx.AsyncClient(timeout=TIMEOUT_S) as cli:
+            while True:
+                resp = await cli.get(url, params=params)
+                if resp.status_code >= 400:
+                    return {
+                        "ok": False,
+                        "erro": f"Meta API HTTP {resp.status_code}",
+                        "resposta_meta": resp.text[:500],
+                        "act_id": act_id,
+                    }
+                payload = resp.json()
+                for linha in payload.get("data") or []:
+                    linhas_processadas += 1
+                    nome = linha.get("campaign_name") or "(sem nome)"
+                    nome_l = nome.lower()
+                    try:
+                        spend = Decimal(str(linha.get("spend") or "0"))
+                    except (ValueError, TypeError):
+                        spend = Decimal("0")
+                    campanhas_todas[nome] += spend
+                    if not filtro or filtro in nome_l:
+                        campanhas_filtradas[nome] += spend
+                        total_filtrado += spend
+                proxima = (payload.get("paging") or {}).get("next")
+                if not proxima:
+                    break
+                url = proxima
+                params = {}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "erro": f"Exception: {type(e).__name__}: {e}"}
+
+    return {
+        "ok": True,
+        "act_id": act_id,
+        "periodo": [inicio.isoformat(), fim.isoformat()],
+        "filtro_aplicado": filtro or None,
+        "linhas_processadas": linhas_processadas,
+        "campanhas_encontradas": len(campanhas_todas),
+        "campanhas_apos_filtro": len(campanhas_filtradas),
+        "total_gasto_filtrado": str(total_filtrado),
+        # Lista pra debug — nomes e gastos, ordenados por gasto desc
+        "campanhas_todas": [
+            {"nome": n, "gasto": str(v)}
+            for n, v in sorted(
+                campanhas_todas.items(), key=lambda kv: -kv[1]
+            )
+        ],
+        "campanhas_apos_filtro_detalhe": [
+            {"nome": n, "gasto": str(v)}
+            for n, v in sorted(
+                campanhas_filtradas.items(), key=lambda kv: -kv[1]
+            )
+        ],
+    }
+
+
+async def listar_ad_accounts_acessiveis() -> dict:
+    """Chama /me/adaccounts pra listar as ad accounts que o token consegue
+    ver. Útil pra descobrir se o ID digitado tá errado ou o token sem
+    permissão."""
+    token = _token()
+    if not token:
+        return {"ok": False, "erro": "META_ACCESS_TOKEN não configurado"}
+    try:
+        async with httpx.AsyncClient(timeout=TIMEOUT_S) as cli:
+            resp = await cli.get(
+                f"{BASE_URL}/me/adaccounts",
+                params={
+                    "fields": "id,account_id,name",
+                    "limit": "200",
+                    "access_token": token,
+                },
+            )
+            if resp.status_code >= 400:
+                return {
+                    "ok": False,
+                    "erro": f"HTTP {resp.status_code}",
+                    "resposta_meta": resp.text[:500],
+                }
+            data = resp.json().get("data") or []
+            return {
+                "ok": True,
+                "quantidade": len(data),
+                "contas": [
+                    {"id": c.get("id"), "account_id": c.get("account_id"), "name": c.get("name")}
+                    for c in data
+                ],
+            }
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "erro": f"Exception: {type(e).__name__}: {e}"}

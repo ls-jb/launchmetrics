@@ -121,6 +121,20 @@ async def sync_meta(
     return await lancamento_service.sincronizar_meta(db, id)
 
 
+@router.get("/{id}/debug-meta")
+async def debug_meta(
+    id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(verify_token),
+):
+    """Diagnóstico do sync Meta: testa cada conta configurada e mostra
+    o que a Meta devolveu (HTTP status, campanhas encontradas,
+    campanhas que passaram no filtro, gasto). Também lista as
+    ad_accounts que o token consegue acessar. Uso quando o sync devolve
+    0 pra alguma conta e você quer saber por quê."""
+    return await lancamento_service.debug_sync_meta(db, id)
+
+
 @router.get("/{id}/sendflow-leads", response_model=SendflowLeadsResponse)
 async def sendflow_leads(
     id: UUID,

@@ -292,6 +292,49 @@ async def sincronizar_meta(db: AsyncSession, lancamento_id: UUID) -> dict:
     }
 
 
+async def debug_sync_meta(db: AsyncSession, lancamento_id: UUID) -> dict:
+    """Testa cada par (ad_account, filtro) configurado no lançamento e
+    retorna o que a Meta devolveu — status HTTP, campanhas encontradas,
+    campanhas que passaram no filtro, gasto total. Também lista as
+    ad accounts que o token consegue acessar. Uso: descobrir por que o
+    sync tá devolvendo 0 pra uma conta específica (permissão? filtro
+    errado? sem gasto no período?)."""
+    lanc = await _buscar_simples(db, lancamento_id)
+    if not lanc:
+        return {"erro": "lançamento não encontrado"}
+    if not lanc.data_inicio or not lanc.data_fim:
+        return {"erro": "lançamento sem data_inicio/data_fim"}
+
+    pares: list[tuple[str, str | None]] = []
+    if lanc.meta_ad_account_id:
+        pares.append((lanc.meta_ad_account_id, lanc.meta_filtro_nome))
+    for extra in (lanc.meta_contas_extras or []):
+        if isinstance(extra, dict) and (extra.get("ad_account_id") or "").strip():
+            pares.append((extra["ad_account_id"], extra.get("filtro_nome")))
+
+    resultados = []
+    for i, (ad, filtro) in enumerate(pares):
+        r = await meta_ads_service.debug_conta(
+            ad, lanc.data_inicio, lanc.data_fim, filtro,
+        )
+        resultados.append({
+            "conta_slot": i + 1,
+            "ad_account_id": ad,
+            "filtro_nome": filtro,
+            **r,
+        })
+
+    contas_acessiveis = await meta_ads_service.listar_ad_accounts_acessiveis()
+
+    return {
+        "lancamento": lanc.nome,
+        "periodo": [lanc.data_inicio.isoformat(), lanc.data_fim.isoformat()],
+        "contas_configuradas": len(pares),
+        "resultados_por_conta": resultados,
+        "ad_accounts_que_o_token_ve": contas_acessiveis,
+    }
+
+
 async def sincronizar_meta_todos(db: AsyncSession) -> dict:
     """Roda sincronizar_meta() pra cada lançamento com Meta configurado
     (principal OU extras). Usado pelo cron diário."""
