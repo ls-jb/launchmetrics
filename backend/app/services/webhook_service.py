@@ -22,6 +22,8 @@ NORMALIZACAO_CANAL = {
     "meta ads": "Meta Ads",
     "meta-ads": "Meta Ads",
     "metaads": "Meta Ads",
+    "meta-captura": "Meta Ads",
+    "meta_captura": "Meta Ads",
     "paid_metaads": "Meta Ads",
     "paid metaads": "Meta Ads",
     "instagram": "Meta Ads",
