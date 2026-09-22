@@ -557,7 +557,9 @@ function DetalhePerpetuo({
             marginBottom: '1.5rem',
           }}
         >
-          {completo.ofertas.map((o) => (
+          {/* Filtra pelos mesmos catsAtivas dos KPIs — assim quando o
+              usuário marca só "Principal", só os cards Principal aparecem. */}
+          {ofertasAtivas.map((o) => (
             <CardOferta
               key={o.id}
               detalhe={o}
