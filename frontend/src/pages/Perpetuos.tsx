@@ -179,6 +179,18 @@ function DetalhePerpetuo({
   // sempre o total — só receita/qtd/ROAS refletem as marcadas.
   const [categoriasKPI, setCategoriasKPI] = useState<Set<CategoriaPerpetuo> | null>(null)
 
+  // Impostos aplicados no investimento (só afeta a visualização — não
+  // altera aportes gravados). Persistido por perpétuo no localStorage
+  // do navegador; cada usuário decide se quer ver com ou sem imposto.
+  const [modalImpostos, setModalImpostos] = useState(false)
+  const [impostos, setImpostos] = useState<ImpostosConfig>(() =>
+    carregarImpostos(perpetuoId),
+  )
+  const atualizarImpostos = (novo: ImpostosConfig) => {
+    setImpostos(novo)
+    salvarImpostos(perpetuoId, novo)
+  }
+
   const carregar = useCallback(
     async (silencioso = false) => {
       if (!silencioso) setCarregando(true)
@@ -312,7 +324,11 @@ function DetalhePerpetuo({
   // caso apareça uma categoria nova (nova oferta cadastrada).
   const catsAtivas = categoriasKPI ?? new Set(categoriasDisponiveis)
 
-  const invest = Number(completo.investimento_total)
+  const investBruto = Number(completo.investimento_total)
+  // Investimento com impostos aplicados. Só afeta os KPIs — os aportes
+  // gravados no banco continuam com valor original.
+  const multiplicadorImposto = impostos.metaAds12_5 ? 1.125 : 1
+  const invest = investBruto * multiplicadorImposto
   // Receita/qtd só das categorias marcadas
   const receita = completo.ofertas
     .filter((o) => catsAtivas.has(o.categoria))
@@ -321,6 +337,7 @@ function DetalhePerpetuo({
     .filter((o) => catsAtivas.has(o.categoria))
     .reduce((s, o) => s + o.quantidade, 0)
   const roas = invest > 0 ? receita / invest : 0
+  const algumImpostoAtivo = impostos.metaAds12_5
 
   const alternarCategoriaKPI = (cat: CategoriaPerpetuo) => {
     const base = categoriasKPI ?? new Set(categoriasDisponiveis)
@@ -364,6 +381,18 @@ function DetalhePerpetuo({
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <BotaoAtualizar onClick={() => carregar(true)} atualizando={atualizando} />
+          <button
+            onClick={() => setModalImpostos(true)}
+            style={{
+              ...botaoSecundario,
+              ...(algumImpostoAtivo
+                ? { borderColor: '#F59E0B', color: '#F59E0B' }
+                : {}),
+            }}
+            title="Aplicar impostos no cálculo do investimento (só afeta a visualização — não altera aportes)"
+          >
+            {algumImpostoAtivo ? '💰 Impostos ativos' : 'Impostos'}
+          </button>
           {isAdmin && (
             <>
               <button onClick={() => setModalAportes(true)} style={botaoSecundario}>
@@ -610,6 +639,19 @@ function DetalhePerpetuo({
         largura={640}
       >
         <DetalheDiaPerp ofertas={ofertasDoDia} erro={erroDia} />
+      </Modal>
+
+      <Modal
+        aberto={modalImpostos}
+        titulo="Impostos"
+        onFechar={() => setModalImpostos(false)}
+        largura={480}
+      >
+        <FormImpostos
+          valor={impostos}
+          onChange={atualizarImpostos}
+          onFechar={() => setModalImpostos(false)}
+        />
       </Modal>
     </div>
   )
@@ -1406,6 +1448,109 @@ const CAT_COR_PERP: Record<CategoriaPerpetuo, string> = {
 
 function fmtDiaBR(dia: string): string {
   return dia.slice(8, 10) + '/' + dia.slice(5, 7) + '/' + dia.slice(0, 4)
+}
+
+// ============================================================
+// Impostos aplicados sobre o investimento (só visualização — não altera
+// aportes do banco). Persistido por perpétuo no localStorage. Adicionar
+// novos impostos no futuro = campo novo no type + linha nova no form.
+// ============================================================
+type ImpostosConfig = {
+  metaAds12_5: boolean
+}
+
+const IMPOSTOS_DEFAULT: ImpostosConfig = { metaAds12_5: false }
+
+function chaveImpostos(perpetuoId: string): string {
+  return `perpetuo:${perpetuoId}:impostos`
+}
+
+function carregarImpostos(perpetuoId: string): ImpostosConfig {
+  try {
+    const raw = localStorage.getItem(chaveImpostos(perpetuoId))
+    if (!raw) return IMPOSTOS_DEFAULT
+    const parsed = JSON.parse(raw) as Partial<ImpostosConfig>
+    // Merge com default pra sobreviver a upgrades futuros (chaves novas)
+    return { ...IMPOSTOS_DEFAULT, ...parsed }
+  } catch {
+    return IMPOSTOS_DEFAULT
+  }
+}
+
+function salvarImpostos(perpetuoId: string, valor: ImpostosConfig): void {
+  try {
+    localStorage.setItem(chaveImpostos(perpetuoId), JSON.stringify(valor))
+  } catch {
+    // storage cheio ou bloqueado — ignora (config é preferência, não crítico)
+  }
+}
+
+function FormImpostos({
+  valor,
+  onChange,
+  onFechar,
+}: {
+  valor: ImpostosConfig
+  onChange: (v: ImpostosConfig) => void
+  onFechar: () => void
+}) {
+  return (
+    <div style={{ display: 'grid', gap: 14 }}>
+      <p style={{ margin: 0, fontSize: 12, color: 'var(--text-faint)' }}>
+        Aplica os impostos marcados sobre o <b>investimento</b> exibido no
+        dashboard. O ROAS e o Lucro recalculam automaticamente. Isso NÃO
+        altera os aportes gravados no banco — é só uma preferência de
+        visualização, salva neste navegador.
+      </p>
+
+      <label
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 10,
+          padding: 12,
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 10,
+          cursor: 'pointer',
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={valor.metaAds12_5}
+          onChange={(e) => onChange({ ...valor, metaAds12_5: e.target.checked })}
+          style={{ marginTop: 2 }}
+        />
+        <div>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+            12,5% de imposto da Meta
+          </p>
+          <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--text-faint)' }}>
+            Multiplica o investimento por 1,125 (CIDE/PIS/COFINS de remessa).
+          </p>
+        </div>
+      </label>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <button
+          type="button"
+          onClick={onFechar}
+          style={{
+            background: '#7C6AF7',
+            border: 'none',
+            color: '#fff',
+            padding: '10px 16px',
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          Fechar
+        </button>
+      </div>
+    </div>
+  )
 }
 
 function DetalheDiaPerp({
