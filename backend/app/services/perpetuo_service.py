@@ -292,23 +292,34 @@ async def _ofertas_com_metricas(
     inicio_dt, fim_dt = _range_utc(inicio, fim)
     sub = _vendas_efetivas_subquery(codigos, inicio_dt, fim_dt)
 
+    # Recupera qtd, receita e receita_hotmart (só vendas plataforma=Hotmart)
+    # de uma vez — pra taxa de 3,99% da Hotmart no client sem query extra.
     rows = (
         await db.execute(
             select(
                 sub.c.oferta_codigo,
                 func.count().label("qtd"),
                 func.coalesce(func.sum(sub.c.v), 0).label("receita"),
+                func.coalesce(
+                    func.sum(
+                        case((sub.c.plataforma == "Hotmart", sub.c.v), else_=0)
+                    ),
+                    0,
+                ).label("receita_hotmart"),
             ).group_by(sub.c.oferta_codigo)
         )
     ).all()
 
-    metricas: dict[str, tuple[int, Decimal]] = {
-        r.oferta_codigo: (int(r.qtd), Decimal(r.receita)) for r in rows
+    metricas: dict[str, tuple[int, Decimal, Decimal]] = {
+        r.oferta_codigo: (int(r.qtd), Decimal(r.receita), Decimal(r.receita_hotmart))
+        for r in rows
     }
 
     detalhes: list[OfertaDetalhe] = []
     for o in ofertas:
-        qtd, receita = metricas.get(o.oferta_codigo, (0, Decimal("0")))
+        qtd, receita, receita_hotmart = metricas.get(
+            o.oferta_codigo, (0, Decimal("0"), Decimal("0"))
+        )
         detalhes.append(
             OfertaDetalhe(
                 id=o.id,
@@ -317,6 +328,7 @@ async def _ofertas_com_metricas(
                 categoria=_categoria_efetiva(o),  # type: ignore[arg-type]
                 quantidade=qtd,
                 receita=receita,
+                receita_hotmart=receita_hotmart,
             )
         )
     # Receita desc; sem venda vai pro fim
@@ -568,6 +580,7 @@ def _vendas_efetivas_subquery(codigos: list[str], inicio_dt, fim_dt):
             Venda.oferta_codigo.label("oferta_codigo"),
             valor_efetivo,
             Venda.data_venda.label("data_venda"),
+            Venda.plataforma.label("plataforma"),
             rn,
         )
         .select_from(Venda)
@@ -580,7 +593,12 @@ def _vendas_efetivas_subquery(codigos: list[str], inicio_dt, fim_dt):
         .subquery()
     )
     return (
-        select(base.c.oferta_codigo, base.c.v, base.c.data_venda)
+        select(
+            base.c.oferta_codigo,
+            base.c.v,
+            base.c.data_venda,
+            base.c.plataforma,
+        )
         .where(
             base.c.rn == 1,
             base.c.data_venda >= inicio_dt,

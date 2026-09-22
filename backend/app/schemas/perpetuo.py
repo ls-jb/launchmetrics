@@ -1,5 +1,6 @@
 """Schemas dos Perpétuos."""
 from datetime import date
+from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
@@ -87,6 +88,10 @@ class OfertaDetalhe(BaseModel):
     """Categoria heurística pelo nome (Principal / Upsell / etc)."""
     quantidade: int
     receita: Money
+    receita_hotmart: Money = Decimal("0")  # type: ignore[assignment]
+    """Parcela da receita vinda de vendas com plataforma=Hotmart. Usada
+    pelo front pra calcular a taxa de 3,99% da Hotmart (que se aplica
+    só a essas vendas)."""
 
 
 class PontoVendaCategoria(BaseModel):

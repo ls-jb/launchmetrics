@@ -325,19 +325,28 @@ function DetalhePerpetuo({
   const catsAtivas = categoriasKPI ?? new Set(categoriasDisponiveis)
 
   const investBruto = Number(completo.investimento_total)
-  // Investimento com impostos aplicados. Só afeta os KPIs — os aportes
-  // gravados no banco continuam com valor original.
-  const multiplicadorImposto = impostos.metaAds12_5 ? 1.125 : 1
-  const invest = investBruto * multiplicadorImposto
-  // Receita/qtd só das categorias marcadas
-  const receita = completo.ofertas
-    .filter((o) => catsAtivas.has(o.categoria))
-    .reduce((s, o) => s + Number(o.receita), 0)
-  const qtd = completo.ofertas
-    .filter((o) => catsAtivas.has(o.categoria))
-    .reduce((s, o) => s + o.quantidade, 0)
+  // Investimento com imposto Meta aplicado (só visualização — não altera
+  // aportes gravados).
+  const multiplicadorInvest = impostos.metaAds12_5 ? 1.125 : 1
+  const invest = investBruto * multiplicadorInvest
+  // Receita/qtd só das categorias marcadas (bruto)
+  const ofertasAtivas = completo.ofertas.filter((o) =>
+    catsAtivas.has(o.categoria),
+  )
+  const receitaBruta = ofertasAtivas.reduce((s, o) => s + Number(o.receita), 0)
+  const receitaHotmart = ofertasAtivas.reduce(
+    (s, o) => s + Number(o.receita_hotmart),
+    0,
+  )
+  const qtd = ofertasAtivas.reduce((s, o) => s + o.quantidade, 0)
+  // Aplica taxas que incidem no faturamento. Hotmart 3,99% só sobre
+  // receita de vendas Hotmart; empresa 5,93% sobre faturamento total.
+  const taxaHotmart = impostos.hotmart3_99 ? receitaHotmart * 0.0399 : 0
+  const taxaEmpresa = impostos.empresa5_93 ? receitaBruta * 0.0593 : 0
+  const receita = receitaBruta - taxaHotmart - taxaEmpresa
   const roas = invest > 0 ? receita / invest : 0
-  const algumImpostoAtivo = impostos.metaAds12_5
+  const algumImpostoAtivo =
+    impostos.metaAds12_5 || impostos.hotmart3_99 || impostos.empresa5_93
 
   const alternarCategoriaKPI = (cat: CategoriaPerpetuo) => {
     const base = categoriasKPI ?? new Set(categoriasDisponiveis)
@@ -1457,9 +1466,15 @@ function fmtDiaBR(dia: string): string {
 // ============================================================
 type ImpostosConfig = {
   metaAds12_5: boolean
+  hotmart3_99: boolean
+  empresa5_93: boolean
 }
 
-const IMPOSTOS_DEFAULT: ImpostosConfig = { metaAds12_5: false }
+const IMPOSTOS_DEFAULT: ImpostosConfig = {
+  metaAds12_5: false,
+  hotmart3_99: false,
+  empresa5_93: false,
+}
 
 function chaveImpostos(perpetuoId: string): string {
   return `perpetuo:${perpetuoId}:impostos`
@@ -1485,6 +1500,48 @@ function salvarImpostos(perpetuoId: string, valor: ImpostosConfig): void {
   }
 }
 
+function LinhaImposto({
+  titulo,
+  legenda,
+  marcado,
+  onChange,
+}: {
+  titulo: string
+  legenda: string
+  marcado: boolean
+  onChange: (v: boolean) => void
+}) {
+  return (
+    <label
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 10,
+        padding: 12,
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 10,
+        cursor: 'pointer',
+      }}
+    >
+      <input
+        type="checkbox"
+        checked={marcado}
+        onChange={(e) => onChange(e.target.checked)}
+        style={{ marginTop: 2 }}
+      />
+      <div>
+        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+          {titulo}
+        </p>
+        <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--text-faint)' }}>
+          {legenda}
+        </p>
+      </div>
+    </label>
+  )
+}
+
 function FormImpostos({
   valor,
   onChange,
@@ -1503,33 +1560,26 @@ function FormImpostos({
         visualização, salva neste navegador.
       </p>
 
-      <label
-        style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          gap: 10,
-          padding: 12,
-          background: 'var(--surface)',
-          border: '1px solid var(--border)',
-          borderRadius: 10,
-          cursor: 'pointer',
-        }}
-      >
-        <input
-          type="checkbox"
-          checked={valor.metaAds12_5}
-          onChange={(e) => onChange({ ...valor, metaAds12_5: e.target.checked })}
-          style={{ marginTop: 2 }}
-        />
-        <div>
-          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
-            12,5% de imposto da Meta
-          </p>
-          <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--text-faint)' }}>
-            Multiplica o investimento por 1,125 (CIDE/PIS/COFINS de remessa).
-          </p>
-        </div>
-      </label>
+      <LinhaImposto
+        titulo="12,5% de imposto da Meta"
+        legenda="Aplicado sobre o investimento (CIDE/PIS/COFINS de remessa)."
+        marcado={valor.metaAds12_5}
+        onChange={(v) => onChange({ ...valor, metaAds12_5: v })}
+      />
+
+      <LinhaImposto
+        titulo="3,99% de taxa da Hotmart"
+        legenda="Aplicada apenas sobre a receita de vendas Hotmart (deduz do faturamento)."
+        marcado={valor.hotmart3_99}
+        onChange={(v) => onChange({ ...valor, hotmart3_99: v })}
+      />
+
+      <LinhaImposto
+        titulo="5,93% de imposto empresa"
+        legenda="Aplicado sobre o faturamento total (deduz do faturamento)."
+        marcado={valor.empresa5_93}
+        onChange={(v) => onChange({ ...valor, empresa5_93: v })}
+      />
 
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <button

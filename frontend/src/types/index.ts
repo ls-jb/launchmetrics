@@ -299,6 +299,9 @@ export interface PerpetuoOfertaDetalhe {
   categoria: CategoriaPerpetuo
   quantidade: number
   receita: number
+  /** Parcela da receita vinda só de vendas plataforma=Hotmart. Usada
+   * pelo front pra aplicar a taxa de 3,99% (que só incide nessas). */
+  receita_hotmart: number
 }
 
 /** Categoria da oferta cadastrada: se null, o backend deriva pelo nome
