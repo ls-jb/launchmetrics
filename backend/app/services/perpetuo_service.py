@@ -292,8 +292,9 @@ async def _ofertas_com_metricas(
     inicio_dt, fim_dt = _range_utc(inicio, fim)
     sub = _vendas_efetivas_subquery(codigos, inicio_dt, fim_dt)
 
-    # Recupera qtd, receita e receita_hotmart (só vendas plataforma=Hotmart)
-    # de uma vez — pra taxa de 3,99% da Hotmart no client sem query extra.
+    # Recupera qtd, receita e receita/qtd Hotmart (só vendas plataforma=Hotmart)
+    # de uma vez — pra taxa da Hotmart (4% + R$1/venda) no client sem query extra.
+    eh_hotmart = sub.c.plataforma == "Hotmart"
     rows = (
         await db.execute(
             select(
@@ -301,24 +302,31 @@ async def _ofertas_com_metricas(
                 func.count().label("qtd"),
                 func.coalesce(func.sum(sub.c.v), 0).label("receita"),
                 func.coalesce(
-                    func.sum(
-                        case((sub.c.plataforma == "Hotmart", sub.c.v), else_=0)
-                    ),
+                    func.sum(case((eh_hotmart, sub.c.v), else_=0)),
                     0,
                 ).label("receita_hotmart"),
+                func.coalesce(
+                    func.sum(case((eh_hotmart, 1), else_=0)),
+                    0,
+                ).label("qtd_hotmart"),
             ).group_by(sub.c.oferta_codigo)
         )
     ).all()
 
-    metricas: dict[str, tuple[int, Decimal, Decimal]] = {
-        r.oferta_codigo: (int(r.qtd), Decimal(r.receita), Decimal(r.receita_hotmart))
+    metricas: dict[str, tuple[int, Decimal, Decimal, int]] = {
+        r.oferta_codigo: (
+            int(r.qtd),
+            Decimal(r.receita),
+            Decimal(r.receita_hotmart),
+            int(r.qtd_hotmart),
+        )
         for r in rows
     }
 
     detalhes: list[OfertaDetalhe] = []
     for o in ofertas:
-        qtd, receita, receita_hotmart = metricas.get(
-            o.oferta_codigo, (0, Decimal("0"), Decimal("0"))
+        qtd, receita, receita_hotmart, qtd_hotmart = metricas.get(
+            o.oferta_codigo, (0, Decimal("0"), Decimal("0"), 0)
         )
         detalhes.append(
             OfertaDetalhe(
@@ -329,6 +337,7 @@ async def _ofertas_com_metricas(
                 quantidade=qtd,
                 receita=receita,
                 receita_hotmart=receita_hotmart,
+                quantidade_hotmart=qtd_hotmart,
             )
         )
     # Receita desc; sem venda vai pro fim

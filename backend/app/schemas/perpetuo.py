@@ -90,8 +90,11 @@ class OfertaDetalhe(BaseModel):
     receita: Money
     receita_hotmart: Money = Decimal("0")  # type: ignore[assignment]
     """Parcela da receita vinda de vendas com plataforma=Hotmart. Usada
-    pelo front pra calcular a taxa de 3,99% da Hotmart (que se aplica
+    pelo front pra calcular a taxa de 4% da Hotmart (que se aplica
     só a essas vendas)."""
+    quantidade_hotmart: int = 0
+    """Qtd de vendas com plataforma=Hotmart. Usada pelo front pra taxa
+    fixa de R$1 por venda da Hotmart."""
 
 
 class PontoVendaCategoria(BaseModel):

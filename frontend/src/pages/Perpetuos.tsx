@@ -338,15 +338,21 @@ function DetalhePerpetuo({
     (s, o) => s + Number(o.receita_hotmart),
     0,
   )
+  const qtdHotmart = ofertasAtivas.reduce(
+    (s, o) => s + (o.quantidade_hotmart ?? 0),
+    0,
+  )
   const qtd = ofertasAtivas.reduce((s, o) => s + o.quantidade, 0)
-  // Aplica taxas que incidem no faturamento. Hotmart 3,99% só sobre
-  // receita de vendas Hotmart; empresa 5,93% sobre faturamento total.
-  const taxaHotmart = impostos.hotmart3_99 ? receitaHotmart * 0.0399 : 0
+  // Aplica taxas que incidem no faturamento. Hotmart 4% + R$1 por venda
+  // só sobre vendas Hotmart; empresa 5,93% sobre faturamento total.
+  const taxaHotmart = impostos.hotmart
+    ? receitaHotmart * 0.04 + qtdHotmart * 1
+    : 0
   const taxaEmpresa = impostos.empresa5_93 ? receitaBruta * 0.0593 : 0
   const receita = receitaBruta - taxaHotmart - taxaEmpresa
   const roas = invest > 0 ? receita / invest : 0
   const algumImpostoAtivo =
-    impostos.metaAds12_5 || impostos.hotmart3_99 || impostos.empresa5_93
+    impostos.metaAds12_5 || impostos.hotmart || impostos.empresa5_93
 
   const alternarCategoriaKPI = (cat: CategoriaPerpetuo) => {
     const base = categoriasKPI ?? new Set(categoriasDisponiveis)
@@ -1468,13 +1474,14 @@ function fmtDiaBR(dia: string): string {
 // ============================================================
 type ImpostosConfig = {
   metaAds12_5: boolean
-  hotmart3_99: boolean
+  /** Hotmart: 4% da receita + R$1 por venda (só vendas Hotmart). */
+  hotmart: boolean
   empresa5_93: boolean
 }
 
 const IMPOSTOS_DEFAULT: ImpostosConfig = {
-  metaAds12_5: false,
-  hotmart3_99: false,
+  metaAds12_5: true,
+  hotmart: false,
   empresa5_93: false,
 }
 
@@ -1486,9 +1493,19 @@ function carregarImpostos(perpetuoId: string): ImpostosConfig {
   try {
     const raw = localStorage.getItem(chaveImpostos(perpetuoId))
     if (!raw) return IMPOSTOS_DEFAULT
-    const parsed = JSON.parse(raw) as Partial<ImpostosConfig>
-    // Merge com default pra sobreviver a upgrades futuros (chaves novas)
-    return { ...IMPOSTOS_DEFAULT, ...parsed }
+    const parsed = JSON.parse(raw) as Partial<ImpostosConfig> & {
+      hotmart3_99?: boolean
+    }
+    // Chave antiga (taxa era 3,99%) — mantém a escolha de quem já usava
+    const hotmart = parsed.hotmart ?? parsed.hotmart3_99 ?? IMPOSTOS_DEFAULT.hotmart
+    // Merge com default pra sobreviver a upgrades futuros (chaves novas).
+    // Imposto Meta sempre começa ativo ao entrar — desativar vale só até
+    // sair da página.
+    return {
+      metaAds12_5: true,
+      hotmart,
+      empresa5_93: parsed.empresa5_93 ?? IMPOSTOS_DEFAULT.empresa5_93,
+    }
   } catch {
     return IMPOSTOS_DEFAULT
   }
@@ -1570,10 +1587,10 @@ function FormImpostos({
       />
 
       <LinhaImposto
-        titulo="3,99% de taxa da Hotmart"
-        legenda="Aplicada apenas sobre a receita de vendas Hotmart (deduz do faturamento)."
-        marcado={valor.hotmart3_99}
-        onChange={(v) => onChange({ ...valor, hotmart3_99: v })}
+        titulo="4% + R$ 1 por venda de taxa da Hotmart"
+        legenda="Aplicada apenas sobre as vendas Hotmart (deduz do faturamento)."
+        marcado={valor.hotmart}
+        onChange={(v) => onChange({ ...valor, hotmart: v })}
       />
 
       <LinhaImposto
