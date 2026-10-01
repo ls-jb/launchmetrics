@@ -13,6 +13,7 @@ from app.api import (  # noqa: E402
     cron,
     lancamentos,
     lancamentos_pagos,
+    luzi,
     perpetuos,
     placar,
     usuarios,
@@ -54,6 +55,7 @@ app.include_router(vendas.router, prefix="/api")
 app.include_router(webhooks.router, prefix="/api")
 app.include_router(usuarios.router, prefix="/api")
 app.include_router(placar.router, prefix="/api")
+app.include_router(luzi.router, prefix="/api")
 
 
 @app.get("/health", tags=["health"])

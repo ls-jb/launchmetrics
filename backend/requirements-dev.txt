@@ -14,3 +14,7 @@ python-multipart>=0.0.20
 
 # HTTP client para testes manuais / scripts
 httpx>=0.28
+
+# Testes automatizados (backend/tests) — rode: python -m pytest
+pytest>=9.0
+pytest-asyncio>=1.0

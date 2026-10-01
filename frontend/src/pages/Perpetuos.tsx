@@ -1,5 +1,5 @@
 import { format } from 'date-fns'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react'
 
 import { BotaoAtualizar } from '@/components/shared/BotaoAtualizar'
 import { FiltroData } from '@/components/shared/FiltroData'
@@ -8,6 +8,7 @@ import { KPICard } from '@/components/shared/KPICard'
 import { Modal } from '@/components/shared/Modal'
 import { extrairErro } from '@/lib/erro'
 import { formatBRL, formatNum } from '@/lib/tokens'
+import { luziService } from '@/services/luziService'
 import {
   perpetuosService,
   type NovoPerpetuoPayload,
@@ -24,6 +25,11 @@ import type {
   PontoInvestimentoDia,
   PontoVendaCategoriaPerp,
 } from '@/types'
+
+// Chat da Luzi (com o renderizador de markdown) só é baixado quando aparece.
+const LuziChat = lazy(() =>
+  import('@/components/shared/LuziChat').then((m) => ({ default: m.LuziChat })),
+)
 
 // ============================================================
 // Página: lista de perpétuos
@@ -217,6 +223,23 @@ function DetalhePerpetuo({
   useEffect(() => {
     carregar(false)
   }, [carregar])
+
+  // Luzi (assistente de IA) só aparece nos perpétuos habilitados no backend.
+  const [luziHabilitada, setLuziHabilitada] = useState(false)
+  useEffect(() => {
+    let ativo = true
+    luziService
+      .config()
+      .then((c) => {
+        if (ativo) setLuziHabilitada(c.perpetuos_habilitados.includes(perpetuoId.toLowerCase()))
+      })
+      .catch(() => {
+        if (ativo) setLuziHabilitada(false)
+      })
+    return () => {
+      ativo = false
+    }
+  }, [perpetuoId])
 
   const adicionarAporte = async (
     dia: string,
@@ -670,6 +693,17 @@ function DetalhePerpetuo({
           onFechar={() => setModalImpostos(false)}
         />
       </Modal>
+
+      {luziHabilitada && (
+        <Suspense fallback={null}>
+          <LuziChat
+            perpetuoId={perpetuoId}
+            nomePerpetuo={completo.perpetuo.nome}
+            inicio={inicio}
+            fim={fim}
+          />
+        </Suspense>
+      )}
     </div>
   )
 }

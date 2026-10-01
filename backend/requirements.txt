@@ -19,3 +19,6 @@ PyJWT>=2.10
 
 # HTTP client — usado pra chamar a API admin do Supabase (criar/remover usuários)
 httpx>=0.28
+
+# Luzi — assistente de IA de vendas (API da Anthropic)
+anthropic>=1.11

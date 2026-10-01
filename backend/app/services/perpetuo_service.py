@@ -567,6 +567,43 @@ def _vendas_efetivas_subquery(codigos: list[str], inicio_dt, fim_dt):
     é a venda efetiva. Filtro de data é aplicado depois do dedup pra
     manter coerência entre filtros (mesma venda aparece sempre no mesmo
     dia, independente do range)."""
+    base = _base_vendas_dedup(codigos)
+    return (
+        select(
+            base.c.oferta_codigo,
+            base.c.v,
+            base.c.data_venda,
+            base.c.plataforma,
+        )
+        .where(
+            base.c.rn == 1,
+            base.c.data_venda >= inicio_dt,
+            base.c.data_venda < fim_dt,
+        )
+        .subquery()
+    )
+
+
+def vendas_efetivas_detalhadas_subquery(codigos: list[str], inicio_dt, fim_dt):
+    """Mesma regra de `_vendas_efetivas_subquery`, mas com os dados da venda
+    (comprador, método de pagamento e `origin` do payload Hotmart). Usada
+    pela Luzi — o dashboard segue na versão enxuta, que não lê o payload."""
+    base = _base_vendas_dedup(codigos, detalhado=True)
+    return (
+        select(base)
+        .where(
+            base.c.rn == 1,
+            base.c.data_venda >= inicio_dt,
+            base.c.data_venda < fim_dt,
+        )
+        .subquery()
+    )
+
+
+def _base_vendas_dedup(codigos: list[str], detalhado: bool = False):
+    """Vendas aprovadas (1ª recorrência) das ofertas, com valor efetivo
+    (override de ofertas_precos) e `rn` = posição da compra dentro do
+    par (email, oferta) — rn=1 é a venda efetiva."""
     valor_efetivo = func.coalesce(OfertaPreco.valor, Venda.valor).label("v")
     dedup_key = case(
         (Venda.forcar_no_dash.is_(True), cast(Venda.id, String)),
@@ -584,34 +621,29 @@ def _vendas_efetivas_subquery(codigos: list[str], inicio_dt, fim_dt):
         .over(partition_by=dedup_key, order_by=Venda.data_venda)
         .label("rn")
     )
-    base = (
-        select(
-            Venda.oferta_codigo.label("oferta_codigo"),
-            valor_efetivo,
-            Venda.data_venda.label("data_venda"),
-            Venda.plataforma.label("plataforma"),
-            rn,
-        )
+    colunas = [
+        Venda.oferta_codigo.label("oferta_codigo"),
+        valor_efetivo,
+        Venda.data_venda.label("data_venda"),
+        Venda.plataforma.label("plataforma"),
+        rn,
+    ]
+    if detalhado:
+        colunas += [
+            Venda.id.label("venda_id"),
+            Venda.comprador_nome.label("comprador_nome"),
+            Venda.comprador_email.label("comprador_email"),
+            Venda.metodo_pagamento.label("metodo_pagamento"),
+            Venda.payload_bruto["data"]["purchase"]["origin"].label("origin"),
+        ]
+    return (
+        select(*colunas)
         .select_from(Venda)
         .outerjoin(OfertaPreco, OfertaPreco.oferta_codigo == Venda.oferta_codigo)
         .where(
             Venda.oferta_codigo.in_(codigos),
             Venda.status == "aprovada",
             or_(Venda.recorrencia_seq.is_(None), Venda.recorrencia_seq == 1),
-        )
-        .subquery()
-    )
-    return (
-        select(
-            base.c.oferta_codigo,
-            base.c.v,
-            base.c.data_venda,
-            base.c.plataforma,
-        )
-        .where(
-            base.c.rn == 1,
-            base.c.data_venda >= inicio_dt,
-            base.c.data_venda < fim_dt,
         )
         .subquery()
     )

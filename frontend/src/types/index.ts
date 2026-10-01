@@ -393,3 +393,18 @@ export interface LancamentoPagoCompleto {
   lancamento: LancamentoPago
   totais_por_categoria: LancamentoPagoTotal[]
 }
+
+// ============================================================
+// Luzi — assistente de IA de vendas
+// ============================================================
+export type PapelMensagemLuzi = 'usuario' | 'luzi'
+
+export interface MensagemLuzi {
+  papel: PapelMensagemLuzi
+  conteudo: string
+}
+
+export interface LuziConfig {
+  /** Ids (minúsculos) dos perpétuos com a Luzi habilitada. */
+  perpetuos_habilitados: string[]
+}
