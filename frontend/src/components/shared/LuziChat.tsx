@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from 'react'
+import type {
+  CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent,
+  PointerEvent as ReactPointerEvent,
+} from 'react'
 import ReactMarkdown from 'react-markdown'
 import type { Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -32,6 +36,7 @@ export function LuziChat({ perpetuoId, nomePerpetuo, inicio, fim }: LuziChatProp
   const [aberto, setAberto] = useState(false)
   const conversa = useConversaLuzi(perpetuoId, inicio, fim)
   const telaPequena = useTelaPequena()
+  const arraste = usePosicaoLuzi()
 
   useEffect(() => {
     if (!aberto) return
@@ -50,13 +55,194 @@ export function LuziChat({ perpetuoId, nomePerpetuo, inicio, fim }: LuziChatProp
           nomePerpetuo={nomePerpetuo}
           conversa={conversa}
           telaPequena={telaPequena}
+          arraste={arraste}
           onFechar={() => setAberto(false)}
         />
       ) : (
-        <BotaoFlutuante onClick={() => setAberto(true)} />
+        <BotaoFlutuante
+          arraste={arraste}
+          onClick={() => {
+            // Soltar depois de arrastar não conta como clique
+            if (!arraste.arrastou.current) setAberto(true)
+          }}
+        />
       )}
     </>
   )
+}
+
+// ============================================================
+// Posição e tamanho ajustáveis (âncora no canto inferior direito,
+// salvos no navegador de cada usuário)
+// ============================================================
+interface Posicao {
+  right: number
+  bottom: number
+}
+
+interface Tamanho {
+  largura: number
+  altura: number
+}
+
+/** Bordas/cantos de onde dá pra redimensionar (n = topo, s = base, w = esquerda, e = direita). */
+type Direcao = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
+
+type ArrasteLuzi = ReturnType<typeof usePosicaoLuzi>
+
+const POSICAO_PADRAO: Posicao = { right: 24, bottom: 24 }
+const TAMANHO_PADRAO: Tamanho = { largura: 420, altura: 640 }
+const TAMANHO_MINIMO: Tamanho = { largura: 320, altura: 360 }
+const MARGEM_TELA = 8
+const CHAVE_POSICAO = 'luzi:posicao'
+const CHAVE_TAMANHO = 'luzi:tamanho'
+const LIMIAR_ARRASTE_PX = 4
+
+function usePosicaoLuzi() {
+  const [posicao, setPosicao] = useState<Posicao>(() => carregar(CHAVE_POSICAO, POSICAO_PADRAO))
+  const [tamanho, setTamanho] = useState<Tamanho>(() => carregar(CHAVE_TAMANHO, TAMANHO_PADRAO))
+  const tela = useTamanhoTela()
+  const arrastou = useRef(false)
+
+  useEffect(() => salvar(CHAVE_POSICAO, posicao), [posicao])
+  useEffect(() => salvar(CHAVE_TAMANHO, tamanho), [tamanho])
+
+  const iniciar = useCallback((e: ReactPointerEvent<HTMLElement>, alvo: HTMLElement | null) => {
+    const origem = inicioDoGesto(e, alvo)
+    if (!origem) return
+    arrastou.current = false
+    acompanharPonteiro((dx, dy) => {
+      if (!arrastou.current && Math.hypot(dx, dy) < LIMIAR_ARRASTE_PX) return
+      arrastou.current = true
+      setPosicao(dentroDaTela({ right: origem.right - dx, bottom: origem.bottom - dy }, origem.largura, origem.altura))
+    }, origem)
+  }, [])
+
+  const redimensionar = useCallback((e: ReactPointerEvent<HTMLElement>, direcao: Direcao, alvo: HTMLElement | null) => {
+    const origem = inicioDoGesto(e, alvo)
+    if (!origem) return
+    e.stopPropagation()
+    acompanharPonteiro((dx, dy) => {
+      const lado = (inicio: string, fim: string) => (direcao.includes(inicio) ? 'inicio' : direcao.includes(fim) ? 'fim' : null)
+      const h = redimensionarEixo(origem.right, origem.largura, dx, lado('w', 'e'), window.innerWidth, TAMANHO_MINIMO.largura)
+      const v = redimensionarEixo(origem.bottom, origem.altura, dy, lado('n', 's'), window.innerHeight, TAMANHO_MINIMO.altura)
+      setPosicao({ right: h.pos, bottom: v.pos })
+      setTamanho({ largura: h.tam, altura: v.tam })
+    }, origem)
+  }, [])
+
+  const resetar = useCallback(() => {
+    setPosicao(POSICAO_PADRAO)
+    setTamanho(TAMANHO_PADRAO)
+  }, [])
+
+  /** Posição ajustada pra um elemento de largura×altura caber na tela. */
+  const visivel = (largura: number, altura: number) => dentroDaTela(posicao, largura, altura, tela)
+
+  /** Tamanho do painel limitado ao tamanho atual da janela. */
+  const tamanhoPainel: Tamanho = {
+    largura: Math.min(tamanho.largura, tela.w - 2 * MARGEM_TELA),
+    altura: Math.min(tamanho.altura, tela.h - 2 * MARGEM_TELA),
+  }
+
+  return { iniciar, redimensionar, resetar, visivel, tamanhoPainel, arrastou }
+}
+
+function useTamanhoTela() {
+  const [tela, setTela] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }))
+  useEffect(() => {
+    const aoRedimensionar = () => setTela({ w: window.innerWidth, h: window.innerHeight })
+    window.addEventListener('resize', aoRedimensionar)
+    return () => window.removeEventListener('resize', aoRedimensionar)
+  }, [])
+  return tela
+}
+
+interface OrigemGesto extends Posicao, Tamanho {
+  x: number
+  y: number
+}
+
+/** Foto do elemento e do ponteiro no início de um arraste/redimensionamento. */
+function inicioDoGesto(e: ReactPointerEvent<HTMLElement>, alvo: HTMLElement | null): OrigemGesto | null {
+  if (e.button !== 0 || !alvo) return null
+  e.preventDefault() // evita selecionar texto durante o gesto
+  const rect = alvo.getBoundingClientRect()
+  return {
+    x: e.clientX,
+    y: e.clientY,
+    right: window.innerWidth - rect.right,
+    bottom: window.innerHeight - rect.bottom,
+    largura: rect.width,
+    altura: rect.height,
+  }
+}
+
+/** Chama `aoMover(dx, dy)` a cada movimento até o ponteiro ser solto. */
+function acompanharPonteiro(aoMover: (dx: number, dy: number) => void, origem: { x: number; y: number }) {
+  const mover = (ev: PointerEvent) => aoMover(ev.clientX - origem.x, ev.clientY - origem.y)
+  const soltar = () => {
+    window.removeEventListener('pointermove', mover)
+    window.removeEventListener('pointerup', soltar)
+    window.removeEventListener('pointercancel', soltar)
+  }
+  window.addEventListener('pointermove', mover)
+  window.addEventListener('pointerup', soltar)
+  window.addEventListener('pointercancel', soltar)
+}
+
+/**
+ * Redimensiona num eixo com a âncora no fim (right/bottom).
+ * lado 'inicio' = borda esquerda/topo (âncora parada); 'fim' = borda
+ * direita/base (âncora anda junto). Nunca deixa sair da tela.
+ */
+function redimensionarEixo(
+  pos: number,
+  tam: number,
+  delta: number,
+  lado: 'inicio' | 'fim' | null,
+  tela: number,
+  minimo: number,
+): { pos: number; tam: number } {
+  const faixa = (v: number, max: number) => Math.max(minimo, Math.min(v, Math.max(minimo, max)))
+  if (lado === 'inicio') return { pos, tam: faixa(tam - delta, tela - pos - MARGEM_TELA) }
+  if (lado === 'fim') {
+    const novo = faixa(tam + delta, tam + pos - MARGEM_TELA)
+    return { pos: pos - (novo - tam), tam: novo }
+  }
+  return { pos, tam }
+}
+
+function dentroDaTela(
+  p: Posicao,
+  largura: number,
+  altura: number,
+  tela = { w: window.innerWidth, h: window.innerHeight },
+): Posicao {
+  const limitar = (v: number, max: number) => Math.max(MARGEM_TELA, Math.min(v, Math.max(MARGEM_TELA, max)))
+  return {
+    right: limitar(p.right, tela.w - largura - MARGEM_TELA),
+    bottom: limitar(p.bottom, tela.h - altura - MARGEM_TELA),
+  }
+}
+
+function carregar<T extends object>(chave: string, padrao: T): T {
+  try {
+    const salvo = JSON.parse(localStorage.getItem(chave) ?? 'null') as Record<string, unknown> | null
+    const valido = salvo && Object.keys(padrao).every((k) => Number.isFinite(salvo[k]))
+    if (valido) return { ...padrao, ...salvo } as T
+  } catch {
+    // localStorage indisponível (aba anônima etc.) — usa o padrão
+  }
+  return padrao
+}
+
+function salvar(chave: string, valor: object) {
+  try {
+    localStorage.setItem(chave, JSON.stringify(valor))
+  } catch {
+    // sem localStorage o ajuste só não fica salvo
+  }
 }
 
 // ============================================================
@@ -125,16 +311,25 @@ function useTelaPequena() {
 // ============================================================
 // Botão flutuante
 // ============================================================
-function BotaoFlutuante({ onClick }: { onClick: () => void }) {
+// Tamanho aproximado do botão — só pra mantê-lo na tela quando a janela
+// encolhe; durante o arraste usamos o tamanho real.
+const BOTAO_LARGURA = 190
+const BOTAO_ALTURA = 48
+
+function BotaoFlutuante({ arraste, onClick }: { arraste: ArrasteLuzi; onClick: () => void }) {
+  const ref = useRef<HTMLButtonElement>(null)
   return (
     <button
+      ref={ref}
       onClick={onClick}
-      title="Pergunte à Luzi sobre as vendas"
+      onPointerDown={(e) => arraste.iniciar(e, ref.current)}
+      title="Pergunte à Luzi sobre as vendas (arraste para mover)"
       style={{
         position: 'fixed',
-        right: 24,
-        bottom: 24,
+        ...arraste.visivel(BOTAO_LARGURA, BOTAO_ALTURA),
         zIndex: 40,
+        touchAction: 'none',
+        userSelect: 'none',
         display: 'flex',
         alignItems: 'center',
         gap: 8,
@@ -145,7 +340,7 @@ function BotaoFlutuante({ onClick }: { onClick: () => void }) {
         color: '#fff',
         fontSize: 14,
         fontWeight: 600,
-        cursor: 'pointer',
+        cursor: 'grab',
         boxShadow: '0 8px 24px rgba(124,106,247,0.45)',
         animation: 'luziSobe 0.25s ease-out',
       }}
@@ -163,19 +358,31 @@ function PainelLuzi({
   nomePerpetuo,
   conversa,
   telaPequena,
+  arraste,
   onFechar,
 }: {
   nomePerpetuo: string
   conversa: ConversaLuzi
   telaPequena: boolean
+  arraste: ArrasteLuzi
   onFechar: () => void
 }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const { largura, altura } = arraste.tamanhoPainel
   const posicao: CSSProperties = telaPequena
     ? { inset: 0, borderRadius: 0 }
-    : { right: 24, bottom: 24, width: 420, height: 'min(640px, calc(100vh - 48px))', borderRadius: 16 }
+    : { ...arraste.visivel(largura, altura), width: largura, height: altura, borderRadius: 16 }
+
+  // Arrasta pelo cabeçalho (menos nos botões dele). No celular o painel
+  // ocupa a tela toda, então não move.
+  const aoPressionarCabecalho = (e: ReactPointerEvent<HTMLElement>) => {
+    if (telaPequena || (e.target as HTMLElement).closest('button')) return
+    arraste.iniciar(e, ref.current)
+  }
 
   return (
     <div
+      ref={ref}
       role="dialog"
       aria-label="Luzi, assistente de vendas"
       style={{
@@ -194,28 +401,98 @@ function PainelLuzi({
       <CabecalhoLuzi
         nomePerpetuo={nomePerpetuo}
         podeLimpar={conversa.mensagens.length > 0 && !conversa.enviando}
+        arrastavel={!telaPequena}
+        onPressionar={aoPressionarCabecalho}
+        onResetarPosicao={arraste.resetar}
         onLimpar={conversa.limpar}
         onFechar={onFechar}
       />
       <ListaMensagens conversa={conversa} />
       <CampoPergunta enviando={conversa.enviando} onEnviar={conversa.enviar} />
+      {!telaPequena && (
+        <AlcasRedimensionar onIniciar={(e, direcao) => arraste.redimensionar(e, direcao, ref.current)} />
+      )}
     </div>
+  )
+}
+
+// Faixas invisíveis nas bordas/cantos pra redimensionar o painel.
+const ESPESSURA_BORDA = 6
+const TAMANHO_CANTO = 14
+const ALCAS: { direcao: Direcao; style: CSSProperties }[] = [
+  { direcao: 'n', style: { top: 0, left: TAMANHO_CANTO, right: TAMANHO_CANTO, height: ESPESSURA_BORDA, cursor: 'ns-resize' } },
+  { direcao: 's', style: { bottom: 0, left: TAMANHO_CANTO, right: TAMANHO_CANTO, height: ESPESSURA_BORDA, cursor: 'ns-resize' } },
+  { direcao: 'w', style: { left: 0, top: TAMANHO_CANTO, bottom: TAMANHO_CANTO, width: ESPESSURA_BORDA, cursor: 'ew-resize' } },
+  { direcao: 'e', style: { right: 0, top: TAMANHO_CANTO, bottom: TAMANHO_CANTO, width: ESPESSURA_BORDA, cursor: 'ew-resize' } },
+  { direcao: 'nw', style: { top: 0, left: 0, width: TAMANHO_CANTO, height: TAMANHO_CANTO, cursor: 'nwse-resize' } },
+  { direcao: 'ne', style: { top: 0, right: 0, width: TAMANHO_CANTO, height: TAMANHO_CANTO, cursor: 'nesw-resize' } },
+  { direcao: 'sw', style: { bottom: 0, left: 0, width: TAMANHO_CANTO, height: TAMANHO_CANTO, cursor: 'nesw-resize' } },
+  { direcao: 'se', style: { bottom: 0, right: 0, width: TAMANHO_CANTO, height: TAMANHO_CANTO, cursor: 'nwse-resize' } },
+]
+
+function AlcasRedimensionar({
+  onIniciar,
+}: {
+  onIniciar: (e: ReactPointerEvent<HTMLElement>, direcao: Direcao) => void
+}) {
+  return (
+    <>
+      {ALCAS.map(({ direcao, style }) => (
+        <div
+          key={direcao}
+          onPointerDown={(e) => onIniciar(e, direcao)}
+          style={{ position: 'absolute', zIndex: 2, touchAction: 'none', ...style }}
+        />
+      ))}
+      {/* "Pegada" visível no canto inferior direito */}
+      <svg
+        width={10}
+        height={10}
+        viewBox="0 0 10 10"
+        aria-hidden
+        style={{ position: 'absolute', right: 3, bottom: 3, pointerEvents: 'none', color: 'var(--text-dim)' }}
+      >
+        <path d="M9 1L1 9M9 5L5 9" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" />
+      </svg>
+    </>
   )
 }
 
 function CabecalhoLuzi({
   nomePerpetuo,
   podeLimpar,
+  arrastavel,
+  onPressionar,
+  onResetarPosicao,
   onLimpar,
   onFechar,
 }: {
   nomePerpetuo: string
   podeLimpar: boolean
+  arrastavel: boolean
+  onPressionar: (e: ReactPointerEvent<HTMLElement>) => void
+  onResetarPosicao: () => void
   onLimpar: () => void
   onFechar: () => void
 }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
+    <div
+      onPointerDown={onPressionar}
+      onDoubleClick={(e) => {
+        if (arrastavel && !(e.target as HTMLElement).closest('button')) onResetarPosicao()
+      }}
+      title={arrastavel ? 'Arraste para mover · puxe as bordas para redimensionar · clique duplo restaura' : undefined}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '12px 14px',
+        borderBottom: '1px solid var(--border)',
+        cursor: arrastavel ? 'grab' : 'default',
+        touchAction: arrastavel ? 'none' : 'auto',
+        userSelect: 'none',
+      }}
+    >
       <div style={{ width: 32, height: 32, borderRadius: '50%', background: ROXO, color: '#fff', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
         <IconeLuzi tamanho={18} />
       </div>
