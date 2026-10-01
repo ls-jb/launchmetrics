@@ -30,7 +30,10 @@ _PERIODO: dict[str, Any] = {
 
 _FILTROS: dict[str, Any] = {
     campo: {"type": "string", "description": f"Filtra por {campo} (valor exato, como aparece nos resultados)."}
-    for campo in ("categoria", "oferta", "canal", "criativo", "pagina", "metodo_pagamento")
+    for campo in (
+        "categoria", "oferta", "canal", "campanha", "conjunto", "criativo",
+        "posicionamento", "pagina", "metodo_pagamento",
+    )
 }
 
 
@@ -50,9 +53,11 @@ FERRAMENTAS: list[dict[str, Any]] = [
         "name": "vendas_agrupadas",
         "description": (
             "Agrupa as vendas efetivas por uma dimensão e devolve quantidade, faturamento, ticket "
-            "médio e % do faturamento por grupo. Dimensões de origem: canal (vsrc, ex. paid_metaads), "
-            "criativo (código do anúncio, ex. ADS_AC_21), anuncio (id do anúncio na Meta), pagina "
-            "(URL da página de venda) e referencia (site de onde veio, ex. instagram.com)."
+            "médio e % do faturamento por grupo. Dimensões de origem: canal (fonte/utm_source, ex. "
+            "paid_metaads ou FB), campanha, conjunto (de anúncios), criativo (nome/código do "
+            "anúncio), anuncio (id do anúncio na Meta), posicionamento (ex. Facebook_Mobile_Feed), "
+            "pagina (URL da página de venda) e referencia (site de onde veio, ex. instagram.com). "
+            "Nem todo perpétuo tem todas: dimensão só com '(sem origem)' = dado não rastreado."
         ),
         "input_schema": {
             "type": "object",

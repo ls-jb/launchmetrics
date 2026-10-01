@@ -6,9 +6,14 @@ As vendas seguem a MESMA regra de venda real do dashboard (via
 batem com os KPIs. A agregação é feita em Python: o volume por perpétuo é
 pequeno (centenas a poucos milhares de linhas).
 
-Origem da venda: a Hotmart não manda utm_* nessas vendas. A origem vem em
-`payload_bruto.data.purchase.origin` — `xcod` (texto JSON com canal, código
-do criativo, id do anúncio, página e referenciador), `src` e `sck`.
+Origem da venda: vem em `payload_bruto.data.purchase.origin` (`xcod`, `src`,
+`sck`). O `xcod` chega em dois formatos, conforme o rastreamento da página:
+  - JSON (ex. Agenda Cheia): canal (vsrc), código do criativo (co), id do
+    anúncio (vid), página (url) e referenciador (r);
+  - UTMify (ex. Protocolo Antidor): utm_source, utm_campaign, utm_medium
+    (conjunto), utm_content (anúncio) e utm_term (posicionamento), unidos
+    pelo separador SEPARADOR_UTMIFY — campanha/conjunto/anúncio no padrão
+    "nome|id".
 """
 import json
 from collections import defaultdict
@@ -16,6 +21,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Literal
+from urllib.parse import parse_qs
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
@@ -26,11 +32,13 @@ from app.services import perpetuo_service
 from app.services.perpetuo_service import BR_TZ
 
 SEM_ORIGEM = "(sem origem)"
+SEPARADOR_UTMIFY = "hQwK21wXxR"
 DIAS_SEMANA = ["segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo"]
 
 Dimensao = Literal[
     "dia", "semana", "mes", "hora", "dia_semana", "oferta", "categoria",
-    "metodo_pagamento", "canal", "criativo", "anuncio", "pagina", "referencia",
+    "metodo_pagamento", "canal", "campanha", "conjunto", "criativo", "anuncio",
+    "posicionamento", "pagina", "referencia",
 ]
 DIMENSOES: tuple[str, ...] = Dimensao.__args__  # type: ignore[attr-defined]
 
@@ -47,6 +55,9 @@ class OrigemVenda:
     referencia: str
     src: str | None
     sck: str | None
+    campanha: str = SEM_ORIGEM
+    conjunto: str = SEM_ORIGEM
+    posicionamento: str = SEM_ORIGEM
 
 
 @dataclass(frozen=True)
@@ -81,22 +92,53 @@ class VendaLuzi:
 # Origem (xcod / src / sck)
 # ============================================================
 def extrair_origem(origin: dict[str, Any] | None) -> OrigemVenda:
-    """Interpreta `purchase.origin` do payload Hotmart. Campos ausentes
-    viram SEM_ORIGEM — nunca levanta exceção."""
+    """Interpreta `purchase.origin` do payload Hotmart (xcod JSON ou UTMify).
+    Campos ausentes viram SEM_ORIGEM — nunca levanta exceção."""
     origin = origin if isinstance(origin, dict) else {}
-    xcod = _parse_xcod(origin.get("xcod"))
+    src = origin.get("src") or None
+    sck = origin.get("sck") or None
+    xcod_bruto = origin.get("xcod")
+    if isinstance(xcod_bruto, str) and SEPARADOR_UTMIFY in xcod_bruto:
+        return _origem_utmify(xcod_bruto, src, sck)
+    xcod = _parse_xcod(xcod_bruto)
     co = str(xcod.get("co") or "")
     criativo, _, anuncio_do_co = co.partition("|")
     url = str(xcod.get("url") or "").split("?")[0].rstrip("/")
     return OrigemVenda(
-        canal=_ou_sem_origem(xcod.get("vsrc")),
+        canal=_ou_sem_origem(xcod.get("vsrc") or _utm_source_do_sck(sck)),
         criativo=_ou_sem_origem(criativo),
         anuncio_id=_ou_sem_origem(xcod.get("vid") or anuncio_do_co),
         pagina=_ou_sem_origem(url),
         referencia=_ou_sem_origem(str(xcod.get("r") or "").rstrip("/")),
-        src=origin.get("src") or None,
-        sck=origin.get("sck") or None,
+        src=src,
+        sck=sck,
     )
+
+
+def _origem_utmify(xcod: str, src: str | None, sck: str | None) -> OrigemVenda:
+    """xcod = source SEP campanha|id SEP conjunto|id SEP anúncio|id SEP posicionamento."""
+    partes = (xcod.split(SEPARADOR_UTMIFY) + [""] * 5)[:5]
+    fonte, campanha, conjunto, anuncio, posicionamento = (p.strip() for p in partes)
+    anuncio_nome, _, anuncio_id = anuncio.partition("|")
+    return OrigemVenda(
+        canal=_ou_sem_origem(fonte or _utm_source_do_sck(sck)),
+        criativo=_ou_sem_origem(anuncio_nome),
+        anuncio_id=_ou_sem_origem(anuncio_id),
+        pagina=SEM_ORIGEM,
+        referencia=SEM_ORIGEM,
+        src=src,
+        sck=sck,
+        campanha=_ou_sem_origem(campanha.partition("|")[0]),
+        conjunto=_ou_sem_origem(conjunto.partition("|")[0]),
+        posicionamento=_ou_sem_origem(posicionamento),
+    )
+
+
+def _utm_source_do_sck(sck: str | None) -> str | None:
+    """sck às vezes vem como querystring (ex.: 'utm_source=FB')."""
+    if not sck or "utm_source=" not in sck:
+        return None
+    return (parse_qs(sck).get("utm_source") or [None])[0]
 
 
 def _parse_xcod(xcod: Any) -> dict[str, Any]:
@@ -208,8 +250,11 @@ def chave_dimensao(venda: VendaLuzi, dimensao: str) -> str:
         "categoria": lambda: venda.categoria,
         "metodo_pagamento": lambda: venda.metodo_pagamento or "(não informado)",
         "canal": lambda: venda.origem.canal,
+        "campanha": lambda: venda.origem.campanha,
+        "conjunto": lambda: venda.origem.conjunto,
         "criativo": lambda: venda.origem.criativo,
         "anuncio": lambda: venda.origem.anuncio_id,
+        "posicionamento": lambda: venda.origem.posicionamento,
         "pagina": lambda: venda.origem.pagina,
         "referencia": lambda: venda.origem.referencia,
     }
@@ -292,8 +337,11 @@ def venda_para_dict(v: VendaLuzi) -> dict[str, Any]:
         "email": v.comprador_email,
         "metodo_pagamento": v.metodo_pagamento,
         "canal": v.origem.canal,
+        "campanha": v.origem.campanha,
+        "conjunto": v.origem.conjunto,
         "criativo": v.origem.criativo,
         "anuncio_id": v.origem.anuncio_id,
+        "posicionamento": v.origem.posicionamento,
         "pagina": v.origem.pagina,
         "referencia": v.origem.referencia,
     }
@@ -361,6 +409,7 @@ def _compra_para_dict(v: Venda, ctx: ContextoPerpetuo) -> dict[str, Any]:
         "valor": _dinheiro(Decimal(v.valor)),
         "metodo_pagamento": v.metodo_pagamento,
         "canal": origem.canal,
+        "campanha": origem.campanha,
         "criativo": origem.criativo,
     }
 

@@ -57,6 +57,37 @@ def test_extrair_origem_co_sem_vid_pega_anuncio_do_co():
     assert origem.anuncio_id == "999"
 
 
+def test_extrair_origem_formato_utmify():
+    sep = "hQwK21wXxR"
+    xcod = sep.join([
+        "FB",
+        "[PAR][VENDA][FUNIL-02][ADS01-05] 29/07|120250577463890551",
+        "ADVANTAGE|120250577463880551",
+        "PAR_Funil02-ADS01-WHATSAPP|120250577463900551",
+        "Facebook_Mobile_Feed",
+    ])
+    origem = extrair_origem({"sck": "utm_source=FB", "xcod": xcod, "src": "abc"})
+    assert origem.canal == "FB"
+    assert origem.campanha == "[PAR][VENDA][FUNIL-02][ADS01-05] 29/07"
+    assert origem.conjunto == "ADVANTAGE"
+    assert origem.criativo == "PAR_Funil02-ADS01-WHATSAPP"
+    assert origem.anuncio_id == "120250577463900551"
+    assert origem.posicionamento == "Facebook_Mobile_Feed"
+    assert origem.pagina == SEM_ORIGEM
+
+
+def test_extrair_origem_utmify_incompleto_nao_quebra():
+    origem = extrair_origem({"xcod": "hQwK21wXxRcampanha|1"})
+    assert origem.canal == SEM_ORIGEM
+    assert origem.campanha == "campanha"
+    assert origem.posicionamento == SEM_ORIGEM
+
+
+def test_extrair_origem_canal_pelo_sck_quando_xcod_nao_traz():
+    origem = extrair_origem({"sck": "utm_source=FB&utm_medium=x"})
+    assert origem.canal == "FB"
+
+
 @pytest.mark.parametrize("origin", [None, {}, {"xcod": ""}, {"xcod": "isso não é json"}, {"xcod": "[1,2]"}, "texto"])
 def test_extrair_origem_invalida_nunca_quebra(origin):
     origem = extrair_origem(origin)  # type: ignore[arg-type]
