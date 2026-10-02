@@ -103,6 +103,8 @@ async def atualizar(
     meta_filtro_nome: str | None = None,
     *,
     atualizar_meta: bool = False,
+    meta_contas_extras: list[dict] | None = None,
+    atualizar_extras: bool = False,
 ) -> Perpetuo | None:
     perp = await db.get(Perpetuo, perpetuo_id)
     if not perp:
@@ -118,6 +120,10 @@ async def atualizar(
     if atualizar_meta:
         perp.meta_ad_account_id = meta_ad_account_id
         perp.meta_filtro_nome = meta_filtro_nome
+    # Extras só mudam quando o cliente manda o campo — evita que um PATCH
+    # antigo (só par principal) apague as contas adicionais.
+    if atualizar_extras:
+        perp.meta_contas_extras = meta_contas_extras or None
     await db.commit()
     await db.refresh(perp)
     return perp
@@ -654,6 +660,21 @@ DESCRICAO_META = "Meta Ads — sync automático"
 do que foi cadastrado manualmente (e refazer o UPSERT só nesses)."""
 
 
+def _pares_meta(perp: Perpetuo) -> list[tuple[str, str | None]]:
+    """Lista de pares (ad_account, filtro): principal + extras. Ignora
+    entradas sem ad_account_id (defensivo — JSONB pode vir torto)."""
+    pares: list[tuple[str, str | None]] = []
+    if perp.meta_ad_account_id:
+        pares.append((perp.meta_ad_account_id, perp.meta_filtro_nome))
+    for extra in perp.meta_contas_extras or []:
+        if not isinstance(extra, dict):
+            continue
+        ad = (extra.get("ad_account_id") or "").strip()
+        if ad:
+            pares.append((ad, extra.get("filtro_nome")))
+    return pares
+
+
 async def sincronizar_meta_perpetuo(
     db: AsyncSession,
     perpetuo_id: UUID,
@@ -668,18 +689,26 @@ async def sincronizar_meta_perpetuo(
     mantém aportes manuais. Roda mesmo se o perpétuo não tiver Meta
     configurado: nesse caso vira no-op e retorna 0 dias.
 
+    Com `meta_contas_extras`, soma por dia o gasto do par principal + de
+    todos os pares extras (cada par puxa independente).
+
     Retorna {dias: N, total: Decimal, periodo: [inicio, fim]}.
     """
     perp = await db.get(Perpetuo, perpetuo_id)
-    if not perp or not perp.meta_ad_account_id:
+    pares = _pares_meta(perp) if perp else []
+    if not pares:
         return {"dias": 0, "total": Decimal("0"), "periodo": None}
 
     fim = date.today()
     inicio = fim - timedelta(days=max(dias_retroativos, 0))
 
-    gastos = await meta_ads_service.puxar_gasto_por_dia(
-        perp.meta_ad_account_id, inicio, fim, perp.meta_filtro_nome
-    )
+    gastos: dict[date, Decimal] = defaultdict(lambda: Decimal("0"))
+    for ad_id, filtro in pares:
+        gastos_par = await meta_ads_service.puxar_gasto_por_dia(
+            ad_id, inicio, fim, filtro
+        )
+        for dia, valor in (gastos_par or {}).items():
+            gastos[dia] += valor
     if not gastos:
         return {
             "dias": 0,
@@ -719,7 +748,12 @@ async def sincronizar_meta_perpetuo(
 async def sincronizar_meta_todos(db: AsyncSession, dias_retroativos: int = 3) -> dict:
     """Roda sincronizar_meta_perpetuo() pra todo perpétuo com Meta configurado.
     Usado pelo endpoint de cron."""
-    stmt = select(Perpetuo).where(Perpetuo.meta_ad_account_id.is_not(None))
+    stmt = select(Perpetuo).where(
+        or_(
+            Perpetuo.meta_ad_account_id.is_not(None),
+            Perpetuo.meta_contas_extras.is_not(None),
+        )
+    )
     perps = list((await db.execute(stmt)).scalars().all())
     resultados = []
     for p in perps:

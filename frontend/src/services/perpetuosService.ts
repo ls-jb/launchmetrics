@@ -1,6 +1,7 @@
 import { api } from './api'
 import type {
   CategoriaPerpetuo,
+  MetaContaExtra,
   OfertaDisponivel,
   OfertaDoDiaPerp,
   Perpetuo,
@@ -22,6 +23,7 @@ export interface AtualizarPerpetuoPayload {
   investimento?: number | null
   meta_ad_account_id?: string | null
   meta_filtro_nome?: string | null
+  meta_contas_extras?: MetaContaExtra[] | null
 }
 
 export interface NovoAportePayload {

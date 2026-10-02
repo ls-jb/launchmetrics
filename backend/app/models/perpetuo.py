@@ -13,10 +13,11 @@ diário (Sprint 2 — cron pega gasto e gera aportes em perpetuos_aportes).
 """
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID as UUIDType, uuid4
 
 from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -42,6 +43,10 @@ class Perpetuo(Base):
     meta_filtro_nome: Mapped[str | None] = mapped_column(String)
     """Pattern (substring) pra filtrar campanhas pelo nome (ex: '[PAR]').
     Quando null, todas as campanhas da conta entram no investimento."""
+    meta_contas_extras: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
+    """Ad Accounts adicionais quando o perpétuo roda em >1 conta (ex: troca
+    de conta ou de filtro no meio do tráfego). Array de {ad_account_id,
+    filtro_nome}. O sync soma o gasto do par principal + todos os extras."""
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

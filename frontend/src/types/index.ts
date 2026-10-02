@@ -290,6 +290,7 @@ export interface Perpetuo {
   investimento: number
   meta_ad_account_id: string | null
   meta_filtro_nome: string | null
+  meta_contas_extras: MetaContaExtra[] | null
 }
 
 export interface PerpetuoOfertaDetalhe {

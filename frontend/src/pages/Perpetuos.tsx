@@ -16,6 +16,7 @@ import {
 import { useAuthStore } from '@/store/authStore'
 import type {
   CategoriaPerpetuo,
+  MetaContaExtra,
   OfertaDisponivel,
   OfertaDoDiaPerp,
   Perpetuo,
@@ -294,10 +295,14 @@ function DetalhePerpetuo({
     }
   }
 
-  const salvarMeta = async (ad: string | null, filtro: string | null) => {
+  const salvarMeta = async (contas: MetaContaExtra[]) => {
+    // Primeira conta vai pros campos principais; demais pra meta_contas_extras.
+    // Lista vazia limpa o vínculo inteiro.
+    const [principal, ...extras] = contas
     await perpetuosService.atualizar(perpetuoId, {
-      meta_ad_account_id: ad,
-      meta_filtro_nome: filtro,
+      meta_ad_account_id: principal?.ad_account_id ?? null,
+      meta_filtro_nome: principal?.filtro_nome ?? null,
+      meta_contas_extras: extras.length > 0 ? extras : null,
     })
     await carregar(false)
   }
@@ -412,6 +417,9 @@ function DetalhePerpetuo({
                 {' · '}Meta Ads {completo.perpetuo.meta_ad_account_id}
                 {completo.perpetuo.meta_filtro_nome
                   ? ` (filtro: "${completo.perpetuo.meta_filtro_nome}")`
+                  : ''}
+                {completo.perpetuo.meta_contas_extras?.length
+                  ? ` + ${completo.perpetuo.meta_contas_extras.length} conta(s)`
                   : ''}
               </>
             ) : null}
@@ -658,11 +666,20 @@ function DetalhePerpetuo({
         largura={480}
       >
         <FormConfigurarMeta
-          adInicial={completo.perpetuo.meta_ad_account_id}
-          filtroInicial={completo.perpetuo.meta_filtro_nome}
+          contasIniciais={[
+            ...(completo.perpetuo.meta_ad_account_id
+              ? [
+                  {
+                    ad_account_id: completo.perpetuo.meta_ad_account_id,
+                    filtro_nome: completo.perpetuo.meta_filtro_nome,
+                  },
+                ]
+              : []),
+            ...(completo.perpetuo.meta_contas_extras ?? []),
+          ]}
           onCancelar={() => setModalMeta(false)}
-          onSalvar={async (ad, filtro) => {
-            await salvarMeta(ad, filtro)
+          onSalvar={async (contas) => {
+            await salvarMeta(contas)
             setModalMeta(false)
           }}
         />
@@ -1110,27 +1127,38 @@ function FormAdicionarOferta({
 // Modal: configurar Meta Ads (ad_account_id + filtro)
 // ============================================================
 function FormConfigurarMeta({
-  adInicial,
-  filtroInicial,
+  contasIniciais,
   onCancelar,
   onSalvar,
 }: {
-  adInicial: string | null
-  filtroInicial: string | null
+  contasIniciais: MetaContaExtra[]
   onCancelar: () => void
-  onSalvar: (ad: string | null, filtro: string | null) => Promise<void>
+  onSalvar: (contas: MetaContaExtra[]) => Promise<void>
 }) {
-  const [ad, setAd] = useState(adInicial ?? '')
-  const [filtro, setFiltro] = useState(filtroInicial ?? '')
+  // Sempre pelo menos 1 slot — se não veio nada do banco, começa vazio.
+  const [contas, setContas] = useState<MetaContaExtra[]>(
+    contasIniciais.length > 0 ? contasIniciais : [{ ad_account_id: '', filtro_nome: '' }],
+  )
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState('')
+
+  const atualizarConta = (i: number, campo: keyof MetaContaExtra, valor: string) => {
+    setContas((prev) => prev.map((c, idx) => (idx === i ? { ...c, [campo]: valor } : c)))
+  }
 
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault()
     setErro('')
     setEnviando(true)
     try {
-      await onSalvar(ad.trim() || null, filtro.trim() || null)
+      // Linhas sem ad_account_id são descartadas (usuário limpou pra apagar).
+      const limpas = contas
+        .map((c) => ({
+          ad_account_id: c.ad_account_id.trim(),
+          filtro_nome: (c.filtro_nome ?? '').trim() || null,
+        }))
+        .filter((c) => c.ad_account_id !== '')
+      await onSalvar(limpas)
     } catch (err) {
       setErro(extrairErro(err))
       setEnviando(false)
@@ -1140,23 +1168,78 @@ function FormConfigurarMeta({
   return (
     <form onSubmit={enviar} style={{ display: 'grid', gap: 14 }}>
       <p style={{ margin: 0, fontSize: 12, color: 'var(--text-faint)' }}>
-        Vincule esse perpétuo a uma Ad Account da Meta. Aportes serão puxados
-        automaticamente das campanhas que tiverem o filtro no nome.
+        Vincule esse perpétuo a uma ou mais Ad Accounts da Meta. O sync soma o
+        gasto de <b>todas</b> as contas (cada uma filtrada pelo seu padrão de
+        nome) e gera os aportes diários. Aportes de dias já sincronizados não
+        são apagados ao trocar o filtro.
       </p>
-      <Campo
-        label="Ad Account ID"
-        tipo="text"
-        valor={ad}
-        onChange={setAd}
-        placeholder="Ex: 628263058826646"
-      />
-      <Campo
-        label="Filtro de campanhas (substring no nome)"
-        tipo="text"
-        valor={filtro}
-        onChange={setFiltro}
-        placeholder="Ex: [PAR]"
-      />
+
+      {contas.map((c, i) => (
+        <div
+          key={i}
+          style={{
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 10,
+            padding: 12,
+            display: 'grid',
+            gap: 8,
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ ...rotulo, marginBottom: 0, fontWeight: 700 }}>
+              Conta {i + 1}
+              {i === 0 && contas.length > 1 ? ' (principal)' : ''}
+            </span>
+            {contas.length > 1 && (
+              <button
+                type="button"
+                onClick={() => setContas((prev) => prev.filter((_, idx) => idx !== i))}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#EF4444',
+                  fontSize: 11,
+                  cursor: 'pointer',
+                  padding: 0,
+                }}
+              >
+                × Remover
+              </button>
+            )}
+          </div>
+          <Campo
+            label="Ad Account ID"
+            tipo="text"
+            valor={c.ad_account_id}
+            onChange={(v) => atualizarConta(i, 'ad_account_id', v)}
+            placeholder="Ex: 628263058826646"
+          />
+          <Campo
+            label="Filtro de campanhas (substring no nome)"
+            tipo="text"
+            valor={c.filtro_nome ?? ''}
+            onChange={(v) => atualizarConta(i, 'filtro_nome', v)}
+            placeholder="Ex: [PAR]"
+          />
+        </div>
+      ))}
+
+      <button
+        type="button"
+        onClick={() => setContas((prev) => [...prev, { ad_account_id: '', filtro_nome: '' }])}
+        style={{
+          background: 'transparent',
+          border: '1px dashed var(--border-strong)',
+          color: 'var(--text-muted)',
+          padding: '9px 12px',
+          borderRadius: 8,
+          fontSize: 12,
+          cursor: 'pointer',
+        }}
+      >
+        + Adicionar outra conta
+      </button>
 
       {erro && <Aviso texto={erro} />}
 

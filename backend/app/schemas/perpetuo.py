@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas._types import Money
+from app.schemas.lancamento import MetaContaExtra
 
 
 # ============================================================
@@ -34,6 +35,7 @@ class PerpetuoUpdate(BaseModel):
     investimento: Money | None = Field(default=None, ge=0)
     meta_ad_account_id: str | None = Field(default=None, max_length=64)
     meta_filtro_nome: str | None = Field(default=None, max_length=200)
+    meta_contas_extras: list[MetaContaExtra] | None = None
 
 
 class OfertaCreate(BaseModel):
@@ -64,6 +66,7 @@ class PerpetuoResponse(BaseModel):
     investimento: Money = 0  # type: ignore[assignment]
     meta_ad_account_id: str | None = None
     meta_filtro_nome: str | None = None
+    meta_contas_extras: list[MetaContaExtra] | None = None
 
 
 class PerpetuoOfertaResponse(BaseModel):

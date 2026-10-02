@@ -148,6 +148,11 @@ async def atualizar(
     atualiza_meta = "meta_ad_account_id" in dados.model_fields_set or (
         "meta_filtro_nome" in dados.model_fields_set
     )
+    extras = (
+        [c.model_dump() for c in dados.meta_contas_extras]
+        if dados.meta_contas_extras
+        else None
+    )
     perp = await svc.atualizar(
         db,
         perpetuo_id,
@@ -157,6 +162,8 @@ async def atualizar(
         dados.meta_ad_account_id,
         dados.meta_filtro_nome,
         atualizar_meta=atualiza_meta,
+        meta_contas_extras=extras,
+        atualizar_extras="meta_contas_extras" in dados.model_fields_set,
     )
     if not perp:
         raise HTTPException(status_code=404, detail="Perpétuo não encontrado.")
@@ -274,7 +281,7 @@ async def sync_meta_perpetuo(
 ):
     """Puxa o gasto Meta Ads dos últimos N dias pra esse perpétuo e faz
     UPSERT em perpetuos_aportes (preserva aportes manuais). Exige Meta
-    configurado (meta_ad_account_id setado)."""
+    configurado (par principal ou contas extras)."""
     if not await svc.obter(db, perpetuo_id):
         raise HTTPException(status_code=404, detail="Perpétuo não encontrado.")
     return await svc.sincronizar_meta_perpetuo(db, perpetuo_id, dias)
