@@ -291,6 +291,8 @@ export interface Perpetuo {
   meta_ad_account_id: string | null
   meta_filtro_nome: string | null
   meta_contas_extras: MetaContaExtra[] | null
+  /** Web App do Apps Script. Preenchida = vendas caem na planilha em tempo real. */
+  planilha_url: string | null
 }
 
 export interface PerpetuoOfertaDetalhe {

@@ -105,6 +105,8 @@ async def atualizar(
     atualizar_meta: bool = False,
     meta_contas_extras: list[dict] | None = None,
     atualizar_extras: bool = False,
+    planilha_url: str | None = None,
+    atualizar_planilha: bool = False,
 ) -> Perpetuo | None:
     perp = await db.get(Perpetuo, perpetuo_id)
     if not perp:
@@ -124,6 +126,9 @@ async def atualizar(
     # antigo (só par principal) apague as contas adicionais.
     if atualizar_extras:
         perp.meta_contas_extras = meta_contas_extras or None
+    # Mesma lógica: flag explícita pra permitir desligar a planilha (NULL).
+    if atualizar_planilha:
+        perp.planilha_url = planilha_url
     await db.commit()
     await db.refresh(perp)
     return perp

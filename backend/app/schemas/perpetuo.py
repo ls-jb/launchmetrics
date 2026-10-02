@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas._types import Money
 from app.schemas.lancamento import MetaContaExtra
@@ -16,6 +16,9 @@ from app.schemas.lancamento import MetaContaExtra
 Categoria = Literal[
     "Principal", "Order Bump", "Upsell", "UpUpsell", "Downsell", "Outros"
 ]
+
+
+PREFIXO_APPS_SCRIPT = "https://script.google.com/"
 
 
 # ============================================================
@@ -36,6 +39,21 @@ class PerpetuoUpdate(BaseModel):
     meta_ad_account_id: str | None = Field(default=None, max_length=64)
     meta_filtro_nome: str | None = Field(default=None, max_length=200)
     meta_contas_extras: list[MetaContaExtra] | None = None
+    planilha_url: str | None = Field(default=None, max_length=500)
+    """URL do Web App do Apps Script (termina em /exec). Vazio/null desliga."""
+
+    @field_validator("planilha_url")
+    @classmethod
+    def _validar_planilha_url(cls, v: str | None) -> str | None:
+        v = (v or "").strip()
+        if not v:
+            return None
+        if not v.startswith(PREFIXO_APPS_SCRIPT):
+            raise ValueError(
+                "Use a URL do Web App do Apps Script "
+                f"(começa com {PREFIXO_APPS_SCRIPT}), não a URL da planilha."
+            )
+        return v
 
 
 class OfertaCreate(BaseModel):
@@ -67,6 +85,13 @@ class PerpetuoResponse(BaseModel):
     meta_ad_account_id: str | None = None
     meta_filtro_nome: str | None = None
     meta_contas_extras: list[MetaContaExtra] | None = None
+    planilha_url: str | None = None
+
+
+class ReenvioPlanilhaResponse(BaseModel):
+    """Resultado do reenvio do histórico de vendas pra planilha."""
+
+    enviadas: int
 
 
 class PerpetuoOfertaResponse(BaseModel):

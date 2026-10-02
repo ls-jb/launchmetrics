@@ -47,6 +47,9 @@ class Perpetuo(Base):
     """Ad Accounts adicionais quando o perpétuo roda em >1 conta (ex: troca
     de conta ou de filtro no meio do tráfego). Array de {ad_account_id,
     filtro_nome}. O sync soma o gasto do par principal + todos os extras."""
+    planilha_url: Mapped[str | None] = mapped_column(String)
+    """URL do Web App (Apps Script) da planilha do perpétuo. Preenchida =
+    cada venda das ofertas cai na planilha em tempo real. Opcional."""
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

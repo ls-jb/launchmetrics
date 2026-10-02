@@ -25,6 +25,7 @@ from typing import Any
 import httpx
 
 from app.models import Venda
+from app.services import planilha_perpetuo_service
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,9 @@ STATUS_EXPORTADOS = {"aprovada", "reembolsada"}
 # ============================================================
 async def exportar(venda: Venda) -> None:
     """Envia a venda para a planilha. Nunca propaga erro."""
+    # Ponto único pós-commit de cada venda: aproveita pra mandar também pra
+    # planilha do perpétuo (se a oferta estiver num perpétuo com planilha).
+    await planilha_perpetuo_service.exportar_venda(venda)
     if not URL:
         return
     if venda.status not in STATUS_EXPORTADOS:

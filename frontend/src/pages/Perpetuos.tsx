@@ -180,6 +180,7 @@ function DetalhePerpetuo({
   const [erroDia, setErroDia] = useState('')
   const [modalAportes, setModalAportes] = useState(false)
   const [modalMeta, setModalMeta] = useState(false)
+  const [modalPlanilha, setModalPlanilha] = useState(false)
 
   // Filtro de categoria pros KPIs. null = ainda não inicializado (a 1ª
   // carga popula com todas as categorias existentes). Investimento fica
@@ -304,6 +305,11 @@ function DetalhePerpetuo({
       meta_filtro_nome: principal?.filtro_nome ?? null,
       meta_contas_extras: extras.length > 0 ? extras : null,
     })
+    await carregar(false)
+  }
+
+  const salvarPlanilha = async (url: string | null) => {
+    await perpetuosService.atualizar(perpetuoId, { planilha_url: url })
     await carregar(false)
   }
 
@@ -458,6 +464,18 @@ function DetalhePerpetuo({
               )}
               <button onClick={() => setModalMeta(true)} style={botaoSecundario}>
                 Meta Ads
+              </button>
+              <button
+                onClick={() => setModalPlanilha(true)}
+                style={{
+                  ...botaoSecundario,
+                  ...(completo.perpetuo.planilha_url
+                    ? { borderColor: '#3ECFB2', color: '#3ECFB2' }
+                    : {}),
+                }}
+                title="Cada venda das ofertas desse perpétuo cai numa planilha Google Sheets"
+              >
+                {completo.perpetuo.planilha_url ? '✓ Planilha' : 'Planilha'}
               </button>
               <button onClick={removerPerpetuo} style={{ ...botaoSecundario, color: '#EF4444' }}>
                 Remover
@@ -682,6 +700,20 @@ function DetalhePerpetuo({
             await salvarMeta(contas)
             setModalMeta(false)
           }}
+        />
+      </Modal>
+
+      <Modal
+        aberto={modalPlanilha}
+        titulo="Planilha de vendas"
+        onFechar={() => setModalPlanilha(false)}
+        largura={520}
+      >
+        <FormPlanilha
+          perpetuoId={perpetuoId}
+          urlInicial={completo.perpetuo.planilha_url}
+          onCancelar={() => setModalPlanilha(false)}
+          onSalvar={salvarPlanilha}
         />
       </Modal>
 
@@ -1250,6 +1282,101 @@ function FormConfigurarMeta({
         <button type="submit" disabled={enviando} style={botaoPrimario}>
           {enviando ? 'Salvando…' : 'Salvar'}
         </button>
+      </div>
+    </form>
+  )
+}
+
+// ============================================================
+// Modal da planilha — URL do Apps Script + reenvio do histórico
+// ============================================================
+function FormPlanilha({
+  perpetuoId,
+  urlInicial,
+  onCancelar,
+  onSalvar,
+}: {
+  perpetuoId: string
+  urlInicial: string | null
+  onCancelar: () => void
+  onSalvar: (url: string | null) => Promise<void>
+}) {
+  const [url, setUrl] = useState(urlInicial ?? '')
+  const [enviando, setEnviando] = useState(false)
+  const [reenviando, setReenviando] = useState(false)
+  const [erro, setErro] = useState('')
+  const [aviso, setAviso] = useState('')
+
+  const salvar = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setErro('')
+    setAviso('')
+    setEnviando(true)
+    try {
+      await onSalvar(url.trim() || null)
+      setAviso(url.trim() ? 'Salvo. As próximas vendas já caem na planilha.' : 'Planilha desligada.')
+    } catch (err) {
+      setErro(extrairErro(err))
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  const reenviar = async () => {
+    setErro('')
+    setAviso('')
+    setReenviando(true)
+    try {
+      const r = await perpetuosService.reenviarPlanilha(perpetuoId)
+      setAviso(`${formatNum(r.enviadas)} venda(s) enviadas pra planilha.`)
+    } catch (err) {
+      setErro(extrairErro(err))
+    } finally {
+      setReenviando(false)
+    }
+  }
+
+  const ocupado = enviando || reenviando
+
+  return (
+    <form onSubmit={salvar} style={{ display: 'grid', gap: 14 }}>
+      <p style={{ margin: 0, fontSize: 12, color: 'var(--text-faint)' }}>
+        Cada venda aprovada das ofertas desse perpétuo cai na
+        planilha na hora, com data/hora, produto, oferta, valor bruto da oferta
+        e UTMs. Cole aqui a URL do <b>App da Web</b> do Apps Script (termina em{' '}
+        <code>/exec</code>). O passo a passo está em{' '}
+        <code>backend/scripts/planilha_perpetuo.gs</code>.
+      </p>
+
+      <Campo
+        label="URL do App da Web (Apps Script)"
+        tipo="url"
+        valor={url}
+        onChange={setUrl}
+        placeholder="https://script.google.com/macros/s/.../exec"
+      />
+
+      {erro && <Aviso texto={erro} />}
+      {aviso && <p style={{ margin: 0, fontSize: 13, color: '#3ECFB2' }}>{aviso}</p>}
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          onClick={reenviar}
+          disabled={ocupado || !urlInicial}
+          style={{ ...botaoSecundarioModal, opacity: urlInicial ? 1 : 0.5 }}
+          title="Manda todas as vendas desde o início do perpétuo. Não duplica linhas."
+        >
+          {reenviando ? 'Enviando…' : 'Reenviar histórico'}
+        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" onClick={onCancelar} disabled={ocupado} style={botaoSecundarioModal}>
+            Fechar
+          </button>
+          <button type="submit" disabled={ocupado} style={botaoPrimario}>
+            {enviando ? 'Salvando…' : 'Salvar'}
+          </button>
+        </div>
       </div>
     </form>
   )

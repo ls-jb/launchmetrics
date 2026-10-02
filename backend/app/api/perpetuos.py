@@ -3,6 +3,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,8 +22,10 @@ from app.schemas.perpetuo import (
     PerpetuoUpdate,
     PontoInvestimentoDia,
     PontoVendaCategoria,
+    ReenvioPlanilhaResponse,
 )
 from app.services import perpetuo_service as svc
+from app.services import planilha_perpetuo_service as planilha_svc
 
 router = APIRouter(prefix="/perpetuos", tags=["perpetuos"])
 
@@ -164,6 +167,8 @@ async def atualizar(
         atualizar_meta=atualiza_meta,
         meta_contas_extras=extras,
         atualizar_extras="meta_contas_extras" in dados.model_fields_set,
+        planilha_url=dados.planilha_url,
+        atualizar_planilha="planilha_url" in dados.model_fields_set,
     )
     if not perp:
         raise HTTPException(status_code=404, detail="Perpétuo não encontrado.")
@@ -287,3 +292,33 @@ async def sync_meta_perpetuo(
     return await svc.sincronizar_meta_perpetuo(db, perpetuo_id, dias)
 
 
+
+
+# ============================================================
+# Planilha Google Sheets
+# ============================================================
+@router.post(
+    "/{perpetuo_id}/planilha/reenviar", response_model=ReenvioPlanilhaResponse
+)
+async def reenviar_planilha(
+    perpetuo_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_admin),
+):
+    """Manda todas as vendas do perpétuo pra planilha (carga inicial ou
+    correção). Upsert por id da venda — reenviar não duplica linhas."""
+    try:
+        enviadas = await planilha_svc.reenviar_historico(db, perpetuo_id)
+    except planilha_svc.PlanilhaNaoConfigurada:
+        raise HTTPException(
+            status_code=400, detail="Configure a URL da planilha antes de reenviar."
+        )
+    except httpx.HTTPError as e:
+        raise HTTPException(
+            status_code=502, detail=f"A planilha não respondeu: {e}"
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    if enviadas is None:
+        raise HTTPException(status_code=404, detail="Perpétuo não encontrado.")
+    return ReenvioPlanilhaResponse(enviadas=enviadas)

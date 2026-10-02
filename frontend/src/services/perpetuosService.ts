@@ -24,6 +24,7 @@ export interface AtualizarPerpetuoPayload {
   meta_ad_account_id?: string | null
   meta_filtro_nome?: string | null
   meta_contas_extras?: MetaContaExtra[] | null
+  planilha_url?: string | null
 }
 
 export interface NovoAportePayload {
@@ -132,6 +133,12 @@ export const perpetuosService = {
 
   removerAporte: (aporteId: string) =>
     api.delete(`/api/perpetuos/aportes/${aporteId}`).then(() => undefined),
+
+  // Manda todas as vendas do perpétuo pra planilha (upsert — não duplica)
+  reenviarPlanilha: (perpetuoId: string) =>
+    api
+      .post<{ enviadas: number }>(`/api/perpetuos/${perpetuoId}/planilha/reenviar`)
+      .then((r) => r.data),
 
   // Sincroniza com Meta Ads (puxa gasto das campanhas filtradas e
   // faz UPSERT em aportes). Retorna sumário com dias/total/período.
