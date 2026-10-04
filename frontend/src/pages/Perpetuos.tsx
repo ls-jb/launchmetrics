@@ -1,5 +1,5 @@
 import { format } from 'date-fns'
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { BotaoAtualizar } from '@/components/shared/BotaoAtualizar'
 import { FiltroData } from '@/components/shared/FiltroData'
@@ -199,8 +199,14 @@ function DetalhePerpetuo({
     salvarImpostos(perpetuoId, novo)
   }
 
+  // Trocando o período rápido, uma resposta antiga pode chegar depois da
+  // nova — só a requisição mais recente pode gravar no state.
+  const ultimaRequisicaoRef = useRef(0)
+
   const carregar = useCallback(
     async (silencioso = false) => {
+      const requisicao = ++ultimaRequisicaoRef.current
+      const ehAtual = () => requisicao === ultimaRequisicaoRef.current
       if (!silencioso) setCarregando(true)
       else setAtualizando(true)
       try {
@@ -209,14 +215,17 @@ function DetalhePerpetuo({
           perpetuosService.vendasPorDia(perpetuoId, inicio, fim),
           perpetuosService.investimentoPorDia(perpetuoId, inicio, fim),
         ])
+        if (!ehAtual()) return
         setCompleto(c)
         setVendasDia(v)
         setInvestDia(i)
       } catch (e) {
-        if (!silencioso) setErro(extrairErro(e))
+        if (!silencioso && ehAtual()) setErro(extrairErro(e))
       } finally {
-        if (!silencioso) setCarregando(false)
-        else setAtualizando(false)
+        if (ehAtual()) {
+          setCarregando(false)
+          setAtualizando(false)
+        }
       }
     },
     [perpetuoId, inicio, fim],
