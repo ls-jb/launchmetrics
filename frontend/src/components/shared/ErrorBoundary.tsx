@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react'
+import { ehErroDeChunk, recarregarAposDeploy } from '@/lib/recarregarAposDeploy'
 
 interface Props {
   children: ReactNode
@@ -16,6 +17,9 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(erro: Error, info: { componentStack?: string | null }) {
+    // Chunk antigo de antes de um deploy: recarrega sozinho em vez de mostrar erro.
+    if (ehErroDeChunk(erro) && recarregarAposDeploy()) return
+
     // Em produção isso vai pra console do navegador — o usuário consegue
     // copiar e mandar pra gente.
     console.error('[LM] Render crashed:', erro, info)
