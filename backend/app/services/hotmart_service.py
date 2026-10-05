@@ -181,10 +181,22 @@ def _extrair_metodo(purchase: dict) -> str | None:
 
 
 def _extrair_valor(purchase: dict) -> Decimal:
+    """Valor da venda em BRL.
+
+    `price` vem na moeda do comprador (EUR, JPY, PYG...). Gravar isso cru
+    fazia 351.969 guaranis virarem R$ 351.969. Em compra estrangeira usamos
+    `original_offer_price`, que a Hotmart manda em BRL — em compra BRL ele é
+    idêntico a `price`."""
     price = purchase.get("price") or {}
-    valor = price.get("value")
+    original = purchase.get("original_offer_price") or {}
+    moeda = (price.get("currency_value") or "BRL").upper()
+
+    if moeda != "BRL" and (original.get("currency_value") or "").upper() == "BRL":
+        valor = original.get("value")
+    else:
+        valor = price.get("value")
     if valor is None:
-        valor = purchase.get("full_price", {}).get("value", 0)
+        valor = (purchase.get("full_price") or {}).get("value", 0)
     try:
         return Decimal(str(valor))
     except Exception:
