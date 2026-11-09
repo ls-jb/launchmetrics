@@ -6,6 +6,7 @@ import { FiltroData } from '@/components/shared/FiltroData'
 import { GraficoPerpetuoDia } from '@/components/shared/GraficoPerpetuoDia'
 import { KPICard } from '@/components/shared/KPICard'
 import { Modal } from '@/components/shared/Modal'
+import { SecaoVsl } from '@/components/shared/SecaoVsl'
 import { extrairErro } from '@/lib/erro'
 import { formatBRL, formatNum } from '@/lib/tokens'
 import { luziService } from '@/services/luziService'
@@ -655,6 +656,16 @@ function DetalhePerpetuo({
           }}
         />
       </div>
+
+      {/* VSLs (VTurb) — mesmo período já resolvido pelo backend; recarrega
+          junto com a página (filtro, botão Atualizar, novo aporte…) */}
+      <SecaoVsl
+        perpetuoId={perpetuoId}
+        inicio={completo.inicio}
+        fim={completo.fim}
+        isAdmin={isAdmin}
+        recarga={completo}
+      />
 
       <Modal
         aberto={modalOferta}

@@ -358,6 +358,116 @@ export interface OfertaDisponivel {
   produto: string | null
 }
 
+// ============================================================
+// VSLs (VTurb) dos perpétuos
+// ============================================================
+/** Mesma categoria das ofertas — é ela que cruza a VSL com as vendas reais. */
+export type CategoriaVsl = 'Principal' | 'Upsell' | 'UpUpsell' | 'Downsell'
+
+export interface VturbPlayerVinculo {
+  id: string
+  player_id: string
+  player_nome: string | null
+  categoria: CategoriaVsl
+}
+
+export interface VturbPlayerDisponivel {
+  player_id: string
+  nome: string
+  duracao_seg: number | null
+  /** Segundo do pitch cadastrado na VTurb (null = não cadastrado). */
+  pitch_seg: number | null
+  plays_30d: number
+  criado_em: string | null
+}
+
+/** Taxas em porcentagem (0–100); null quando o denominador é zero. */
+export interface VslKpis {
+  views: number
+  views_unicas: number
+  plays: number
+  plays_unicos: number
+  play_rate: number | null
+  engajamento: number | null
+  tempo_medio_seg: number | null
+  finalizacoes: number
+  finalizacoes_unicas: number
+  taxa_finalizacao: number | null
+  cliques: number
+  cliques_unicos: number
+  taxa_clique: number | null
+  audiencia_pitch: number | null
+  retencao_pitch: number | null
+  /** Atribuição por pixel da VTurb — só referência, não é venda. */
+  conversoes_vturb: number
+  receita_vturb: number
+  conversao_vturb: number | null
+  // Vendas reais da categoria (só no total da categoria)
+  vendas_reais: number | null
+  receita_real: number | null
+  conversao_real: number | null
+  receita_por_play: number | null
+  // Só na categoria Principal
+  investimento: number | null
+  custo_por_play: number | null
+  custo_por_view: number | null
+}
+
+export interface VslPontoDia {
+  dia: string
+  views: number
+  views_unicas: number
+  plays: number
+  plays_unicos: number
+  play_rate: number | null
+  engajamento: number | null
+  finalizacoes_unicas: number
+  cliques_unicos: number
+  taxa_clique: number | null
+  conversoes_vturb: number
+}
+
+export interface VslLinhaPlayer {
+  vinculo_id: string
+  player_id: string
+  nome: string
+  categoria: CategoriaVsl
+  duracao_seg: number | null
+  pitch_seg: number | null
+  kpis: VslKpis
+}
+
+export interface VslPainel {
+  /** false = falta a chave da VTurb no backend. */
+  configurado: boolean
+  inicio: string
+  fim: string
+  categoria: CategoriaVsl | null
+  categorias_disponiveis: CategoriaVsl[]
+  vinculos: VturbPlayerVinculo[]
+  kpis: VslKpis | null
+  dias: VslPontoDia[]
+  players: VslLinhaPlayer[]
+}
+
+export interface VslCurvaPonto {
+  segundo: number
+  retencao: number | null
+  usuarios: number | null
+  cliques: number
+  conversoes: number
+}
+
+export interface VslCurva {
+  player_id: string
+  nome: string
+  duracao_seg: number | null
+  pitch_seg: number | null
+  tempo_medio_seg: number | null
+  engajamento: number | null
+  pontos: VslCurvaPonto[]
+}
+
 export interface LancamentoPagoOferta {
   id: string
   produto: string

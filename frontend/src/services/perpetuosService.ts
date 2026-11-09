@@ -1,6 +1,7 @@
 import { api } from './api'
 import type {
   CategoriaPerpetuo,
+  CategoriaVsl,
   MetaContaExtra,
   OfertaDisponivel,
   OfertaDoDiaPerp,
@@ -9,6 +10,10 @@ import type {
   PerpetuoCompleto,
   PontoInvestimentoDia,
   PontoVendaCategoriaPerp,
+  VslCurva,
+  VslPainel,
+  VturbPlayerDisponivel,
+  VturbPlayerVinculo,
 } from '@/types'
 
 export interface NovoPerpetuoPayload {
@@ -44,6 +49,12 @@ export interface NovaOfertaPayload {
 export interface AtualizarOfertaPayload {
   /** null limpa a categoria explícita — volta à heurística. */
   categoria: CategoriaPerpetuo | null
+}
+
+export interface NovoVturbPlayerPayload {
+  player_id: string
+  player_nome?: string | null
+  categoria: CategoriaVsl
 }
 
 function paramsPeriodo(inicio?: string, fim?: string) {
@@ -151,5 +162,41 @@ export const perpetuosService = {
       }>(`/api/perpetuos/${perpetuoId}/sync-meta`, null, {
         params: { dias },
       })
+      .then((r) => r.data),
+
+  // VSLs (VTurb)
+  vturbPlayersDisponiveis: () =>
+    api
+      .get<VturbPlayerDisponivel[]>('/api/perpetuos/_meta/vturb-players')
+      .then((r) => r.data),
+
+  adicionarVturbPlayer: (perpetuoId: string, dados: NovoVturbPlayerPayload) =>
+    api
+      .post<VturbPlayerVinculo>(`/api/perpetuos/${perpetuoId}/vturb-players`, dados)
+      .then((r) => r.data),
+
+  atualizarVturbPlayer: (vinculoId: string, categoria: CategoriaVsl) =>
+    api
+      .patch<VturbPlayerVinculo>(`/api/perpetuos/vturb-players/${vinculoId}`, { categoria })
+      .then((r) => r.data),
+
+  removerVturbPlayer: (vinculoId: string) =>
+    api.delete(`/api/perpetuos/vturb-players/${vinculoId}`).then(() => undefined),
+
+  /** Painel da categoria (sem categoria = a 1ª que tiver VSL vinculada). */
+  painelVsl: (perpetuoId: string, categoria?: CategoriaVsl, inicio?: string, fim?: string) => {
+    const { params } = paramsPeriodo(inicio, fim)
+    if (categoria) params.categoria = categoria
+    return api
+      .get<VslPainel>(`/api/perpetuos/${perpetuoId}/vsl`, { params })
+      .then((r) => r.data)
+  },
+
+  curvaVsl: (perpetuoId: string, playerId: string, inicio?: string, fim?: string) =>
+    api
+      .get<VslCurva>(
+        `/api/perpetuos/${perpetuoId}/vsl/${playerId}/curva`,
+        paramsPeriodo(inicio, fim),
+      )
       .then((r) => r.data),
 }
