@@ -2,7 +2,6 @@ import { format } from 'date-fns'
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { BotaoAtualizar } from '@/components/shared/BotaoAtualizar'
-import { AnaliseVsls } from '@/components/shared/AnaliseVsls'
 import { FiltroData } from '@/components/shared/FiltroData'
 import { GraficoPerpetuoDia } from '@/components/shared/GraficoPerpetuoDia'
 import { KPICard } from '@/components/shared/KPICard'
@@ -602,9 +601,6 @@ function DetalhePerpetuo({
           cor={invest > 0 ? '#7C6AF7' : 'var(--text-dim)'}
         />
       </div>
-
-      {/* Análise das VSLs (VTurb) — 7 e 30 dias fixos, logo no topo */}
-      <AnaliseVsls perpetuoId={perpetuoId} recarga={completo} />
 
       {/* Lista de ofertas */}
       <h3 style={tituloSecao}>Ofertas</h3>

@@ -11,6 +11,7 @@ import {
 import { perpetuosService } from '@/services/perpetuosService'
 import type { CategoriaVsl, VslCurva, VslKpis, VslLinhaPlayer, VslPainel } from '@/types'
 
+import { AnaliseVsls } from './AnaliseVsls'
 import { FormVturbPlayers } from './FormVturbPlayers'
 import { GraficoRetencaoVsl } from './GraficoRetencaoVsl'
 import { GraficoVslDia } from './GraficoVslDia'
@@ -105,6 +106,13 @@ export function SecaoVsl({
           <button type="button" onClick={carregar} style={botaoSecundarioVsl}>
             Tentar de novo
           </button>
+        </div>
+      )}
+
+      {/* Primeiro bloco da seção: análise 7 × 30 dias da categoria ativa */}
+      {painel?.configurado && ativa && (
+        <div style={{ marginBottom: 16 }}>
+          <AnaliseVsls perpetuoId={perpetuoId} categoria={ativa} recarga={recarga} />
         </div>
       )}
 
