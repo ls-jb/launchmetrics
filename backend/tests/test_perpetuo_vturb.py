@@ -194,6 +194,81 @@ def test_curva_de_retencao_com_cliques_e_conversoes():
 
 
 # ============================================================
+# Análise rápida (7 e 30 dias)
+# ============================================================
+def test_janelas_da_analise_sao_as_do_painel_da_vturb():
+    # Conferido com a planilha do time em 09/11: 7 dias = 03..09, 30 dias = 10/10..09/11
+    assert svc.janelas_analise(date(2026, 11, 9)) == [
+        (7, date(2026, 11, 3), date(2026, 11, 9)),
+        (30, date(2026, 10, 10), date(2026, 11, 9)),
+    ]
+
+
+def test_linha_da_analise_retencao_em_1min_5min_e_pitch():
+    player = vt.PlayerVturb(id="x", nome="VSL", duracao_seg=1622, pitch_seg=1200)
+    linha = svc.linha_analise(
+        player,
+        "Principal",
+        vt.normalizar_stats(_fixture("stats")),
+        vt.normalizar_engajamento(_fixture("engajamento")),
+    )
+    # 3765 na curva: 2570 ainda assistiam em 1:00, 1881 em 5:00 e 1105 em 20:00
+    assert (linha.retencao_1min, linha.retencao_5min, linha.retencao_pitch) == (68.26, 49.96, 29.35)
+    assert linha.conversao_vturb == 1.27  # 49 conversões ÷ 3860 plays únicos
+    assert linha.play_rate == 64.79
+    assert linha.plays_unicos == 3860
+
+
+def test_analise_sem_pitch_ou_video_curto_fica_sem_valor():
+    eng = vt.normalizar_engajamento(_fixture("engajamento"))
+    curto = vt.PlayerVturb(id="x", nome="Upsell", duracao_seg=240)
+    assert svc.retencao_em(curto, eng, 300) is None  # vídeo acaba antes de 5 min
+    assert svc.retencao_em(curto, eng, None) is None  # sem pitch cadastrado
+    assert svc.retencao_em(curto, vt.EngajamentoVsl(), 60) is None  # sem curva
+
+
+def test_analise_vsl_sem_play_nao_mostra_zero():
+    player = vt.PlayerVturb(id="x", nome="VSL", duracao_seg=1622, pitch_seg=1200)
+    eng_zerada = vt.EngajamentoVsl(saidas_por_segundo={0: 0, 5: 3})
+    linha = svc.linha_analise(player, "Principal", vt.StatsVsl(views_unicas=10), eng_zerada)
+    assert (linha.retencao_1min, linha.retencao_pitch, linha.conversao_vturb) == (None, None, None)
+    assert linha.play_rate == 0.0
+
+
+def test_analise_mantem_a_mesma_ordem_nas_duas_janelas():
+    def linha(pid: str, categoria: str, plays: int) -> svc.VslAnaliseLinha:
+        return svc.VslAnaliseLinha(player_id=pid, nome=pid, categoria=categoria, plays_unicos=plays)
+
+    sete = svc.VslAnaliseJanela(
+        dias=7, inicio=INICIO, fim=FIM,
+        linhas=[linha("up", "Upsell", 900), linha("a", "Principal", 50), linha("b", "Principal", 10)],
+    )
+    trinta = svc.VslAnaliseJanela(
+        dias=30, inicio=INICIO, fim=FIM,
+        linhas=[linha("up", "Upsell", 950), linha("a", "Principal", 100), linha("b", "Principal", 300)],
+    )
+    ordenadas = svc.ordenar_janelas([sete, trinta])
+    # Principal antes de Upsell; dentro da categoria, mais plays em 30 dias primeiro
+    assert [x.player_id for x in ordenadas[0].linhas] == ["b", "a", "up"]
+    assert [x.player_id for x in ordenadas[1].linhas] == ["b", "a", "up"]
+
+
+def test_analise_pede_stats_com_pitch_e_curva_com_duracao():
+    player = vt.PlayerVturb(id="x", nome="VSL", duracao_seg=1882, pitch_seg=1355)
+    stats, eng = svc._consultas_analise(player, INICIO, FIM)
+    assert stats.caminho == "/sessions/stats"
+    assert (stats.corpo["video_duration"], stats.corpo["pitch_time"]) == (1882, 1355)
+    assert eng is not None and eng.corpo["video_duration"] == 1882
+    assert svc._consultas_analise(vt.PlayerVturb(id="y", nome="sem duração"), INICIO, FIM)[1] is None
+
+
+def test_porcentagem_arredonda_meio_pra_cima_como_a_vturb():
+    assert svc._pct(207, 480) == 43.13  # 43,125
+    assert svc._pct(1, 3) == 33.33
+    assert svc._pct(5, 0) is None
+
+
+# ============================================================
 # Consultas, cache e HTTP
 # ============================================================
 def test_chave_da_consulta_independe_da_ordem_do_corpo():

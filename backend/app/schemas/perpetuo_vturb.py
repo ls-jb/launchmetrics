@@ -130,6 +130,38 @@ class VslPainel(BaseModel):
     players: list[VslLinhaPlayer] = []
 
 
+# ============================================================
+# Análise rápida (topo do perpétuo): janelas fixas de 7 e 30 dias
+# ============================================================
+class VslAnaliseLinha(BaseModel):
+    """Uma VSL numa janela da análise. Taxas em % (None = sem dado)."""
+
+    player_id: str
+    nome: str
+    categoria: CategoriaVsl
+    plays_unicos: int = 0
+    retencao_1min: float | None = None
+    retencao_5min: float | None = None
+    retencao_pitch: float | None = None
+    """None = pitch não cadastrado na VTurb."""
+    conversao_vturb: float | None = None
+    """Conversões do pixel VTurb ÷ plays únicos (atribuição, não é venda)."""
+    play_rate: float | None = None
+
+
+class VslAnaliseJanela(BaseModel):
+    dias: int
+    inicio: date
+    fim: date
+    linhas: list[VslAnaliseLinha] = []
+
+
+class VslAnalise(BaseModel):
+    configurado: bool
+    """False = falta a chave da VTurb no backend."""
+    janelas: list[VslAnaliseJanela] = []
+
+
 class VslCurvaPonto(BaseModel):
     segundo: int
     retencao: float | None = None

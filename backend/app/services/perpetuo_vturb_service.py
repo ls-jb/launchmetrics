@@ -19,7 +19,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
 from sqlalchemy import select
@@ -29,6 +29,9 @@ from app.models import Perpetuo, PerpetuoVturbPlayer
 from app.schemas.perpetuo import PerpetuoCompleto
 from app.schemas.perpetuo_vturb import (
     CategoriaVsl,
+    VslAnalise,
+    VslAnaliseJanela,
+    VslAnaliseLinha,
     VslCurva,
     VslCurvaPonto,
     VslKpis,
@@ -150,9 +153,10 @@ async def listar_disponiveis(db: AsyncSession) -> list[VturbPlayerDisponivel]:
 # Cálculos (funções puras)
 # ============================================================
 def _pct(num: int | Decimal | None, den: int) -> float | None:
+    """Arredonda meio pra cima (43,125 → 43,13), igual ao painel da VTurb."""
     if num is None or not den:
         return None
-    return round(float(num) / den * 100, 2)
+    return float((Decimal(num) * 100 / Decimal(den)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 def _por_unidade(valor: Decimal | None, den: int) -> Decimal | None:
@@ -394,6 +398,109 @@ async def painel_vsl(
     da_categoria = [v for v in vinculos if v.categoria == escolhida]
     dados = await _buscar_dados(db, da_categoria, completo.inicio, completo.fim)
     return _com_dados(painel, escolhida, dados, completo)
+
+
+# ============================================================
+# Análise rápida (topo do perpétuo): 7 e 30 dias, fixos
+# ============================================================
+JANELAS_ANALISE: tuple[tuple[int, int], ...] = ((7, 6), (30, 30))
+"""(dias do rótulo, quantos dias antes de hoje a janela começa). São as
+janelas "Últimos 7 dias" / "Últimos 30 dias" do painel da VTurb — conferido
+com a planilha do time em 09/11/2026: a de 7 começa em hoje−6 e a de 30 em
+hoje−30 (as duas terminam hoje)."""
+SEG_1MIN, SEG_5MIN = 60, 300
+
+
+def janelas_analise(hoje: date) -> list[tuple[int, date, date]]:
+    return [(dias, hoje - timedelta(days=atras), hoje) for dias, atras in JANELAS_ANALISE]
+
+
+def retencao_em(player: vt.PlayerVturb, eng: vt.EngajamentoVsl, segundo: int | None) -> float | None:
+    """% de quem deu play que ainda assistia no segundo dado. None sem curva,
+    sem o segundo (pitch não cadastrado) ou se ele passa do fim do vídeo."""
+    total = eng.total_usuarios
+    if not total or not segundo:
+        return None
+    if player.duracao_seg and segundo > player.duracao_seg:
+        return None
+    return _pct(eng.assistindo_em(segundo), total)
+
+
+def linha_analise(
+    player: vt.PlayerVturb, categoria: CategoriaVsl, stats: vt.StatsVsl, eng: vt.EngajamentoVsl
+) -> VslAnaliseLinha:
+    if not stats.plays_unicos:  # sem play a VTurb manda curva zerada, que engana
+        eng = vt.EngajamentoVsl()
+    return VslAnaliseLinha(
+        player_id=player.id,
+        nome=player.nome,
+        categoria=categoria,
+        plays_unicos=stats.plays_unicos,
+        retencao_1min=retencao_em(player, eng, SEG_1MIN),
+        retencao_5min=retencao_em(player, eng, SEG_5MIN),
+        retencao_pitch=retencao_em(player, eng, player.pitch_seg),
+        conversao_vturb=_pct(stats.conversoes, stats.plays_unicos),
+        play_rate=_pct(stats.plays_unicos, stats.views_unicas),
+    )
+
+
+def ordenar_janelas(janelas: list[VslAnaliseJanela]) -> list[VslAnaliseJanela]:
+    """Mesma ordem de VSLs em todas as janelas (fica fácil comparar 7 × 30):
+    por categoria e, dentro dela, quem tem mais plays na janela mais longa."""
+    if not janelas:
+        return janelas
+    plays = {linha.player_id: linha.plays_unicos for linha in janelas[-1].linhas}
+
+    def chave(linha: VslAnaliseLinha) -> tuple[int, int, str]:
+        return (ORDEM_CATEGORIAS.index(linha.categoria), -plays.get(linha.player_id, 0), linha.nome.lower())
+
+    return [j.model_copy(update={"linhas": sorted(j.linhas, key=chave)}) for j in janelas]
+
+
+def _consultas_analise(p: vt.PlayerVturb, inicio: date, fim: date) -> tuple[vt.Consulta, vt.Consulta | None]:
+    stats = vt.consulta_stats(p.id, inicio, fim, duracao_seg=p.duracao_seg, pitch_seg=p.pitch_seg)
+    eng = vt.consulta_engajamento(p.id, p.duracao_seg, inicio, fim) if p.duracao_seg else None
+    return stats, eng
+
+
+def _linha_da_resposta(
+    vinculo: PerpetuoVturbPlayer,
+    player: vt.PlayerVturb,
+    consultas: tuple[vt.Consulta, vt.Consulta | None],
+    resp: dict,
+) -> VslAnaliseLinha:
+    c_stats, c_eng = consultas
+    bruto = resp[c_stats.chave]
+    stats = vt.normalizar_stats(bruto if isinstance(bruto, dict) else {})
+    eng = vt.normalizar_engajamento(resp[c_eng.chave]) if c_eng else vt.EngajamentoVsl()
+    return linha_analise(player, vinculo.categoria, stats, eng)  # type: ignore[arg-type]
+
+
+async def analise_vsl(db: AsyncSession, perpetuo_id: UUID) -> VslAnalise | None:
+    """Retenção em 1 min / 5 min / pitch, conversão (pixel) e play rate de
+    cada VSL vinculada, nos últimos 7 e 30 dias — independe do filtro de data."""
+    if not await db.get(Perpetuo, perpetuo_id):
+        return None
+    analise = VslAnalise(configurado=vt.configurada())
+    vinculos = await listar_vinculos(db, perpetuo_id)
+    if not vinculos or not analise.configurado:
+        return analise
+    catalogo = await _catalogo(db)
+    players = [_player_de(v, catalogo) for v in vinculos]
+    janelas = janelas_analise(vt.hoje_br())
+    pedidos = [[_consultas_analise(p, ini, fim) for p in players] for _, ini, fim in janelas]
+    todas = [c for por_janela in pedidos for par in por_janela for c in par if c is not None]
+    resp = await vt.resolver(db, todas)
+    resultado = [
+        VslAnaliseJanela(
+            dias=dias,
+            inicio=ini,
+            fim=fim,
+            linhas=[_linha_da_resposta(v, p, par, resp) for v, p, par in zip(vinculos, players, por_janela)],
+        )
+        for (dias, ini, fim), por_janela in zip(janelas, pedidos)
+    ]
+    return analise.model_copy(update={"janelas": ordenar_janelas(resultado)})
 
 
 # ============================================================

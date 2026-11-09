@@ -468,6 +468,32 @@ export interface VslCurva {
   pontos: VslCurvaPonto[]
 }
 
+/** Uma VSL na análise rápida (taxas em %, null = sem dado). */
+export interface VslAnaliseLinha {
+  player_id: string
+  nome: string
+  categoria: CategoriaVsl
+  plays_unicos: number
+  retencao_1min: number | null
+  retencao_5min: number | null
+  retencao_pitch: number | null
+  /** Conversões do pixel VTurb ÷ plays únicos — atribuição, não é venda. */
+  conversao_vturb: number | null
+  play_rate: number | null
+}
+
+export interface VslAnaliseJanela {
+  dias: number
+  inicio: string
+  fim: string
+  linhas: VslAnaliseLinha[]
+}
+
+export interface VslAnalise {
+  configurado: boolean
+  janelas: VslAnaliseJanela[]
+}
+
 export interface LancamentoPagoOferta {
   id: string
   produto: string

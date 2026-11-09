@@ -10,6 +10,7 @@ import type {
   PerpetuoCompleto,
   PontoInvestimentoDia,
   PontoVendaCategoriaPerp,
+  VslAnalise,
   VslCurva,
   VslPainel,
   VturbPlayerDisponivel,
@@ -191,6 +192,10 @@ export const perpetuosService = {
       .get<VslPainel>(`/api/perpetuos/${perpetuoId}/vsl`, { params })
       .then((r) => r.data)
   },
+
+  /** Análise rápida das VSLs: últimos 7 e 30 dias (independe do filtro). */
+  analiseVsl: (perpetuoId: string) =>
+    api.get<VslAnalise>(`/api/perpetuos/${perpetuoId}/vsl/analise`).then((r) => r.data),
 
   curvaVsl: (perpetuoId: string, playerId: string, inicio?: string, fim?: string) =>
     api

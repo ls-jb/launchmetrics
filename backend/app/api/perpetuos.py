@@ -26,6 +26,7 @@ from app.schemas.perpetuo import (
 )
 from app.schemas.perpetuo_vturb import (
     CategoriaVsl,
+    VslAnalise,
     VslCurva,
     VslPainel,
     VturbPlayerCreate,
@@ -342,6 +343,23 @@ async def painel_vsl(
     if painel is None:
         raise HTTPException(status_code=404, detail="Perpétuo não encontrado.")
     return painel
+
+
+@router.get("/{perpetuo_id}/vsl/analise", response_model=VslAnalise)
+async def analise_vsl(
+    perpetuo_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(verify_token),
+):
+    """Retenção em 1 min / 5 min / pitch, conversão e play rate de cada VSL
+    vinculada nos últimos 7 e 30 dias (janelas fixas, as mesmas da VTurb)."""
+    try:
+        analise = await vsl_svc.analise_vsl(db, perpetuo_id)
+    except VturbErro as e:
+        raise _erro_vturb(e)
+    if analise is None:
+        raise HTTPException(status_code=404, detail="Perpétuo não encontrado.")
+    return analise
 
 
 @router.get("/{perpetuo_id}/vsl/{player_id}/curva", response_model=VslCurva)
