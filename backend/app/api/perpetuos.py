@@ -24,8 +24,19 @@ from app.schemas.perpetuo import (
     PontoVendaCategoria,
     ReenvioPlanilhaResponse,
 )
+from app.schemas.perpetuo_vturb import (
+    CategoriaVsl,
+    VslCurva,
+    VslPainel,
+    VturbPlayerCreate,
+    VturbPlayerDisponivel,
+    VturbPlayerResponse,
+    VturbPlayerUpdate,
+)
 from app.services import perpetuo_service as svc
+from app.services import perpetuo_vturb_service as vsl_svc
 from app.services import planilha_perpetuo_service as planilha_svc
+from app.services.vturb_service import VturbErro, VturbNaoConfigurada
 
 router = APIRouter(prefix="/perpetuos", tags=["perpetuos"])
 
@@ -292,6 +303,105 @@ async def sync_meta_perpetuo(
     return await svc.sincronizar_meta_perpetuo(db, perpetuo_id, dias)
 
 
+# ============================================================
+# VSLs (VTurb)
+# ============================================================
+def _erro_vturb(e: VturbErro) -> HTTPException:
+    """Sem chave → 503; VTurb fora/recusando → 502. Mensagem já em português."""
+    codigo = 503 if isinstance(e, VturbNaoConfigurada) else 502
+    return HTTPException(status_code=codigo, detail=str(e))
+
+
+@router.get("/_meta/vturb-players", response_model=list[VturbPlayerDisponivel])
+async def listar_vturb_players(
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(verify_token),
+):
+    """VSLs da conta VTurb pra escolher no vínculo (mais assistidas primeiro)."""
+    try:
+        return await vsl_svc.listar_disponiveis(db)
+    except VturbErro as e:
+        raise _erro_vturb(e)
+
+
+@router.get("/{perpetuo_id}/vsl", response_model=VslPainel)
+async def painel_vsl(
+    perpetuo_id: UUID,
+    categoria: CategoriaVsl | None = Query(default=None),
+    inicio: date | None = Query(default=None),
+    fim: date | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(verify_token),
+):
+    """Métricas das VSLs de uma categoria no período + cruzamento com as
+    vendas reais da mesma categoria. Sem categoria = a 1ª que tiver VSL."""
+    try:
+        painel = await vsl_svc.painel_vsl(db, perpetuo_id, categoria, inicio, fim)
+    except VturbErro as e:
+        raise _erro_vturb(e)
+    if painel is None:
+        raise HTTPException(status_code=404, detail="Perpétuo não encontrado.")
+    return painel
+
+
+@router.get("/{perpetuo_id}/vsl/{player_id}/curva", response_model=VslCurva)
+async def curva_vsl(
+    perpetuo_id: UUID,
+    player_id: str,
+    inicio: date | None = Query(default=None),
+    fim: date | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(verify_token),
+):
+    """Curva de retenção + cliques e conversões por segundo de uma VSL."""
+    try:
+        curva = await vsl_svc.curva_vsl(db, perpetuo_id, player_id, inicio, fim)
+    except VturbErro as e:
+        raise _erro_vturb(e)
+    if curva is None:
+        raise HTTPException(status_code=404, detail="VSL não vinculada a este perpétuo.")
+    return curva
+
+
+@router.post(
+    "/{perpetuo_id}/vturb-players",
+    response_model=VturbPlayerResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def adicionar_vturb_player(
+    perpetuo_id: UUID,
+    dados: VturbPlayerCreate,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_admin),
+):
+    """Liga uma VSL ao perpétuo (se já estiver ligada, atualiza a categoria)."""
+    vinculo = await vsl_svc.adicionar_vinculo(db, perpetuo_id, dados)
+    if not vinculo:
+        raise HTTPException(status_code=404, detail="Perpétuo não encontrado.")
+    return vinculo
+
+
+@router.patch("/vturb-players/{vinculo_id}", response_model=VturbPlayerResponse)
+async def atualizar_vturb_player(
+    vinculo_id: UUID,
+    dados: VturbPlayerUpdate,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_admin),
+):
+    vinculo = await vsl_svc.atualizar_categoria(db, vinculo_id, dados.categoria)
+    if not vinculo:
+        raise HTTPException(status_code=404, detail="VSL não encontrada.")
+    return vinculo
+
+
+@router.delete("/vturb-players/{vinculo_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remover_vturb_player(
+    vinculo_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(require_admin),
+):
+    if not await vsl_svc.remover_vinculo(db, vinculo_id):
+        raise HTTPException(status_code=404, detail="VSL não encontrada.")
 
 
 # ============================================================

@@ -16,7 +16,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID as UUIDType, uuid4
 
-from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, func
+from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -77,6 +77,33 @@ class PerpetuoOferta(Base):
     Quando NULL, cai na heurística pelo nome. Setada quando o nome não
     deixa claro qual é o tipo (ex: um order bump do Agenda Cheia que se
     chama só 'Complemento X')."""
+    criado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class PerpetuoVturbPlayer(Base):
+    """Liga um perpétuo a uma VSL (player da VTurb). Um perpétuo pode ter
+    várias VSLs na mesma categoria (versões, testes A/B). A categoria casa
+    com a das ofertas — é ela que cruza o vídeo com as vendas reais."""
+
+    __tablename__ = "perpetuos_vturb_players"
+    __table_args__ = (
+        UniqueConstraint("perpetuo_id", "player_id"),
+        {"schema": _SCHEMA},
+    )
+
+    id: Mapped[UUIDType] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    perpetuo_id: Mapped[UUIDType] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(f"{_SCHEMA}.perpetuos.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    player_id: Mapped[str] = mapped_column(String, nullable=False)
+    player_nome: Mapped[str | None] = mapped_column(String)
+    """Denormalizado pra UI mostrar o nome mesmo se a VTurb estiver fora."""
+    categoria: Mapped[str] = mapped_column(String, nullable=False)
+    """Principal / Upsell / UpUpsell / Downsell."""
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

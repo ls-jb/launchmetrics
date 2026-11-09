@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     LUZI_MODEL: str = "claude-sonnet-5-5"
     LUZI_PERPETUOS: str = ""
 
+    # VTurb — chave da API de Analytics (app.vturb.com/settings/analytics-api).
+    # Vazia = seção de VSLs do perpétuo mostra "VTurb não configurada".
+    VTURB_API_TOKEN: str = ""
+
     @property
     def luzi_perpetuos_list(self) -> list[str]:
         return [p.strip().lower() for p in self.LUZI_PERPETUOS.split(",") if p.strip()]

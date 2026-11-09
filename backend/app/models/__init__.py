@@ -12,7 +12,12 @@ from app.models.lancamento_pago import (
 from app.models.lead import Lead
 from app.models.oferta_preco import OfertaPreco
 from app.models.perfil import Perfil
-from app.models.perpetuo import Perpetuo, PerpetuoAporte, PerpetuoOferta
+from app.models.perpetuo import (
+    Perpetuo,
+    PerpetuoAporte,
+    PerpetuoOferta,
+    PerpetuoVturbPlayer,
+)
 from app.models.placar import (
     PlacarContagem,
     PlacarLancamento,
@@ -20,6 +25,7 @@ from app.models.placar import (
     PlacarVendedor,
 )
 from app.models.venda import Venda
+from app.models.vturb_cache import VturbCache
 from app.models.webhook_log import WebhookLog
 
 __all__ = [
@@ -34,10 +40,12 @@ __all__ = [
     "Perpetuo",
     "PerpetuoAporte",
     "PerpetuoOferta",
+    "PerpetuoVturbPlayer",
     "PlacarContagem",
     "PlacarLancamento",
     "PlacarOferta",
     "PlacarVendedor",
     "Venda",
+    "VturbCache",
     "WebhookLog",
 ]

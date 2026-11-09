@@ -13,7 +13,12 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
-from app.services import lancamento_pago_service, lancamento_service, perpetuo_service
+from app.services import (
+    lancamento_pago_service,
+    lancamento_service,
+    perpetuo_service,
+    vturb_service,
+)
 
 router = APIRouter(prefix="/cron", tags=["cron"])
 logger = logging.getLogger(__name__)
@@ -42,5 +47,22 @@ async def sync_meta(
     perp = await perpetuo_service.sincronizar_meta_todos(db, dias_retroativos=3)
     lp = await lancamento_pago_service.sincronizar_meta_todos(db)
     lanc = await lancamento_service.sincronizar_meta_todos(db)
+    vturb = await _limpar_cache_vturb(db)
 
-    return {"perpetuos": perp, "lancamentos_pagos": lp, "lancamentos": lanc}
+    return {
+        "perpetuos": perp,
+        "lancamentos_pagos": lp,
+        "lancamentos": lanc,
+        "vturb_cache_removidos": vturb,
+    }
+
+
+async def _limpar_cache_vturb(db: AsyncSession) -> int | None:
+    """Apaga respostas vencidas do cache da VTurb. Falha aqui não derruba
+    o cron (None = não limpou)."""
+    try:
+        return await vturb_service.limpar_cache_expirado(db)
+    except Exception:
+        logger.exception("Falha ao limpar o cache da VTurb")
+        await db.rollback()
+        return None

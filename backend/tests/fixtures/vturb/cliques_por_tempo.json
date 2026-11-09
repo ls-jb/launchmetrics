@@ -1,0 +1,490 @@
+[
+ {
+  "timed": 6,
+  "total_users": 2
+ },
+ {
+  "timed": 1424,
+  "total_users": 1
+ },
+ {
+  "timed": 1426,
+  "total_users": 3
+ },
+ {
+  "timed": 1427,
+  "total_users": 1
+ },
+ {
+  "timed": 1428,
+  "total_users": 2
+ },
+ {
+  "timed": 1429,
+  "total_users": 1
+ },
+ {
+  "timed": 1430,
+  "total_users": 2
+ },
+ {
+  "timed": 1431,
+  "total_users": 1
+ },
+ {
+  "timed": 1432,
+  "total_users": 1
+ },
+ {
+  "timed": 1433,
+  "total_users": 2
+ },
+ {
+  "timed": 1434,
+  "total_users": 1
+ },
+ {
+  "timed": 1435,
+  "total_users": 1
+ },
+ {
+  "timed": 1438,
+  "total_users": 1
+ },
+ {
+  "timed": 1439,
+  "total_users": 9
+ },
+ {
+  "timed": 1440,
+  "total_users": 7
+ },
+ {
+  "timed": 1441,
+  "total_users": 4
+ },
+ {
+  "timed": 1442,
+  "total_users": 6
+ },
+ {
+  "timed": 1443,
+  "total_users": 1
+ },
+ {
+  "timed": 1445,
+  "total_users": 1
+ },
+ {
+  "timed": 1446,
+  "total_users": 6
+ },
+ {
+  "timed": 1447,
+  "total_users": 2
+ },
+ {
+  "timed": 1448,
+  "total_users": 2
+ },
+ {
+  "timed": 1451,
+  "total_users": 3
+ },
+ {
+  "timed": 1452,
+  "total_users": 1
+ },
+ {
+  "timed": 1453,
+  "total_users": 5
+ },
+ {
+  "timed": 1454,
+  "total_users": 2
+ },
+ {
+  "timed": 1455,
+  "total_users": 1
+ },
+ {
+  "timed": 1456,
+  "total_users": 3
+ },
+ {
+  "timed": 1457,
+  "total_users": 3
+ },
+ {
+  "timed": 1458,
+  "total_users": 3
+ },
+ {
+  "timed": 1459,
+  "total_users": 5
+ },
+ {
+  "timed": 1460,
+  "total_users": 8
+ },
+ {
+  "timed": 1461,
+  "total_users": 1
+ },
+ {
+  "timed": 1462,
+  "total_users": 2
+ },
+ {
+  "timed": 1464,
+  "total_users": 1
+ },
+ {
+  "timed": 1465,
+  "total_users": 1
+ },
+ {
+  "timed": 1466,
+  "total_users": 1
+ },
+ {
+  "timed": 1467,
+  "total_users": 2
+ },
+ {
+  "timed": 1470,
+  "total_users": 2
+ },
+ {
+  "timed": 1471,
+  "total_users": 2
+ },
+ {
+  "timed": 1472,
+  "total_users": 1
+ },
+ {
+  "timed": 1474,
+  "total_users": 2
+ },
+ {
+  "timed": 1476,
+  "total_users": 2
+ },
+ {
+  "timed": 1477,
+  "total_users": 2
+ },
+ {
+  "timed": 1480,
+  "total_users": 1
+ },
+ {
+  "timed": 1482,
+  "total_users": 1
+ },
+ {
+  "timed": 1483,
+  "total_users": 1
+ },
+ {
+  "timed": 1485,
+  "total_users": 1
+ },
+ {
+  "timed": 1487,
+  "total_users": 3
+ },
+ {
+  "timed": 1488,
+  "total_users": 1
+ },
+ {
+  "timed": 1489,
+  "total_users": 1
+ },
+ {
+  "timed": 1493,
+  "total_users": 1
+ },
+ {
+  "timed": 1498,
+  "total_users": 1
+ },
+ {
+  "timed": 1500,
+  "total_users": 1
+ },
+ {
+  "timed": 1502,
+  "total_users": 1
+ },
+ {
+  "timed": 1503,
+  "total_users": 2
+ },
+ {
+  "timed": 1504,
+  "total_users": 1
+ },
+ {
+  "timed": 1507,
+  "total_users": 1
+ },
+ {
+  "timed": 1508,
+  "total_users": 1
+ },
+ {
+  "timed": 1509,
+  "total_users": 1
+ },
+ {
+  "timed": 1510,
+  "total_users": 4
+ },
+ {
+  "timed": 1511,
+  "total_users": 1
+ },
+ {
+  "timed": 1512,
+  "total_users": 1
+ },
+ {
+  "timed": 1514,
+  "total_users": 1
+ },
+ {
+  "timed": 1515,
+  "total_users": 1
+ },
+ {
+  "timed": 1517,
+  "total_users": 1
+ },
+ {
+  "timed": 1518,
+  "total_users": 1
+ },
+ {
+  "timed": 1519,
+  "total_users": 1
+ },
+ {
+  "timed": 1523,
+  "total_users": 2
+ },
+ {
+  "timed": 1524,
+  "total_users": 1
+ },
+ {
+  "timed": 1526,
+  "total_users": 2
+ },
+ {
+  "timed": 1536,
+  "total_users": 1
+ },
+ {
+  "timed": 1537,
+  "total_users": 3
+ },
+ {
+  "timed": 1538,
+  "total_users": 2
+ },
+ {
+  "timed": 1539,
+  "total_users": 4
+ },
+ {
+  "timed": 1540,
+  "total_users": 1
+ },
+ {
+  "timed": 1541,
+  "total_users": 1
+ },
+ {
+  "timed": 1542,
+  "total_users": 3
+ },
+ {
+  "timed": 1543,
+  "total_users": 2
+ },
+ {
+  "timed": 1544,
+  "total_users": 3
+ },
+ {
+  "timed": 1545,
+  "total_users": 2
+ },
+ {
+  "timed": 1546,
+  "total_users": 1
+ },
+ {
+  "timed": 1547,
+  "total_users": 1
+ },
+ {
+  "timed": 1548,
+  "total_users": 1
+ },
+ {
+  "timed": 1551,
+  "total_users": 2
+ },
+ {
+  "timed": 1552,
+  "total_users": 1
+ },
+ {
+  "timed": 1553,
+  "total_users": 1
+ },
+ {
+  "timed": 1554,
+  "total_users": 1
+ },
+ {
+  "timed": 1557,
+  "total_users": 2
+ },
+ {
+  "timed": 1558,
+  "total_users": 2
+ },
+ {
+  "timed": 1562,
+  "total_users": 1
+ },
+ {
+  "timed": 1564,
+  "total_users": 1
+ },
+ {
+  "timed": 1565,
+  "total_users": 2
+ },
+ {
+  "timed": 1567,
+  "total_users": 1
+ },
+ {
+  "timed": 1572,
+  "total_users": 1
+ },
+ {
+  "timed": 1574,
+  "total_users": 1
+ },
+ {
+  "timed": 1575,
+  "total_users": 1
+ },
+ {
+  "timed": 1576,
+  "total_users": 2
+ },
+ {
+  "timed": 1579,
+  "total_users": 1
+ },
+ {
+  "timed": 1580,
+  "total_users": 1
+ },
+ {
+  "timed": 1581,
+  "total_users": 2
+ },
+ {
+  "timed": 1583,
+  "total_users": 1
+ },
+ {
+  "timed": 1585,
+  "total_users": 2
+ },
+ {
+  "timed": 1586,
+  "total_users": 2
+ },
+ {
+  "timed": 1589,
+  "total_users": 2
+ },
+ {
+  "timed": 1591,
+  "total_users": 2
+ },
+ {
+  "timed": 1592,
+  "total_users": 2
+ },
+ {
+  "timed": 1593,
+  "total_users": 1
+ },
+ {
+  "timed": 1596,
+  "total_users": 1
+ },
+ {
+  "timed": 1597,
+  "total_users": 2
+ },
+ {
+  "timed": 1599,
+  "total_users": 3
+ },
+ {
+  "timed": 1601,
+  "total_users": 1
+ },
+ {
+  "timed": 1603,
+  "total_users": 1
+ },
+ {
+  "timed": 1604,
+  "total_users": 1
+ },
+ {
+  "timed": 1611,
+  "total_users": 2
+ },
+ {
+  "timed": 1615,
+  "total_users": 1
+ },
+ {
+  "timed": 1618,
+  "total_users": 3
+ },
+ {
+  "timed": 1619,
+  "total_users": 1
+ },
+ {
+  "timed": 1620,
+  "total_users": 6
+ },
+ {
+  "timed": 1621,
+  "total_users": 5
+ },
+ {
+  "timed": 1622,
+  "total_users": 5
+ },
+ {
+  "timed": 1623,
+  "total_users": 61
+ }
+]
