@@ -262,6 +262,52 @@ def test_analise_pede_stats_com_pitch_e_curva_com_duracao():
     assert svc._consultas_analise(vt.PlayerVturb(id="y", nome="sem duração"), INICIO, FIM)[1] is None
 
 
+def _dias(plays: dict[str, int]) -> dict[date, vt.StatsVsl]:
+    return {date.fromisoformat(d): vt.StatsVsl(plays_unicos=n) for d, n in plays.items()}
+
+
+def test_inicio_no_ar_ignora_plays_de_teste_antes_do_lancamento():
+    # Dados reais da VSL lead 2 do Rituais Pro: 6 plays de teste em 23/10,
+    # tráfego a partir de 27/10
+    serie = _dias({"2026-10-23": 6, "2026-10-24": 0, "2026-10-27": 12, "2026-10-28": 20, "2026-11-02": 187})
+    assert svc.inicio_no_ar(serie) == date(2026, 10, 27)
+
+
+def test_inicio_no_ar_em_vsl_de_pouco_trafego_conta_dia_pequeno():
+    assert svc.inicio_no_ar(_dias({"2026-11-01": 1, "2026-11-03": 3, "2026-11-05": 4})) == date(2026, 11, 1)
+    # Lançou hoje e ainda não chegou a 10 plays: começa hoje mesmo
+    assert svc.inicio_no_ar(_dias({"2026-11-09": 8})) == date(2026, 11, 9)
+    assert svc.inicio_no_ar(_dias({"2026-11-09": 0})) is None
+    assert svc.inicio_no_ar({}) is None
+
+
+def test_linha_da_analise_conta_dias_no_ar():
+    player = vt.PlayerVturb(id="x", nome="VSL", duracao_seg=1622)
+    linha = svc.linha_analise(
+        player, "Principal", vt.StatsVsl(plays_unicos=300, views_unicas=600), vt.EngajamentoVsl(),
+        no_ar_desde=date(2026, 11, 6), hoje=date(2026, 11, 9),
+    )
+    assert (linha.no_ar_desde, linha.dias_no_ar) == (date(2026, 11, 6), 4)
+    lancou_hoje = svc.linha_analise(
+        player, "Principal", vt.StatsVsl(), vt.EngajamentoVsl(), no_ar_desde=date(2026, 11, 9), hoje=date(2026, 11, 9)
+    )
+    assert lancou_hoje.dias_no_ar == 1
+
+
+def test_historico_comeca_na_criacao_da_vsl_no_fuso_de_brasilia():
+    hoje = date(2026, 11, 9)
+    # Criada 02h UTC do dia 9 = 23h do dia 8 em Brasília
+    nova = vt.PlayerVturb(id="x", nome="VSL", duracao_seg=1882, criado_em="2026-11-09T02:00:00.000Z")
+    h = svc._historico(nova, hoje)
+    assert h.inicio == date(2026, 11, 8)
+    assert h.consulta.caminho == "/sessions/stats_by_day"
+    assert h.consulta.corpo["video_duration"] == 1882
+    antiga = vt.PlayerVturb(id="y", nome="VSL", criado_em="2020-01-01T00:00:00Z")
+    assert svc._historico(antiga, hoje).inicio == hoje - timedelta(days=365)
+    sem_data = vt.PlayerVturb(id="z", nome="VSL", criado_em="lixo")
+    assert svc._historico(sem_data, hoje).inicio == hoje - timedelta(days=365)
+
+
 def test_porcentagem_arredonda_meio_pra_cima_como_a_vturb():
     assert svc._pct(207, 480) == 43.13  # 43,125
     assert svc._pct(1, 3) == 33.33

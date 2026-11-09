@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
@@ -409,10 +409,55 @@ janelas "Últimos 7 dias" / "Últimos 30 dias" do painel da VTurb — conferido
 com a planilha do time em 09/11/2026: a de 7 começa em hoje−6 e a de 30 em
 hoje−30 (as duas terminam hoje)."""
 SEG_1MIN, SEG_5MIN = 60, 300
+PLAYS_DIA_LANCAMENTO = 10
+MAX_DIAS_HISTORICO = 365
 
 
 def janelas_analise(hoje: date) -> list[tuple[int, date, date]]:
     return [(dias, hoje - timedelta(days=atras), hoje) for dias, atras in JANELAS_ANALISE]
+
+
+def inicio_no_ar(por_dia: dict[date, vt.StatsVsl]) -> date | None:
+    """1º dia de tráfego de verdade. Antes do lançamento costuma ter uns plays
+    de teste da equipe (ex.: 6 plays em 23/10 e o tráfego só a partir de
+    27/10), então vale o 1º dia com pelo menos 10 plays — ou 10% do maior
+    dia, em VSL de pouco tráfego (upsell), pra não pular dias reais."""
+    plays = {dia: s.plays_unicos for dia, s in por_dia.items() if s.plays_unicos}
+    if not plays:
+        return None
+    minimo = min(PLAYS_DIA_LANCAMENTO, max(plays.values()) * 0.1)
+    return min(dia for dia, n in plays.items() if n >= minimo)
+
+
+def _data_br(iso: str | None) -> date | None:
+    """'2026-11-09T02:00:00.000Z' → data no fuso de Brasília (08/11)."""
+    try:
+        return datetime.fromisoformat(str(iso).replace("Z", "+00:00")).astimezone(vt.BR_TZ).date()
+    except ValueError:
+        return None
+
+
+@dataclass
+class _Historico:
+    """Série diária da VSL desde que ela foi criada — só pra achar o início."""
+
+    player_id: str
+    inicio: date
+    consulta: vt.Consulta
+
+
+def _historico(p: vt.PlayerVturb, hoje: date) -> _Historico:
+    limite = hoje - timedelta(days=MAX_DIAS_HISTORICO)
+    inicio = max(_data_br(p.criado_em) or limite, limite)
+    consulta = vt.consulta_stats(p.id, inicio, hoje, por_dia=True, duracao_seg=p.duracao_seg, pitch_seg=p.pitch_seg)
+    return _Historico(p.id, inicio, consulta)
+
+
+def _inicios_no_ar(historicos: list[_Historico], resp: dict, hoje: date) -> dict[str, date | None]:
+    return {
+        h.player_id: inicio_no_ar(vt.normalizar_stats_por_dia(resp[h.consulta.chave], h.inicio, hoje))
+        for h in historicos
+    }
 
 
 def retencao_em(player: vt.PlayerVturb, eng: vt.EngajamentoVsl, segundo: int | None) -> float | None:
@@ -427,11 +472,18 @@ def retencao_em(player: vt.PlayerVturb, eng: vt.EngajamentoVsl, segundo: int | N
 
 
 def linha_analise(
-    player: vt.PlayerVturb, categoria: CategoriaVsl, stats: vt.StatsVsl, eng: vt.EngajamentoVsl
+    player: vt.PlayerVturb,
+    categoria: CategoriaVsl,
+    stats: vt.StatsVsl,
+    eng: vt.EngajamentoVsl,
+    no_ar_desde: date | None = None,
+    hoje: date | None = None,
 ) -> VslAnaliseLinha:
     if not stats.plays_unicos:  # sem play a VTurb manda curva zerada, que engana
         eng = vt.EngajamentoVsl()
     return VslAnaliseLinha(
+        no_ar_desde=no_ar_desde,
+        dias_no_ar=(hoje - no_ar_desde).days + 1 if no_ar_desde and hoje else None,
         player_id=player.id,
         nome=player.nome,
         categoria=categoria,
@@ -463,44 +515,80 @@ def _consultas_analise(p: vt.PlayerVturb, inicio: date, fim: date) -> tuple[vt.C
     return stats, eng
 
 
+@dataclass
+class _PedidoAnalise:
+    """Tudo que a análise pede à VTurb: stats + curva por janela e o histórico."""
+
+    vinculos: list[PerpetuoVturbPlayer]
+    players: list[vt.PlayerVturb]
+    hoje: date
+    janelas: list[tuple[int, date, date]]
+    por_janela: list[list[tuple[vt.Consulta, vt.Consulta | None]]]
+    historicos: list[_Historico]
+
+    def consultas(self) -> list[vt.Consulta]:
+        das_janelas = [c for lista in self.por_janela for par in lista for c in par if c is not None]
+        return das_janelas + [h.consulta for h in self.historicos]
+
+
+def _pedido_analise(vinculos: list[PerpetuoVturbPlayer], catalogo: dict[str, vt.PlayerVturb]) -> _PedidoAnalise:
+    players = [_player_de(v, catalogo) for v in vinculos]
+    hoje = vt.hoje_br()
+    janelas = janelas_analise(hoje)
+    return _PedidoAnalise(
+        vinculos=vinculos,
+        players=players,
+        hoje=hoje,
+        janelas=janelas,
+        por_janela=[[_consultas_analise(p, ini, fim) for p in players] for _, ini, fim in janelas],
+        historicos=[_historico(p, hoje) for p in players],
+    )
+
+
 def _linha_da_resposta(
     vinculo: PerpetuoVturbPlayer,
     player: vt.PlayerVturb,
     consultas: tuple[vt.Consulta, vt.Consulta | None],
     resp: dict,
+    no_ar_desde: date | None,
+    hoje: date,
 ) -> VslAnaliseLinha:
     c_stats, c_eng = consultas
     bruto = resp[c_stats.chave]
     stats = vt.normalizar_stats(bruto if isinstance(bruto, dict) else {})
     eng = vt.normalizar_engajamento(resp[c_eng.chave]) if c_eng else vt.EngajamentoVsl()
-    return linha_analise(player, vinculo.categoria, stats, eng)  # type: ignore[arg-type]
+    return linha_analise(player, vinculo.categoria, stats, eng, no_ar_desde, hoje)  # type: ignore[arg-type]
+
+
+def _montar_janelas(pedido: _PedidoAnalise, resp: dict) -> list[VslAnaliseJanela]:
+    no_ar = _inicios_no_ar(pedido.historicos, resp, pedido.hoje)
+    return [
+        VslAnaliseJanela(
+            dias=dias,
+            inicio=ini,
+            fim=fim,
+            linhas=[
+                _linha_da_resposta(v, p, par, resp, no_ar.get(p.id), pedido.hoje)
+                for v, p, par in zip(pedido.vinculos, pedido.players, consultas)
+            ],
+        )
+        for (dias, ini, fim), consultas in zip(pedido.janelas, pedido.por_janela)
+    ]
 
 
 async def analise_vsl(db: AsyncSession, perpetuo_id: UUID) -> VslAnalise | None:
     """Retenção em 1 min / 5 min / pitch, conversão (pixel) e play rate de
-    cada VSL vinculada, nos últimos 7 e 30 dias — independe do filtro de data."""
+    cada VSL vinculada, nos últimos 7 e 30 dias — independe do filtro de
+    data — e desde quando cada VSL está no ar."""
     if not await db.get(Perpetuo, perpetuo_id):
         return None
     analise = VslAnalise(configurado=vt.configurada())
     vinculos = await listar_vinculos(db, perpetuo_id)
     if not vinculos or not analise.configurado:
         return analise
-    catalogo = await _catalogo(db)
-    players = [_player_de(v, catalogo) for v in vinculos]
-    janelas = janelas_analise(vt.hoje_br())
-    pedidos = [[_consultas_analise(p, ini, fim) for p in players] for _, ini, fim in janelas]
-    todas = [c for por_janela in pedidos for par in por_janela for c in par if c is not None]
-    resp = await vt.resolver(db, todas)
-    resultado = [
-        VslAnaliseJanela(
-            dias=dias,
-            inicio=ini,
-            fim=fim,
-            linhas=[_linha_da_resposta(v, p, par, resp) for v, p, par in zip(vinculos, players, por_janela)],
-        )
-        for (dias, ini, fim), por_janela in zip(janelas, pedidos)
-    ]
-    return analise.model_copy(update={"janelas": ordenar_janelas(resultado)})
+    pedido = _pedido_analise(vinculos, await _catalogo(db))
+    resp = await vt.resolver(db, pedido.consultas())
+    return analise.model_copy(update={"janelas": ordenar_janelas(_montar_janelas(pedido, resp))})
 
 
 # ============================================================

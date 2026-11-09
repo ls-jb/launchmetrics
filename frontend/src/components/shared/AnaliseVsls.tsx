@@ -19,6 +19,7 @@ const COLUNAS: Array<{ chave: Coluna; titulo: string; dica: string }> = [
 
 const GRADE = 'minmax(170px, 2.2fr) repeat(5, minmax(62px, 1fr))'
 const COR_MELHOR = '#3ECFB2'
+const COR_ATENCAO = '#F59E0B'
 
 /** Primeiro bloco da seção "VSLs (VTurb)": retenção (1 min, 5 min, pitch),
  * conversão e play rate das VSLs da categoria escolhida nos últimos 7 e 30
@@ -214,6 +215,7 @@ function TabelaJanela({ janela }: { janela: VslAnaliseJanela }) {
             <LinhaVsl
               key={l.player_id}
               linha={l}
+              inicioJanela={janela.inicio}
               melhores={melhores.get(l.categoria)}
               mostrarCategoria={variasCategorias && l.categoria !== janela.linhas[i - 1]?.categoria}
             />
@@ -226,10 +228,13 @@ function TabelaJanela({ janela }: { janela: VslAnaliseJanela }) {
 
 function LinhaVsl({
   linha: l,
+  inicioJanela,
   melhores,
   mostrarCategoria,
 }: {
   linha: VslAnaliseLinha
+  /** Início da janela (AAAA-MM-DD): VSL que estreou depois dele cobre menos dias. */
+  inicioJanela: string
   melhores?: Partial<Record<Coluna, number>>
   mostrarCategoria: boolean
 }) {
@@ -247,11 +252,12 @@ function LinhaVsl({
           <span style={nomeVsl} title={l.nome}>
             {nome}
           </span>
-          <small style={{ color: amostraPequena(l) ? '#F59E0B' : 'var(--text-faint)', fontSize: 11 }}>
+          <small style={{ display: 'block', color: amostraPequena(l) ? COR_ATENCAO : 'var(--text-faint)', fontSize: 11 }}>
             {!l.plays_unicos
               ? 'sem plays no período'
               : `${formatNum(l.plays_unicos)} plays${amostraPequena(l) ? ' · amostra pequena' : ''}`}
           </small>
+          <NoAr linha={l} inicioJanela={inicioJanela} />
         </span>
         {COLUNAS.map((c) => {
           const valor = l[c.chave]
@@ -264,6 +270,29 @@ function LinhaVsl({
         })}
       </div>
     </>
+  )
+}
+
+/** "no ar desde 06/11 · 4 dias". Em âmbar quando a VSL estreou dentro do
+ * período da tabela — aí os números cobrem só os dias em que ela rodou. */
+function NoAr({ linha: l, inicioJanela }: { linha: VslAnaliseLinha; inicioJanela: string }) {
+  if (!l.no_ar_desde || !l.dias_no_ar) return null
+  const estreouNoPeriodo = l.no_ar_desde > inicioJanela
+  const texto =
+    l.dias_no_ar === 1
+      ? 'no ar desde hoje'
+      : `no ar desde ${dataCurta(l.no_ar_desde)} · ${formatNum(l.dias_no_ar)} dias`
+  return (
+    <small
+      style={{ display: 'block', fontSize: 11, color: estreouNoPeriodo ? COR_ATENCAO : 'var(--text-faint)', fontWeight: estreouNoPeriodo ? 600 : 400 }}
+      title={
+        estreouNoPeriodo
+          ? `Estreou dentro deste período: os números cobrem só ${l.dias_no_ar === 1 ? 'hoje' : `${l.dias_no_ar} dias`}`
+          : 'Primeiro dia com tráfego de verdade (ignora plays de teste antes do lançamento)'
+      }
+    >
+      {texto}
+    </small>
   )
 }
 

@@ -480,6 +480,10 @@ export interface VslAnaliseLinha {
   /** Conversões do pixel VTurb ÷ plays únicos — atribuição, não é venda. */
   conversao_vturb: number | null
   play_rate: number | null
+  /** 1º dia de tráfego de verdade (ignora plays de teste antes do lançamento). */
+  no_ar_desde: string | null
+  /** Dias de no_ar_desde até hoje, contando os dois (lançou hoje = 1). */
+  dias_no_ar: number | null
 }
 
 export interface VslAnaliseJanela {
