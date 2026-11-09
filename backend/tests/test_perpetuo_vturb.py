@@ -91,6 +91,17 @@ def test_kpis_de_uma_vsl_batem_com_o_painel_da_vturb():
     assert k.vendas_reais is None and k.custo_por_play is None
 
 
+def test_vsl_sem_play_no_periodo_nao_mostra_engajamento_zero():
+    # a VTurb manda engagement_rate 0 e average_watched_time 0 quando ninguém assistiu
+    player = vt.PlayerVturb(id="p", nome="x", duracao_seg=1688, pitch_seg=1400)
+    eng = vt.EngajamentoVsl(tempo_medio_seg=0.0, engajamento=0.0)
+    k = svc.montar_kpis(svc.resumo_da_vsl(player, vt.StatsVsl(views_unicas=10), eng))
+    assert k.engajamento is None and k.tempo_medio_seg is None and k.retencao_pitch is None
+    curva = svc.montar_curva(player, eng, {}, {})
+    assert curva.engajamento is None and curva.tempo_medio_seg is None
+    assert all(p.retencao is None for p in curva.pontos)
+
+
 def test_retencao_no_pitch_usa_a_curva():
     k = svc.montar_kpis(_resumo_direcao_suave(pitch_seg=10))
     assert k.audiencia_pitch == 3765 - 472 - 212
@@ -196,6 +207,22 @@ def test_periodo_vai_com_hora_e_fuso():
     assert corpo["start_date"] == "2026-11-02 00:00:00"
     assert corpo["end_date"] == "2026-11-08 23:59:59"
     assert corpo["timezone"] == "America/Sao_Paulo"
+
+
+def test_stats_manda_duracao_e_pitch_quando_conhecidos():
+    # sem video_duration a VTurb devolve série diária vazia pra players novos
+    corpo = vt.consulta_stats("p", INICIO, FIM, por_dia=True, duracao_seg=1740, pitch_seg=1508).corpo
+    assert corpo["video_duration"] == 1740 and corpo["pitch_time"] == 1508
+    sem = vt.consulta_stats("p", INICIO, FIM, duracao_seg=None, pitch_seg=None).corpo
+    assert "video_duration" not in sem and "pitch_time" not in sem
+
+
+def test_painel_pede_a_serie_diaria_com_a_duracao_do_video():
+    player = vt.PlayerVturb(id="p", nome="VSL", duracao_seg=1740, pitch_seg=1508)
+    stats, por_dia, engajamento = svc._consultas_painel(player, INICIO, FIM)
+    assert por_dia.caminho == "/sessions/stats_by_day"
+    assert por_dia.corpo["video_duration"] == 1740
+    assert engajamento.caminho == "/times/user_engagement"
 
 
 def test_ttl_menor_quando_a_janela_inclui_hoje():

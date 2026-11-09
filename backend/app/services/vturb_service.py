@@ -16,7 +16,8 @@ Formatos conferidos contra a API real (nov/2026):
 - algumas taxas vêm como texto ("38.25");
 - /times/user_engagement → grouped_timed[].total_users é quantos SAÍRAM
   naquele trecho de 5 s (a retenção é o acumulado);
-- /sessions/stats_by_day devolve um dia a mais em cada ponta (fuso).
+- /sessions/stats_by_day devolve um dia a mais em cada ponta (fuso), e
+  volta [] para players mais novos se não receber video_duration.
 """
 from __future__ import annotations
 
@@ -107,9 +108,23 @@ def consulta_plays_por_player(inicio: date, fim: date) -> Consulta:
     return Consulta("/events/total_by_company_players", corpo, TTL_CATALOGO)
 
 
-def consulta_stats(player_id: str, inicio: date, fim: date, por_dia: bool = False) -> Consulta:
+def consulta_stats(
+    player_id: str,
+    inicio: date,
+    fim: date,
+    por_dia: bool = False,
+    duracao_seg: int | None = None,
+    pitch_seg: int | None = None,
+) -> Consulta:
+    """A doc diz que video_duration é opcional, mas sem ele /sessions/stats_by_day
+    volta [] para players mais novos — por isso vai sempre que soubermos."""
     caminho = "/sessions/stats_by_day" if por_dia else "/sessions/stats"
-    return Consulta(caminho, {"player_id": player_id, **_periodo(inicio, fim)}, ttl_janela(fim))
+    corpo: dict[str, Any] = {"player_id": player_id, **_periodo(inicio, fim)}
+    if duracao_seg:
+        corpo["video_duration"] = duracao_seg
+    if pitch_seg:
+        corpo["pitch_time"] = pitch_seg
+    return Consulta(caminho, corpo, ttl_janela(fim))
 
 
 def consulta_engajamento(player_id: str, duracao_seg: int, inicio: date, fim: date) -> Consulta:

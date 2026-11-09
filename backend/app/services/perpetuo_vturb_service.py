@@ -200,7 +200,10 @@ def resumo_da_vsl(
     player: vt.PlayerVturb, stats: vt.StatsVsl, eng: vt.EngajamentoVsl
 ) -> ResumoVsl:
     """O engajamento da janela vem da curva (é o número do painel da VTurb);
-    o de /sessions/stats só entra se a curva não veio."""
+    o de /sessions/stats só entra se a curva não veio. Sem play no período,
+    engajamento/tempo/pitch não existem (a VTurb manda 0, que engana)."""
+    if not stats.plays_unicos:
+        return ResumoVsl(stats)
     pitch = None
     if player.pitch_seg and eng.total_usuarios:
         pitch = (eng.assistindo_em(player.pitch_seg), eng.total_usuarios)
@@ -305,9 +308,10 @@ class _DadosVsl:
 
 
 def _consultas_painel(p: vt.PlayerVturb, inicio: date, fim: date) -> list[vt.Consulta]:
+    video = {"duracao_seg": p.duracao_seg, "pitch_seg": p.pitch_seg}
     consultas = [
-        vt.consulta_stats(p.id, inicio, fim),
-        vt.consulta_stats(p.id, inicio, fim, por_dia=True),
+        vt.consulta_stats(p.id, inicio, fim, **video),
+        vt.consulta_stats(p.id, inicio, fim, por_dia=True, **video),
     ]
     if p.duracao_seg:  # a curva exige a duração do vídeo
         consultas.append(vt.consulta_engajamento(p.id, p.duracao_seg, inicio, fim))
@@ -432,8 +436,8 @@ def montar_curva(
         nome=player.nome,
         duracao_seg=player.duracao_seg,
         pitch_seg=player.pitch_seg,
-        tempo_medio_seg=eng.tempo_medio_seg,
-        engajamento=eng.engajamento,
+        tempo_medio_seg=eng.tempo_medio_seg if total else None,
+        engajamento=eng.engajamento if total else None,
         pontos=pontos,
     )
 

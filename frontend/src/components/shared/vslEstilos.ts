@@ -16,8 +16,10 @@ export const COR_CATEGORIA_VSL: Record<CategoriaVsl, string> = {
 export const COR_VIEWS = '#6B7280'
 export const COR_PLAY_RATE = '#3ECFB2'
 export const COR_ENGAJAMENTO = '#F59E0B'
-export const COR_CLIQUES = '#60A5FA'
-export const COR_CONVERSOES = '#3ECFB2'
+// Cliques/conversões com cores próprias: não colidem com play rate (verde-água)
+// nem com as cores das categorias (Upsell é azul).
+export const COR_CLIQUES = '#E879F9'
+export const COR_CONVERSOES = '#A3E635'
 export const COR_PITCH = '#EF4444'
 
 export const cartao: CSSProperties = {

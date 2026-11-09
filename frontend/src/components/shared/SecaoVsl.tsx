@@ -51,7 +51,9 @@ export function SecaoVsl({
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [modalAberto, setModalAberto] = useState(false)
-  const [selecionado, setSelecionado] = useState<string | null>(null)
+  // VSL que o usuário clicou na tabela. Sem clique (ou se ela não está na
+  // lista atual), a curva mostra a VSL com mais plays no período.
+  const [escolhido, setEscolhido] = useState<string | null>(null)
   const ultimaRef = useRef(0)
 
   const carregar = useCallback(async () => {
@@ -62,9 +64,6 @@ export function SecaoVsl({
       const p = await perpetuosService.painelVsl(perpetuoId, categoria, inicio, fim)
       if (requisicao !== ultimaRef.current) return
       setPainel(p)
-      setSelecionado((atual) =>
-        p.players.some((l) => l.player_id === atual) ? atual : (p.players[0]?.player_id ?? null),
-      )
     } catch (e) {
       if (requisicao === ultimaRef.current) setErro(extrairErro(e))
     } finally {
@@ -78,6 +77,10 @@ export function SecaoVsl({
 
   const ativa = painel?.categoria ?? categoria
   const cor = ativa ? COR_CATEGORIA_VSL[ativa] : COR_CATEGORIA_VSL.Principal
+  const players = painel?.players ?? []
+  const selecionado = players.some((l) => l.player_id === escolhido)
+    ? escolhido
+    : (players[0]?.player_id ?? null) // já vem ordenada por plays
 
   return (
     <section style={{ marginBottom: '1.5rem' }}>
@@ -114,7 +117,7 @@ export function SecaoVsl({
         inicio={inicio}
         fim={fim}
         selecionado={selecionado}
-        onSelecionar={setSelecionado}
+        onSelecionar={setEscolhido}
         onVincular={() => setModalAberto(true)}
       />
 
@@ -339,6 +342,8 @@ function CurvaVsl({
       <p style={{ margin: '4px 0 12px', fontSize: 12, color: 'var(--text-faint)' }}>{resumo.join(' · ')}</p>
       {erro ? (
         <div style={avisoErro}>{erro}</div>
+      ) : atual && curvaVazia(atual) ? (
+        <p style={{ ...textoMudoVsl, margin: 0 }}>Sem plays dessa VSL no período selecionado.</p>
       ) : atual ? (
         <GraficoRetencaoVsl curva={atual} cor={cor} />
       ) : (
@@ -346,6 +351,11 @@ function CurvaVsl({
       )}
     </div>
   )
+}
+
+/** Ninguém assistiu nem clicou/converteu no período. */
+function curvaVazia(curva: VslCurva) {
+  return curva.pontos.every((p) => p.usuarios === null && !p.cliques && !p.conversoes)
 }
 
 function CardAviso({
