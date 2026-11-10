@@ -22,6 +22,23 @@ export const COR_CLIQUES = '#E879F9'
 export const COR_CONVERSOES = '#A3E635'
 export const COR_PITCH = '#EF4444'
 
+// Textos de "passe o mouse" das colunas de conversão do pixel (tabelas de VSL)
+const RESSALVA_PIXEL =
+  'É atribuição do pixel da VTurb, não a venda real: quem comprou em outro aparelho ou foi direto ao checkout fica de fora. ' +
+  'Serve pra comparar as VSLs entre si — as vendas reais estão no cartão de vendas da categoria.'
+export const DICA_VENDAS_PIXEL = `Vendas que a VTurb conseguiu ligar a quem assistiu esta VSL. ${RESSALVA_PIXEL}`
+export const DICA_CONV_PIXEL = `Vendas atribuídas pelo pixel ÷ plays únicos. ${RESSALVA_PIXEL}`
+/** Coluna que mostra os dois juntos: "20 2,40%". */
+export const DICA_VENDAS_E_CONV_PIXEL =
+  `Número: vendas que a VTurb conseguiu ligar a quem assistiu esta VSL. %: essas vendas ÷ plays únicos. ${RESSALVA_PIXEL}`
+
+/** Título de coluna com explicação ao passar o mouse (sublinhado pontilhado). */
+export const tituloComDica: CSSProperties = {
+  textDecoration: 'underline dotted',
+  textUnderlineOffset: 3,
+  cursor: 'help',
+}
+
 export const cartao: CSSProperties = {
   background: 'var(--surface)',
   border: '1px solid var(--border)',

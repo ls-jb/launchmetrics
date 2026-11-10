@@ -215,6 +215,7 @@ def test_linha_da_analise_retencao_em_1min_5min_e_pitch():
     # 3765 na curva: 2570 ainda assistiam em 1:00, 1881 em 5:00 e 1105 em 20:00
     assert (linha.retencao_1min, linha.retencao_5min, linha.retencao_pitch) == (68.26, 49.96, 29.35)
     assert linha.conversao_vturb == 1.27  # 49 conversões ÷ 3860 plays únicos
+    assert linha.conversoes_vturb == 49
     assert linha.play_rate == 64.79
     assert linha.plays_unicos == 3860
 

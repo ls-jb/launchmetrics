@@ -5,19 +5,39 @@ import { formatNum, formatTaxa } from '@/lib/tokens'
 import { perpetuosService } from '@/services/perpetuosService'
 import type { CategoriaVsl, VslAnalise, VslAnaliseJanela, VslAnaliseLinha } from '@/types'
 
-import { COR_CATEGORIA_VSL, avisoErro, botaoSecundarioVsl, cartao, rotuloGrupo, textoMudoVsl } from './vslEstilos'
+import {
+  COR_CATEGORIA_VSL,
+  DICA_CONV_PIXEL,
+  DICA_VENDAS_PIXEL,
+  avisoErro,
+  botaoSecundarioVsl,
+  cartao,
+  rotuloGrupo,
+  textoMudoVsl,
+  tituloComDica,
+} from './vslEstilos'
 
-type Coluna = 'retencao_1min' | 'retencao_5min' | 'retencao_pitch' | 'conversao_vturb' | 'play_rate'
+type Coluna = 'retencao_1min' | 'retencao_5min' | 'retencao_pitch' | 'conversao_vturb' | 'play_rate' | 'conversoes_vturb'
 
-const COLUNAS: Array<{ chave: Coluna; titulo: string; dica: string }> = [
-  { chave: 'retencao_1min', titulo: '% 1 min', dica: 'Quem deu play e ainda assistia em 1:00' },
-  { chave: 'retencao_5min', titulo: '% 5 min', dica: 'Quem deu play e ainda assistia em 5:00' },
-  { chave: 'retencao_pitch', titulo: '% até o pitch', dica: 'Quem deu play e chegou ao pitch (cadastrado na VTurb)' },
-  { chave: 'conversao_vturb', titulo: 'Conv.', dica: 'Conversões do pixel VTurb ÷ plays únicos (atribuição, não é venda)' },
-  { chave: 'play_rate', titulo: 'Play rate', dica: 'Plays únicos ÷ views únicas' },
+interface DefColuna {
+  chave: Coluna
+  titulo: string
+  dica: string
+  /** Taxa (%) disputa o destaque de melhor; contagem (vendas) não — depende do tráfego. */
+  taxa: boolean
+}
+
+const COLUNAS: DefColuna[] = [
+  { chave: 'retencao_1min', titulo: '% 1 min', dica: 'Quem deu play e ainda assistia em 1:00', taxa: true },
+  { chave: 'retencao_5min', titulo: '% 5 min', dica: 'Quem deu play e ainda assistia em 5:00', taxa: true },
+  { chave: 'retencao_pitch', titulo: '% até o pitch', dica: 'Quem deu play e chegou ao pitch (cadastrado na VTurb)', taxa: true },
+  { chave: 'conversao_vturb', titulo: 'Conv.', dica: DICA_CONV_PIXEL, taxa: true },
+  { chave: 'play_rate', titulo: 'Play rate', dica: 'Plays únicos ÷ views únicas', taxa: true },
+  { chave: 'conversoes_vturb', titulo: 'Vendas', dica: DICA_VENDAS_PIXEL, taxa: false },
 ]
+const COLUNAS_PIXEL = new Set<Coluna>(['conversao_vturb', 'conversoes_vturb'])
 
-const GRADE = 'minmax(170px, 2.2fr) repeat(5, minmax(62px, 1fr))'
+const GRADE = 'minmax(170px, 2.2fr) repeat(6, minmax(58px, 1fr))'
 const COR_MELHOR = '#3ECFB2'
 const COR_ATENCAO = '#F59E0B'
 
@@ -59,7 +79,7 @@ export function AnaliseVsls({
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
         <p style={{ ...rotuloGrupo, margin: 0 }}>Análise das VSLs — últimos 7 e 30 dias</p>
         <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>
-          períodos fixos, não seguem o filtro de data · melhor de cada coluna em verde (VSLs com 100+ plays)
+          períodos fixos, não seguem o filtro de data · melhor de cada taxa em verde (VSLs com 100+ plays) · passe o mouse nos títulos pra ver o que cada coluna mede
         </span>
       </div>
       {vsls.length > 1 && <SeletorVsls vsls={vsls} ocultas={efetivas} onAlternar={alternar} />}
@@ -202,12 +222,14 @@ function TabelaJanela({ janela }: { janela: VslAnaliseJanela }) {
         </span>
       </p>
       <div style={{ overflowX: 'auto' }}>
-        <div style={{ minWidth: 470 }}>
+        <div style={{ minWidth: 540 }}>
           <div style={{ ...linha, color: 'var(--text-faint)', fontWeight: 600, fontSize: 11, borderBottom: '1px solid var(--border)' }}>
             <span>VSL</span>
             {COLUNAS.map((c) => (
-              <span key={c.chave} style={numero} title={c.dica}>
-                {c.titulo}
+              <span key={c.chave} style={numero}>
+                <span style={tituloComDica} title={c.dica}>
+                  {c.titulo}
+                </span>
               </span>
             ))}
           </div>
@@ -261,10 +283,14 @@ function LinhaVsl({
         </span>
         {COLUNAS.map((c) => {
           const valor = l[c.chave]
-          const destaque = valor !== null && !amostraPequena(l) && melhores?.[c.chave] === valor
+          const destaque = c.taxa && valor !== null && !amostraPequena(l) && melhores?.[c.chave] === valor
           return (
-            <span key={c.chave} style={{ ...numero, fontSize: 14, color: destaque ? COR_MELHOR : 'var(--text)', fontWeight: destaque ? 700 : 500 }}>
-              {formatTaxa(valor, 2)}
+            <span
+              key={c.chave}
+              title={COLUNAS_PIXEL.has(c.chave) ? c.dica : undefined}
+              style={{ ...numero, fontSize: 14, color: destaque ? COR_MELHOR : 'var(--text)', fontWeight: destaque ? 700 : 500 }}
+            >
+              {c.taxa ? formatTaxa(valor, 2) : l.plays_unicos ? formatNum(valor ?? 0) : '—'}
             </span>
           )
         })}
@@ -308,7 +334,7 @@ function melhoresPorCategoria(linhas: VslAnaliseLinha[]) {
   for (const categoria of new Set(linhas.map((l) => l.categoria))) {
     const daCategoria = linhas.filter((l) => l.categoria === categoria && l.plays_unicos >= PLAYS_MINIMOS_DESTAQUE)
     const melhores: Partial<Record<Coluna, number>> = {}
-    for (const { chave } of COLUNAS) {
+    for (const { chave } of COLUNAS.filter((c) => c.taxa)) {
       const valores = daCategoria.map((l) => l[chave]).filter((v): v is number => v !== null)
       if (valores.length >= 2) melhores[chave] = Math.max(...valores)
     }

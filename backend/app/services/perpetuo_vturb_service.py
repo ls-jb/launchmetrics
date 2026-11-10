@@ -493,6 +493,7 @@ def linha_analise(
         retencao_pitch=retencao_em(player, eng, player.pitch_seg),
         conversao_vturb=_pct(stats.conversoes, stats.plays_unicos),
         play_rate=_pct(stats.plays_unicos, stats.views_unicas),
+        conversoes_vturb=stats.conversoes,
     )
 
 

@@ -19,6 +19,7 @@ import { KPICard } from './KPICard'
 import { Modal } from './Modal'
 import {
   COR_CATEGORIA_VSL,
+  DICA_VENDAS_E_CONV_PIXEL,
   avisoErro,
   botaoPrimarioVsl,
   botaoSecundarioVsl,
@@ -27,6 +28,7 @@ import {
   pilulaCategoria,
   rotuloGrupo,
   textoMudoVsl,
+  tituloComDica,
   tituloSecaoVsl,
 } from './vslEstilos'
 
@@ -258,6 +260,7 @@ function TabelaVsls({
   cor: string
 }) {
   const cabecalho = ['VSL', 'Views', 'Plays', 'Play rate', 'Engaj.', 'Tempo médio', 'Ret. pitch', 'Cliques', 'Conv. pixel']
+  const dicas: Record<string, string> = { 'Conv. pixel': DICA_VENDAS_E_CONV_PIXEL }
   return (
     <div>
       <p style={rotuloGrupo}>Comparar VSLs — clique numa linha para ver a curva de retenção</p>
@@ -266,7 +269,13 @@ function TabelaVsls({
           <div style={{ ...linhaTabela, background: 'transparent', border: 'none', color: 'var(--text-faint)', fontWeight: 600 }}>
             {cabecalho.map((c, i) => (
               <span key={c} style={i === 0 ? undefined : celulaNumero}>
-                {c}
+                {dicas[c] ? (
+                  <span style={tituloComDica} title={dicas[c]}>
+                    {c}
+                  </span>
+                ) : (
+                  c
+                )}
               </span>
             ))}
           </div>
@@ -292,7 +301,7 @@ function TabelaVsls({
                 <span style={celulaNumero}>
                   {formatNum(k.cliques_unicos)} <small style={{ color: 'var(--text-faint)' }}>{formatTaxa(k.taxa_clique)}</small>
                 </span>
-                <span style={celulaNumero}>
+                <span style={celulaNumero} title={DICA_VENDAS_E_CONV_PIXEL}>
                   {formatNum(k.conversoes_vturb)} <small style={{ color: 'var(--text-faint)' }}>{formatTaxa(k.conversao_vturb, 2)}</small>
                 </span>
               </button>

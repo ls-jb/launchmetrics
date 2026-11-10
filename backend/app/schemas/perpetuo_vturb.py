@@ -147,6 +147,8 @@ class VslAnaliseLinha(BaseModel):
     conversao_vturb: float | None = None
     """Conversões do pixel VTurb ÷ plays únicos (atribuição, não é venda)."""
     play_rate: float | None = None
+    conversoes_vturb: int = 0
+    """Vendas que o pixel da VTurb atribuiu à VSL (atribuição, não é a venda real)."""
     no_ar_desde: date | None = None
     """1º dia de tráfego de verdade da VSL (ignora plays de teste antes do lançamento)."""
     dias_no_ar: int | None = None
