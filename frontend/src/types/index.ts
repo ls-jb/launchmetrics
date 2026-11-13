@@ -299,6 +299,8 @@ export interface PerpetuoOfertaDetalhe {
   id: string
   oferta_codigo: string
   oferta_nome: string | null
+  /** Nome do produto da oferta (vem da tabela de vendas). */
+  produto: string | null
   categoria: CategoriaPerpetuo
   quantidade: number
   receita: number

@@ -334,6 +334,8 @@ async def _ofertas_com_metricas(
         for r in rows
     }
 
+    produto_por_codigo = await _produto_por_codigo(db, codigos)
+
     detalhes: list[OfertaDetalhe] = []
     for o in ofertas:
         qtd, receita, receita_hotmart, qtd_hotmart = metricas.get(
@@ -344,6 +346,7 @@ async def _ofertas_com_metricas(
                 id=o.id,
                 oferta_codigo=o.oferta_codigo,
                 oferta_nome=o.oferta_nome,
+                produto=produto_por_codigo.get(o.oferta_codigo),
                 categoria=_categoria_efetiva(o),  # type: ignore[arg-type]
                 quantidade=qtd,
                 receita=receita,
@@ -354,6 +357,25 @@ async def _ofertas_com_metricas(
     # Receita desc; sem venda vai pro fim
     detalhes.sort(key=lambda d: (-d.receita, -d.quantidade, d.oferta_nome or ""))
     return detalhes
+
+
+async def _produto_por_codigo(
+    db: AsyncSession, codigos: list[str]
+) -> dict[str, str]:
+    """Nome do produto de cada oferta_codigo, olhando qualquer venda dela
+    (todas as vendas da mesma oferta têm o mesmo produto). Sem filtro de
+    período: a oferta mostra o produto mesmo sem venda no intervalo.
+    MAX devolve 1 valor por código sem risco de erro."""
+    if not codigos:
+        return {}
+    rows = (
+        await db.execute(
+            select(Venda.oferta_codigo, func.max(Venda.produto).label("produto"))
+            .where(Venda.oferta_codigo.in_(codigos))
+            .group_by(Venda.oferta_codigo)
+        )
+    ).all()
+    return {r.oferta_codigo: r.produto for r in rows if r.produto}
 
 
 # ============================================================
@@ -478,20 +500,9 @@ async def vendas_do_dia(
         )
     ).all()
 
-    # Pega o produto de cada oferta_codigo (qualquer venda serve — todas
-    # da mesma oferta têm o mesmo produto). MAX pra devolver 1 valor por
-    # código sem risco de erro.
-    codigos_com_venda = [r.oferta_codigo for r in rows]
-    produto_por_codigo: dict[str, str] = {}
-    if codigos_com_venda:
-        rows_prod = (
-            await db.execute(
-                select(Venda.oferta_codigo, func.max(Venda.produto).label("produto"))
-                .where(Venda.oferta_codigo.in_(codigos_com_venda))
-                .group_by(Venda.oferta_codigo)
-            )
-        ).all()
-        produto_por_codigo = {rp.oferta_codigo: rp.produto for rp in rows_prod}
+    produto_por_codigo = await _produto_por_codigo(
+        db, [r.oferta_codigo for r in rows]
+    )
 
     # Agrega por (produto, oferta_nome, categoria) — vários oferta_codigo
     # podem cair na mesma tripla.

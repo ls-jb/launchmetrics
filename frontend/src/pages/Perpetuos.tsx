@@ -832,6 +832,7 @@ function CardOferta({
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, minWidth: 0 }}>
           {editandoCat && isAdmin ? (
             <select
               autoFocus
@@ -841,7 +842,6 @@ function CardOferta({
               onBlur={() => setEditandoCat(false)}
               style={{
                 ...selectInline,
-                marginBottom: 6,
                 borderColor: cor,
                 color: cor,
                 fontWeight: 700,
@@ -869,16 +869,33 @@ function CardOferta({
                 background: `${cor}22`,
                 padding: '2px 8px',
                 borderRadius: 99,
-                marginBottom: 6,
                 textTransform: 'uppercase',
                 letterSpacing: '0.06em',
                 border: 'none',
                 cursor: isAdmin ? 'pointer' : 'default',
+                flexShrink: 0,
               }}
             >
               {detalhe.categoria}
             </button>
           )}
+          {detalhe.produto && (
+            <span
+              title={detalhe.produto}
+              style={{
+                fontSize: 11,
+                fontWeight: 500,
+                color: 'var(--text-dim)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                minWidth: 0,
+              }}
+            >
+              {detalhe.produto}
+            </span>
+          )}
+          </div>
           <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {detalhe.oferta_nome || detalhe.oferta_codigo}
           </p>

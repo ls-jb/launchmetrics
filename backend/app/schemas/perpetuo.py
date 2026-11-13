@@ -112,6 +112,8 @@ class OfertaDetalhe(BaseModel):
     """ID da linha em perpetuos_ofertas (pra remover)."""
     oferta_codigo: str
     oferta_nome: str | None = None
+    produto: str | None = None
+    """Nome do produto da oferta (vem da tabela vendas)."""
     categoria: Categoria
     """Categoria heurística pelo nome (Principal / Upsell / etc)."""
     quantidade: int
