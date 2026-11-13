@@ -16,7 +16,17 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID as UUIDType, uuid4
 
-from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, UniqueConstraint, func
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Numeric,
+    String,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -77,6 +87,16 @@ class PerpetuoOferta(Base):
     Quando NULL, cai na heurística pelo nome. Setada quando o nome não
     deixa claro qual é o tipo (ex: um order bump do Agenda Cheia que se
     chama só 'Complemento X')."""
+    funil: Mapped[str | None] = mapped_column(String)
+    """Nome do funil que liga ofertas (ex.: 'Funil Especial' = Oferta
+    Especial + Upsell da Oferta Especial). A tela agrupa por ele."""
+    descricao: Mapped[str | None] = mapped_column(String)
+    """Explicação livre mostrada no '?' do card."""
+    oculta: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    """Oferta que não roda mais: some da tela, mas continua somando nos
+    totais (o histórico importa)."""
     criado_em: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

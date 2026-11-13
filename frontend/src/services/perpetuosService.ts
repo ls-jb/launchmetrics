@@ -47,9 +47,15 @@ export interface NovaOfertaPayload {
   categoria?: CategoriaPerpetuo | null
 }
 
+/** Só os campos enviados mudam no backend. */
 export interface AtualizarOfertaPayload {
   /** null limpa a categoria explícita — volta à heurística. */
-  categoria: CategoriaPerpetuo | null
+  categoria?: CategoriaPerpetuo | null
+  /** Vazio/null limpa — a oferta sai dos blocos de funil. */
+  funil?: string | null
+  /** Explicação do "?" do card. Vazio/null limpa. */
+  descricao?: string | null
+  oculta?: boolean
 }
 
 export interface NovoVturbPlayerPayload {

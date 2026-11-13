@@ -228,9 +228,12 @@ async def atualizar_oferta(
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(require_admin),
 ):
-    """Atualiza a categoria de uma oferta cadastrada. Passar
-    categoria=null limpa a categoria explícita (volta à heurística)."""
-    item = await svc.atualizar_oferta(db, oferta_id, dados.categoria)
+    """Atualiza categoria, funil, explicação e/ou se está oculta. Só os
+    campos enviados mudam. categoria=null limpa a categoria explícita
+    (volta à heurística)."""
+    item = await svc.atualizar_oferta(
+        db, oferta_id, dados.model_dump(exclude_unset=True)
+    )
     if not item:
         raise HTTPException(status_code=404, detail="Oferta não encontrada.")
     return item

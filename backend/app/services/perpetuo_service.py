@@ -10,6 +10,7 @@ inicio default é perpetuo.data_inicio e fim default é hoje.
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -167,17 +168,37 @@ async def adicionar_oferta(
     return item
 
 
+_CAMPOS_TEXTO_OFERTA = ("funil", "descricao")
+
+
+def _normalizar_campos_oferta(campos: dict[str, Any]) -> dict[str, Any]:
+    """Limpa os campos enviados no PATCH da oferta (só os enviados chegam
+    aqui — exclude_unset). Texto vazio/espaços vira None (limpa o campo);
+    oculta=None é ignorado; categoria=None é mantido (volta à heurística)."""
+    limpos: dict[str, Any] = {}
+    for nome, valor in campos.items():
+        if nome in _CAMPOS_TEXTO_OFERTA:
+            limpos[nome] = (valor or "").strip() or None
+        elif nome == "oculta":
+            if valor is not None:
+                limpos[nome] = bool(valor)
+        elif nome == "categoria":
+            limpos[nome] = valor
+    return limpos
+
+
 async def atualizar_oferta(
     db: AsyncSession,
     oferta_id: UUID,
-    categoria: str | None,
+    campos: dict[str, Any],
 ) -> PerpetuoOferta | None:
-    """Atualiza a categoria de uma oferta. categoria=None limpa a
-    categoria explícita — volta à heurística pelo nome."""
+    """Atualiza só os campos enviados da oferta (categoria, funil,
+    descricao, oculta). categoria=None limpa a categoria explícita."""
     item = await db.get(PerpetuoOferta, oferta_id)
     if not item:
         return None
-    item.categoria = categoria
+    for nome, valor in _normalizar_campos_oferta(campos).items():
+        setattr(item, nome, valor)
     await db.commit()
     await db.refresh(item)
     return item
@@ -348,6 +369,9 @@ async def _ofertas_com_metricas(
                 oferta_nome=o.oferta_nome,
                 produto=produto_por_codigo.get(o.oferta_codigo),
                 categoria=_categoria_efetiva(o),  # type: ignore[arg-type]
+                funil=o.funil,
+                descricao=o.descricao,
+                oculta=bool(o.oculta),
                 quantidade=qtd,
                 receita=receita,
                 receita_hotmart=receita_hotmart,

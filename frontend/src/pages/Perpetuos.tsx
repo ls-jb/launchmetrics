@@ -1,5 +1,14 @@
 import { format } from 'date-fns'
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Fragment,
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 
 import { BotaoAtualizar } from '@/components/shared/BotaoAtualizar'
 import { FiltroData } from '@/components/shared/FiltroData'
@@ -12,6 +21,7 @@ import { formatBRL, formatNum } from '@/lib/tokens'
 import { luziService } from '@/services/luziService'
 import {
   perpetuosService,
+  type AtualizarOfertaPayload,
   type NovoPerpetuoPayload,
 } from '@/services/perpetuosService'
 import { useAuthStore } from '@/store/authStore'
@@ -182,6 +192,9 @@ function DetalhePerpetuo({
   const [modalAportes, setModalAportes] = useState(false)
   const [modalMeta, setModalMeta] = useState(false)
   const [modalPlanilha, setModalPlanilha] = useState(false)
+  const [ofertaEditando, setOfertaEditando] = useState<PerpetuoOfertaDetalhe | null>(null)
+  // Ofertas ocultas (não rodam mais) ficam fora da tela até clicar em "Mostrar".
+  const [mostrarOcultas, setMostrarOcultas] = useState(false)
 
   // Filtro de categoria pros KPIs. null = ainda não inicializado (a 1ª
   // carga popula com todas as categorias existentes). Investimento fica
@@ -287,6 +300,11 @@ function DetalhePerpetuo({
     categoria: CategoriaPerpetuo,
   ) => {
     await perpetuosService.atualizarOferta(id, { categoria })
+    await carregar(false)
+  }
+
+  const salvarOferta = async (id: string, dados: AtualizarOfertaPayload) => {
+    await perpetuosService.atualizarOferta(id, dados)
     await carregar(false)
   }
 
@@ -614,26 +632,24 @@ function DetalhePerpetuo({
           }
         />
       ) : (
-        <div
-          style={{
-            display: 'grid',
-            gap: 12,
-            gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
-            marginBottom: '1.5rem',
-          }}
-        >
-          {/* Filtra pelos mesmos catsAtivas dos KPIs — assim quando o
-              usuário marca só "Principal", só os cards Principal aparecem. */}
-          {ofertasAtivas.map((o) => (
+        /* Filtra pelos mesmos catsAtivas dos KPIs — assim quando o
+           usuário marca só "Principal", só os cards Principal aparecem.
+           Ocultas saem só da tela: os KPIs acima continuam somando. */
+        <ListaOfertas
+          ofertas={ofertasAtivas}
+          mostrarOcultas={mostrarOcultas}
+          onAlternarOcultas={() => setMostrarOcultas((v) => !v)}
+          renderCard={(o) => (
             <CardOferta
               key={o.id}
               detalhe={o}
               isAdmin={isAdmin}
               onRemover={removerOferta}
               onAlterarCategoria={alterarCategoriaOferta}
+              onEditar={setOfertaEditando}
             />
-          ))}
-        </div>
+          )}
+        />
       )}
 
       {/* Gráfico diário */}
@@ -682,6 +698,26 @@ function DetalhePerpetuo({
             carregar(false)
           }}
         />
+      </Modal>
+
+      <Modal
+        aberto={ofertaEditando !== null}
+        titulo="Editar oferta"
+        onFechar={() => setOfertaEditando(null)}
+        largura={520}
+      >
+        {ofertaEditando && (
+          <FormEditarOferta
+            key={ofertaEditando.id}
+            oferta={ofertaEditando}
+            funisExistentes={funisDoPerpetuo(completo.ofertas)}
+            onCancelar={() => setOfertaEditando(null)}
+            onSalvar={async (dados) => {
+              await salvarOferta(ofertaEditando.id, dados)
+              setOfertaEditando(null)
+            }}
+          />
+        )}
       </Modal>
 
       <Modal
@@ -785,12 +821,15 @@ function CardOferta({
   isAdmin,
   onRemover,
   onAlterarCategoria,
+  onEditar,
 }: {
   detalhe: PerpetuoOfertaDetalhe
   isAdmin: boolean
   onRemover: (id: string) => void
   onAlterarCategoria: (id: string, cat: CategoriaPerpetuo) => Promise<void>
+  onEditar: (oferta: PerpetuoOfertaDetalhe) => void
 }) {
+  const [verExplicacao, setVerExplicacao] = useState(false)
   const cpv =
     detalhe.quantidade > 0 ? Number(detalhe.receita) / detalhe.quantidade : 0
   const corCategoria: Record<string, string> = {
@@ -828,6 +867,9 @@ function CardOferta({
         border: '1px solid var(--border)',
         borderRadius: 12,
         padding: '1rem 1.25rem',
+        height: '100%',
+        boxSizing: 'border-box',
+        opacity: detalhe.oculta ? 0.55 : 1,
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
@@ -895,22 +937,51 @@ function CardOferta({
               {detalhe.produto}
             </span>
           )}
+          {detalhe.oculta && <span style={etiquetaOculta}>Oculta</span>}
           </div>
           <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {detalhe.oferta_nome || detalhe.oferta_codigo}
+            {detalhe.descricao && (
+              <button
+                type="button"
+                onClick={() => setVerExplicacao((v) => !v)}
+                title={detalhe.descricao}
+                aria-label="Ver explicação da oferta"
+                style={{
+                  ...botaoInterrogacao,
+                  background: verExplicacao ? '#7C6AF7' : 'transparent',
+                  color: verExplicacao ? '#fff' : '#7C6AF7',
+                }}
+              >
+                ?
+              </button>
+            )}
           </p>
           <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--text-faint)' }}>
             cód: {detalhe.oferta_codigo}
           </p>
+          {verExplicacao && detalhe.descricao && (
+            <p style={caixaExplicacao}>{detalhe.descricao}</p>
+          )}
         </div>
         {isAdmin && (
-          <button
-            onClick={() => onRemover(detalhe.id)}
-            title="Remover oferta"
-            style={botaoIconeRemover}
-          >
-            ×
-          </button>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            <button
+              type="button"
+              onClick={() => onEditar(detalhe)}
+              title="Editar funil, explicação ou ocultar"
+              style={botaoIconeEditar}
+            >
+              ✎
+            </button>
+            <button
+              onClick={() => onRemover(detalhe.id)}
+              title="Remover oferta"
+              style={botaoIconeRemover}
+            >
+              ×
+            </button>
+          </div>
         )}
       </div>
 
@@ -929,6 +1000,277 @@ function CardOferta({
         <MetricaInline label="Ticket méd." valor={`R$ ${cpv.toFixed(2)}`} />
       </div>
     </div>
+  )
+}
+
+// ============================================================
+// Ofertas agrupadas por funil (ofertas que se ligam ficam juntas)
+// ============================================================
+const ORDEM_ETAPA: CategoriaPerpetuo[] = [
+  'Principal',
+  'Order Bump',
+  'Upsell',
+  'UpUpsell',
+  'Downsell',
+  'Outros',
+]
+
+interface GrupoFunil {
+  /** null = ofertas sem funil ("Outras ofertas"). */
+  nome: string | null
+  ofertas: PerpetuoOfertaDetalhe[]
+  quantidade: number
+  receita: number
+}
+
+/** Agrupa por funil; dentro do bloco, ordem de etapa (Principal → Upsell
+ * → …). Blocos por receita desc; "Outras ofertas" sempre por último. */
+function agruparPorFunil(ofertas: PerpetuoOfertaDetalhe[]): GrupoFunil[] {
+  const mapa = new Map<string | null, PerpetuoOfertaDetalhe[]>()
+  for (const o of ofertas) {
+    const chave = o.funil?.trim() || null
+    mapa.set(chave, [...(mapa.get(chave) ?? []), o])
+  }
+  const etapa = (o: PerpetuoOfertaDetalhe) => ORDEM_ETAPA.indexOf(o.categoria)
+  const grupos = [...mapa.entries()].map(([nome, lista]) => ({
+    nome,
+    ofertas: [...lista].sort(
+      (a, b) => etapa(a) - etapa(b) || Number(b.receita) - Number(a.receita),
+    ),
+    quantidade: lista.reduce((s, o) => s + o.quantidade, 0),
+    receita: lista.reduce((s, o) => s + Number(o.receita), 0),
+  }))
+  const semFunil = (g: GrupoFunil) => (g.nome === null ? 1 : 0)
+  return grupos.sort((a, b) => semFunil(a) - semFunil(b) || b.receita - a.receita)
+}
+
+/** Funis já usados no perpétuo — sugestões no campo do modal. */
+function funisDoPerpetuo(ofertas: PerpetuoOfertaDetalhe[]): string[] {
+  const nomes = ofertas.map((o) => o.funil?.trim()).filter((f): f is string => !!f)
+  return [...new Set(nomes)].sort((a, b) => a.localeCompare(b, 'pt-BR'))
+}
+
+function ListaOfertas({
+  ofertas,
+  mostrarOcultas,
+  onAlternarOcultas,
+  renderCard,
+}: {
+  ofertas: PerpetuoOfertaDetalhe[]
+  mostrarOcultas: boolean
+  onAlternarOcultas: () => void
+  renderCard: (o: PerpetuoOfertaDetalhe) => React.ReactNode
+}) {
+  const qtdOcultas = ofertas.filter((o) => o.oculta).length
+  const visiveis = mostrarOcultas ? ofertas : ofertas.filter((o) => !o.oculta)
+  // Sem nenhum funil configurado, mantém a grade simples de sempre.
+  const temFunil = ofertas.some((o) => o.funil?.trim())
+
+  return (
+    <div style={{ marginBottom: '1.5rem' }}>
+      {visiveis.length === 0 ? (
+        <p style={textoMudo}>Todas as ofertas desta seleção estão ocultas.</p>
+      ) : temFunil ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {agruparPorFunil(visiveis).map((g) => (
+            <BlocoFunil key={g.nome ?? '__sem_funil'} grupo={g} renderCard={renderCard} />
+          ))}
+        </div>
+      ) : (
+        <div style={gradeOfertas}>{visiveis.map(renderCard)}</div>
+      )}
+      {qtdOcultas > 0 && (
+        <button type="button" onClick={onAlternarOcultas} style={botaoOcultas}>
+          {mostrarOcultas
+            ? 'Esconder ofertas ocultas'
+            : `👁 Mostrar ${qtdOcultas} ${qtdOcultas === 1 ? 'oferta oculta' : 'ofertas ocultas'}`}
+        </button>
+      )}
+    </div>
+  )
+}
+
+function BlocoFunil({
+  grupo,
+  renderCard,
+}: {
+  grupo: GrupoFunil
+  renderCard: (o: PerpetuoOfertaDetalhe) => React.ReactNode
+}) {
+  const ligado = grupo.nome !== null
+  const n = grupo.ofertas.length
+  return (
+    <div style={blocoFunil}>
+      <div style={cabecalhoFunil}>
+        <p
+          style={{
+            ...tituloFunil,
+            color: ligado ? '#7C6AF7' : 'var(--text-faint)',
+          }}
+        >
+          {ligado ? `🔗 ${grupo.nome}` : 'Outras ofertas'}
+        </p>
+        <p style={{ margin: 0, fontSize: 12, color: 'var(--text-faint)' }}>
+          {n} {n === 1 ? 'oferta' : 'ofertas'} · {formatNum(grupo.quantidade)} vendas ·{' '}
+          <strong style={{ color: 'var(--text)' }}>{formatBRL(grupo.receita)}</strong>
+        </p>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'stretch', gap: 8 }}>
+        {grupo.ofertas.map((o, i) => (
+          <Fragment key={o.id}>
+            {/* Seta só entre ofertas do mesmo funil: quem compra uma etapa
+                veio da anterior. Em "Outras ofertas" não há ligação. */}
+            {i > 0 && ligado && (
+              <span aria-hidden style={setaFunil}>
+                →
+              </span>
+            )}
+            <div style={{ flex: '1 1 300px', minWidth: 0 }}>{renderCard(o)}</div>
+          </Fragment>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ============================================================
+// Form: editar oferta (funil, explicação do "?", ocultar)
+// ============================================================
+function FormEditarOferta({
+  oferta,
+  funisExistentes,
+  onCancelar,
+  onSalvar,
+}: {
+  oferta: PerpetuoOfertaDetalhe
+  funisExistentes: string[]
+  onCancelar: () => void
+  onSalvar: (dados: AtualizarOfertaPayload) => Promise<void>
+}) {
+  const [funil, setFunil] = useState(oferta.funil ?? '')
+  const [descricao, setDescricao] = useState(oferta.descricao ?? '')
+  const [oculta, setOculta] = useState(oferta.oculta)
+  const [enviando, setEnviando] = useState(false)
+  const [erro, setErro] = useState('')
+
+  const submeter = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setEnviando(true)
+    setErro('')
+    try {
+      await onSalvar({
+        funil: funil.trim() || null,
+        descricao: descricao.trim() || null,
+        oculta,
+      })
+    } catch (err) {
+      setErro(extrairErro(err))
+      setEnviando(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submeter} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div>
+        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
+          {oferta.oferta_nome || oferta.oferta_codigo}
+        </p>
+        <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--text-faint)' }}>
+          {oferta.produto ? `${oferta.produto} · ` : ''}cód: {oferta.oferta_codigo}
+        </p>
+      </div>
+      <CampoFunil valor={funil} onChange={setFunil} sugestoes={funisExistentes} />
+      <div>
+        <label style={rotulo}>Explicação (aparece no “?” do card)</label>
+        <textarea
+          value={descricao}
+          onChange={(e) => setDescricao(e.target.value)}
+          maxLength={500}
+          rows={3}
+          placeholder="Ex.: Vendido na aula ao vivo que acontece toda quinta-feira."
+          style={{ ...inputBase, resize: 'vertical', fontFamily: 'inherit' }}
+        />
+      </div>
+      <CheckboxOcultar marcado={oculta} onChange={setOculta} />
+      {erro && <Aviso texto={erro} />}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <button type="button" onClick={onCancelar} style={botaoSecundarioModal}>
+          Cancelar
+        </button>
+        <button type="submit" disabled={enviando} style={botaoPrimario}>
+          {enviando ? 'Salvando…' : 'Salvar'}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+function CampoFunil({
+  valor,
+  onChange,
+  sugestoes,
+}: {
+  valor: string
+  onChange: (v: string) => void
+  sugestoes: string[]
+}) {
+  return (
+    <div>
+      <label style={rotulo}>Funil</label>
+      <input
+        list="funis-do-perpetuo"
+        value={valor}
+        onChange={(e) => onChange(e.target.value)}
+        maxLength={60}
+        placeholder="Ex.: Funil Especial"
+        style={inputBase}
+      />
+      <datalist id="funis-do-perpetuo">
+        {sugestoes.map((f) => (
+          <option key={f} value={f} />
+        ))}
+      </datalist>
+      <p style={textoAjuda}>
+        Ofertas com o mesmo funil aparecem juntas, em ordem: Principal → Upsell →
+        UpUpsell → Downsell. Vazio = fica em “Outras ofertas”.
+      </p>
+    </div>
+  )
+}
+
+function CheckboxOcultar({
+  marcado,
+  onChange,
+}: {
+  marcado: boolean
+  onChange: (v: boolean) => void
+}) {
+  return (
+    <label
+      style={{
+        display: 'flex',
+        gap: 10,
+        alignItems: 'flex-start',
+        fontSize: 13,
+        color: 'var(--text)',
+        cursor: 'pointer',
+      }}
+    >
+      <input
+        type="checkbox"
+        checked={marcado}
+        onChange={(e) => onChange(e.target.checked)}
+        style={{ marginTop: 2 }}
+      />
+      <span>
+        Ocultar esta oferta
+        <span style={{ ...textoAjuda, display: 'block' }}>
+          Pra ofertas que não estão mais rodando. Some da tela, mas continua
+          somando nos totais e no gráfico (dá pra ver de novo em “Mostrar ofertas
+          ocultas”).
+        </span>
+      </span>
+    </label>
   )
 }
 
@@ -1696,6 +2038,108 @@ const botaoIconeRemover: React.CSSProperties = {
   fontWeight: 600,
   cursor: 'pointer',
   lineHeight: 1,
+}
+
+const botaoIconeEditar: React.CSSProperties = {
+  ...botaoIconeRemover,
+  color: 'var(--text-muted)',
+  fontSize: 13,
+}
+
+const botaoInterrogacao: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 16,
+  height: 16,
+  marginLeft: 6,
+  padding: 0,
+  border: '1px solid #7C6AF7',
+  borderRadius: 99,
+  fontSize: 10,
+  fontWeight: 700,
+  lineHeight: 1,
+  verticalAlign: 'middle',
+  cursor: 'pointer',
+}
+
+const caixaExplicacao: React.CSSProperties = {
+  margin: '8px 0 0',
+  padding: '8px 10px',
+  fontSize: 12,
+  lineHeight: 1.45,
+  color: 'var(--text-muted)',
+  background: 'var(--surface-2)',
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  whiteSpace: 'pre-wrap',
+}
+
+const etiquetaOculta: React.CSSProperties = {
+  fontSize: 9,
+  fontWeight: 700,
+  color: 'var(--text-faint)',
+  border: '1px solid var(--border-strong)',
+  padding: '1px 6px',
+  borderRadius: 99,
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+  flexShrink: 0,
+}
+
+const gradeOfertas: React.CSSProperties = {
+  display: 'grid',
+  gap: 12,
+  gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+}
+
+const blocoFunil: React.CSSProperties = {
+  border: '1px solid var(--border)',
+  borderRadius: 14,
+  padding: '12px 14px 14px',
+  background: 'rgba(124,106,247,0.03)',
+}
+
+const cabecalhoFunil: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'baseline',
+  gap: 12,
+  flexWrap: 'wrap',
+  marginBottom: 10,
+}
+
+const tituloFunil: React.CSSProperties = {
+  margin: 0,
+  fontSize: 12,
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+}
+
+const setaFunil: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  color: 'var(--text-faint)',
+  fontSize: 18,
+}
+
+const botaoOcultas: React.CSSProperties = {
+  marginTop: 10,
+  background: 'transparent',
+  border: 'none',
+  padding: 0,
+  color: 'var(--text-faint)',
+  fontSize: 12,
+  cursor: 'pointer',
+  textDecoration: 'underline',
+}
+
+const textoAjuda: React.CSSProperties = {
+  margin: '6px 0 0',
+  fontSize: 11,
+  lineHeight: 1.4,
+  color: 'var(--text-faint)',
 }
 
 const cardClicavel: React.CSSProperties = {

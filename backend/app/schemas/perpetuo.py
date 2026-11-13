@@ -66,10 +66,14 @@ class OfertaCreate(BaseModel):
 
 
 class OfertaUpdate(BaseModel):
-    """Atualiza uma oferta do perpétuo (só categoria por enquanto).
-    categoria=None limpa a categoria explícita — volta à heurística."""
+    """Atualiza uma oferta do perpétuo. Só os campos ENVIADOS mudam
+    (exclude_unset). categoria=None limpa a categoria explícita — volta à
+    heurística; funil/descricao vazios limpam; oculta=None é ignorado."""
 
     categoria: Categoria | None = None
+    funil: str | None = Field(default=None, max_length=60)
+    descricao: str | None = Field(default=None, max_length=500)
+    oculta: bool | None = None
 
 
 # ============================================================
@@ -103,6 +107,9 @@ class PerpetuoOfertaResponse(BaseModel):
     oferta_codigo: str
     oferta_nome: str | None = None
     categoria: Categoria | None = None
+    funil: str | None = None
+    descricao: str | None = None
+    oculta: bool = False
 
 
 class OfertaDetalhe(BaseModel):
@@ -116,6 +123,12 @@ class OfertaDetalhe(BaseModel):
     """Nome do produto da oferta (vem da tabela vendas)."""
     categoria: Categoria
     """Categoria heurística pelo nome (Principal / Upsell / etc)."""
+    funil: str | None = None
+    """Funil que liga ofertas — a tela agrupa os cards por ele."""
+    descricao: str | None = None
+    """Explicação livre mostrada no '?' do card."""
+    oculta: bool = False
+    """Some da tela, mas continua somando nos totais."""
     quantidade: int
     receita: Money
     receita_hotmart: Money = Decimal("0")  # type: ignore[assignment]

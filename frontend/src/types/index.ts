@@ -302,6 +302,12 @@ export interface PerpetuoOfertaDetalhe {
   /** Nome do produto da oferta (vem da tabela de vendas). */
   produto: string | null
   categoria: CategoriaPerpetuo
+  /** Funil que liga ofertas (ex.: "Funil Especial") — a tela agrupa por ele. */
+  funil: string | null
+  /** Explicação livre mostrada no "?" do card. */
+  descricao: string | null
+  /** Não roda mais: some da tela, mas continua somando nos totais. */
+  oculta: boolean
   quantidade: number
   receita: number
   /** Parcela da receita vinda só de vendas plataforma=Hotmart. Usada
