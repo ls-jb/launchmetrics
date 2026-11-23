@@ -1,11 +1,14 @@
 import { api } from './api'
 import type {
   Lancamento,
+  LancamentoVendasPainel,
   LeadsPorUtmContent,
   NovoLancamentoPayload,
+  Pasta,
   PontoVelocidade,
   SendflowLeads,
   StatusLancamento,
+  VinculoOferta,
 } from '@/types'
 
 export type LancamentoCreatePayload = NovoLancamentoPayload
@@ -23,6 +26,9 @@ export interface LancamentoUpdatePayload {
   meta_filtro_nome?: string | null
   meta_contas_extras?: { ad_account_id: string; filtro_nome: string | null }[] | null
   sendflow_release_id?: string | null
+  /** null tira o lançamento da pasta. */
+  pasta_id?: string | null
+  investimento_manual?: number | null
 }
 
 export interface SyncMetaLancamentoResposta {
@@ -83,4 +89,29 @@ export const lancamentosService = {
     api
       .get<Record<string, unknown>>(`/api/lancamentos/${id}/sendflow-debug`)
       .then((r) => r.data),
+
+  // Dashboard de vendas
+  painelVendas: (id: string) =>
+    api
+      .get<LancamentoVendasPainel>(`/api/lancamentos/${id}/vendas`)
+      .then((r) => r.data),
+
+  /** Troca a seleção inteira de ofertas/produtos e devolve o painel recalculado. */
+  definirOfertas: (id: string, itens: VinculoOferta[]) =>
+    api
+      .put<LancamentoVendasPainel>(`/api/lancamentos/${id}/ofertas`, itens)
+      .then((r) => r.data),
+}
+
+export const pastasService = {
+  listar: () => api.get<Pasta[]>('/api/pastas').then((r) => r.data),
+
+  criar: (nome: string) =>
+    api.post<Pasta>('/api/pastas', { nome }).then((r) => r.data),
+
+  renomear: (id: string, nome: string) =>
+    api.patch<Pasta>(`/api/pastas/${id}`, { nome }).then((r) => r.data),
+
+  /** Apaga só a pasta — os dashboards de dentro continuam, soltos. */
+  remover: (id: string) => api.delete(`/api/pastas/${id}`).then(() => undefined),
 }

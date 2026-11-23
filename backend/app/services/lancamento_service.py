@@ -18,9 +18,12 @@ from app.schemas.lancamento import (
     LancamentoUpdate,
     PontoVelocidade,
 )
-from app.services import meta_ads_service
+from app.services import lancamento_vendas_service, meta_ads_service
+from app.services.lancamento_vendas_service import TotaisVendas
 
 ZERO = Decimal("0")
+STATUS_INICIAL = {"leads": "captacao", "vendas": "carrinho"}
+"""Status com que o lançamento nasce, por tipo. Pode mudar depois via PATCH."""
 
 
 # ============================================================
@@ -32,9 +35,13 @@ async def listar(db: AsyncSession) -> list[LancamentoResponse]:
         .options(selectinload(Lancamento.canais))
         .order_by(Lancamento.criado_em.desc())
     )
-    lancamentos = (await db.execute(stmt)).scalars().all()
+    lancamentos = list((await db.execute(stmt)).scalars().all())
     leads_por_canal_global = await _leads_por_canal(db)
-    return [_montar_response(l, leads_por_canal_global) for l in lancamentos]
+    vendas = await lancamento_vendas_service.totais_por_lancamento(db, lancamentos)
+    return [
+        _montar_response(l, leads_por_canal_global, vendas.get(l.id))
+        for l in lancamentos
+    ]
 
 
 async def obter(db: AsyncSession, id: UUID) -> LancamentoResponse | None:
@@ -47,7 +54,8 @@ async def obter(db: AsyncSession, id: UUID) -> LancamentoResponse | None:
     if not lancamento:
         return None
     leads_por_canal_global = await _leads_por_canal(db)
-    return _montar_response(lancamento, leads_por_canal_global)
+    vendas = await lancamento_vendas_service.totais_por_lancamento(db, [lancamento])
+    return _montar_response(lancamento, leads_por_canal_global, vendas.get(lancamento.id))
 
 
 async def leads_por_utm_content(
@@ -93,10 +101,12 @@ async def velocidade_leads(
 # Operações de escrita
 # ============================================================
 async def criar(db: AsyncSession, dados: LancamentoCreate) -> LancamentoResponse:
-    # status começa em 'captacao' (mais comum quando se cadastra). Pode mudar
-    # depois via PATCH (lancamento detalhe).
+    # status começa em 'captacao' no dash de leads (mais comum quando se
+    # cadastra) e em 'carrinho' no de vendas. Pode mudar depois via PATCH.
+    campos = dados.model_dump()
+    campos["investimento_manual"] = campos["investimento_manual"] or ZERO
     lancamento = Lancamento(
-        **dados.model_dump(), status="captacao", webhook_token=uuid4().hex
+        **campos, status=STATUS_INICIAL[dados.tipo], webhook_token=uuid4().hex
     )
     db.add(lancamento)
     await db.commit()
@@ -112,6 +122,9 @@ async def atualizar(
         return None
 
     for chave, valor in dados.model_dump(exclude_unset=True).items():
+        # investimento apagado na tela chega como null — a coluna não aceita.
+        if chave == "investimento_manual" and valor is None:
+            valor = ZERO
         setattr(lancamento, chave, valor)
 
     await db.commit()
@@ -169,9 +182,34 @@ async def _leads_por_canal(db: AsyncSession) -> dict[UUID, int]:
     return {canal_id: total for canal_id, total in (await db.execute(stmt)).all()}
 
 
-def _montar_response(
+def calcular_metricas(
+    tipo: str,
+    investimento_canais: Decimal,
+    investimento_manual: Decimal,
+    total_leads: int,
+    vendas: TotaisVendas | None,
+) -> dict[str, Decimal | int]:
+    """Métricas do lançamento (CPL, ROAS, ticket médio). No dash de vendas
+    o investimento é o digitado à mão e a receita vem das ofertas
+    vinculadas; no de leads o investimento é a soma dos canais."""
+    eh_vendas = tipo == "vendas"
+    investimento = investimento_manual if eh_vendas else investimento_canais
+    # TODO etapa 5: no dash de leads, somar vendas no período do lançamento
+    receita = vendas.receita if (eh_vendas and vendas) else ZERO
+    total_vendas = vendas.quantidade if (eh_vendas and vendas) else 0
+    return {
+        "investimento_total": investimento,
+        "receita_total": receita,
+        "total_vendas": total_vendas,
+        "cpl": (investimento / total_leads) if total_leads > 0 else ZERO,
+        "roas": (receita / investimento) if investimento > 0 else ZERO,
+        "ticket_medio": (receita / total_vendas) if total_vendas > 0 else ZERO,
+    }
+
+
+def _canais_response(
     lancamento: Lancamento, leads_por_canal: dict[UUID, int]
-) -> LancamentoResponse:
+) -> list[CanalResponse]:
     canais_resp = [
         CanalResponse(
             id=c.id,
@@ -184,16 +222,30 @@ def _montar_response(
     # Quem trouxe mais leads aparece em cima — vale pro BarraCanal e pro
     # EditorInvestimento, que consomem a mesma lista. Empate: nome A→Z.
     canais_resp.sort(key=lambda c: (-c.leads, c.nome.lower()))
-    total_leads = sum(c.leads for c in canais_resp)
-    investimento_total = sum((c.investimento for c in lancamento.canais), ZERO)
-    receita_total = ZERO  # TODO etapa 5: somar vendas no período do lançamento
+    return canais_resp
 
-    cpl = (investimento_total / total_leads) if total_leads > 0 else ZERO
-    roas = (receita_total / investimento_total) if investimento_total > 0 else ZERO
+
+def _montar_response(
+    lancamento: Lancamento,
+    leads_por_canal: dict[UUID, int],
+    vendas: TotaisVendas | None = None,
+) -> LancamentoResponse:
+    canais_resp = _canais_response(lancamento, leads_por_canal)
+    total_leads = sum(c.leads for c in canais_resp)
+    metricas = calcular_metricas(
+        tipo=lancamento.tipo,
+        investimento_canais=sum((c.investimento for c in lancamento.canais), ZERO),
+        investimento_manual=lancamento.investimento_manual or ZERO,
+        total_leads=total_leads,
+        vendas=vendas,
+    )
 
     return LancamentoResponse(
         id=lancamento.id,
         nome=lancamento.nome,
+        tipo=lancamento.tipo,  # type: ignore[arg-type]
+        pasta_id=lancamento.pasta_id,
+        investimento_manual=lancamento.investimento_manual or ZERO,
         status=lancamento.status,  # type: ignore[arg-type]
         data_inicio=lancamento.data_inicio,
         data_fim=lancamento.data_fim,
@@ -208,11 +260,8 @@ def _montar_response(
         webhook_token=lancamento.webhook_token,
         criado_em=lancamento.criado_em,
         total_leads=total_leads,
-        investimento_total=investimento_total,
-        receita_total=receita_total,
-        cpl=cpl,
-        roas=roas,
         canais=canais_resp,
+        **metricas,  # type: ignore[arg-type]
     )
 
 

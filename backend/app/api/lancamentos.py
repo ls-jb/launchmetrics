@@ -14,9 +14,22 @@ from app.schemas.lancamento import (
     PontoVelocidade,
     SendflowLeadsResponse,
 )
-from app.services import lancamento_service, sendflow_service
+from app.schemas.lancamento_vendas import LancamentoVendasPainel, VinculoOferta
+from app.services import (
+    lancamento_service,
+    lancamento_vendas_service,
+    pasta_service,
+    sendflow_service,
+)
 
 router = APIRouter(prefix="/lancamentos", tags=["lancamentos"])
+
+
+async def _exigir_pasta(db: AsyncSession, pasta_id: UUID | None) -> None:
+    """404 se a pasta informada não existe (sem isso o banco devolveria um
+    erro de chave estrangeira difícil de entender)."""
+    if pasta_id is not None and not await pasta_service.existe(db, pasta_id):
+        raise HTTPException(status_code=404, detail="Pasta não encontrada")
 
 
 @router.get("", response_model=list[LancamentoResponse])
@@ -33,6 +46,7 @@ async def criar_lancamento(
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(verify_token),
 ):
+    await _exigir_pasta(db, dados.pasta_id)
     return await lancamento_service.criar(db, dados)
 
 
@@ -64,10 +78,43 @@ async def atualizar_lancamento(
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(verify_token),
 ):
+    await _exigir_pasta(db, dados.pasta_id)
     lancamento = await lancamento_service.atualizar(db, id, dados)
     if not lancamento:
         raise HTTPException(status_code=404, detail="Lançamento não encontrado")
     return lancamento
+
+
+@router.get("/{id}/vendas", response_model=LancamentoVendasPainel)
+async def painel_vendas(
+    id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(verify_token),
+):
+    """Tela do dashboard de vendas: KPIs, ofertas/produtos selecionados,
+    vendas por oferta e receita por dia — no período do lançamento."""
+    lancamento = await lancamento_service.obter(db, id)
+    if not lancamento:
+        raise HTTPException(status_code=404, detail="Lançamento não encontrado")
+    return await lancamento_vendas_service.painel(db, lancamento)
+
+
+@router.put("/{id}/ofertas", response_model=LancamentoVendasPainel)
+async def definir_ofertas(
+    id: UUID,
+    itens: list[VinculoOferta],
+    db: AsyncSession = Depends(get_db),
+    _: dict = Depends(verify_token),
+):
+    """Troca a seleção de ofertas/produtos do dashboard de vendas pela
+    lista enviada (estado final das caixinhas) e devolve o painel já
+    recalculado."""
+    if not await lancamento_vendas_service.substituir_vinculos(db, id, itens):
+        raise HTTPException(status_code=404, detail="Lançamento não encontrado")
+    lancamento = await lancamento_service.obter(db, id)
+    if not lancamento:
+        raise HTTPException(status_code=404, detail="Lançamento não encontrado")
+    return await lancamento_vendas_service.painel(db, lancamento)
 
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)

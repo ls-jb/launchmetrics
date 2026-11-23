@@ -9,6 +9,7 @@ from app.models.lancamento_pago import (
     LancamentoPagoAjuste,
     LancamentoPagoOferta,
 )
+from app.models.lancamento_vendas import LancamentoOferta, LancamentoPasta
 from app.models.lead import Lead
 from app.models.oferta_preco import OfertaPreco
 from app.models.perfil import Perfil
@@ -31,9 +32,11 @@ from app.models.webhook_log import WebhookLog
 __all__ = [
     "Canal",
     "Lancamento",
+    "LancamentoOferta",
     "LancamentoPago",
     "LancamentoPagoAjuste",
     "LancamentoPagoOferta",
+    "LancamentoPasta",
     "Lead",
     "OfertaPreco",
     "Perfil",

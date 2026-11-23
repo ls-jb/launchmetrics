@@ -16,9 +16,23 @@ export interface MetaContaExtra {
   filtro_nome: string | null
 }
 
+/** 'leads' = dashboard de captação. 'vendas' = dashboard de vendas. */
+export type TipoLancamento = 'leads' | 'vendas'
+
+/** Pasta que junta os dashboards do mesmo lançamento (leads + vendas). */
+export interface Pasta {
+  id: string
+  nome: string
+  criado_em: string
+}
+
 export interface Lancamento {
   id: string
   nome: string
+  tipo: TipoLancamento
+  pasta_id: string | null
+  /** Investimento digitado à mão — só vale no dashboard de vendas. */
+  investimento_manual: number
   status: StatusLancamento
   data_inicio: string | null
   data_fim: string | null
@@ -37,7 +51,53 @@ export interface Lancamento {
   receita_total: number
   cpl: number
   roas: number
+  /** Só no dashboard de vendas (no de leads vem 0). */
+  total_vendas: number
+  ticket_medio: number
   canais: Canal[]
+}
+
+/** Item da seleção do dashboard de vendas. Sem `oferta_codigo` = produto
+ * inteiro (todas as ofertas dele, inclusive as futuras). */
+export interface VinculoOferta {
+  produto: string | null
+  oferta_codigo: string | null
+  oferta_nome: string | null
+}
+
+export interface VinculoOfertaSalvo extends VinculoOferta {
+  id: string
+}
+
+export interface OfertaVendida {
+  produto: string
+  oferta_codigo: string | null
+  oferta_nome: string | null
+  quantidade: number
+  receita: number
+}
+
+/** Um produto do lançamento, com o subtotal e as ofertas dele. */
+export interface ProdutoVendido {
+  produto: string
+  /** true = o produto foi marcado por inteiro (não oferta por oferta). */
+  inteiro: boolean
+  quantidade: number
+  receita: number
+  ofertas: OfertaVendida[]
+}
+
+export interface PontoVendaDia {
+  dia: string
+  quantidade: number
+  receita: number
+}
+
+export interface LancamentoVendasPainel {
+  lancamento: Lancamento
+  vinculos: VinculoOfertaSalvo[]
+  produtos: ProdutoVendido[]
+  por_dia: PontoVendaDia[]
 }
 
 export interface SendflowLeads {
@@ -48,6 +108,9 @@ export interface SendflowLeads {
 
 export interface NovoLancamentoPayload {
   nome: string
+  tipo?: TipoLancamento
+  pasta_id?: string | null
+  investimento_manual?: number | null
   data_inicio?: string | null
   data_fim?: string | null
   meta_leads?: number | null

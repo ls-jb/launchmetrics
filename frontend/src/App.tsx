@@ -7,6 +7,7 @@ import { Configuracoes } from '@/pages/Configuracoes'
 import { Lancamentos } from '@/pages/Lancamentos'
 import { LancamentoDetalhe } from '@/pages/LancamentoDetalhe'
 import { LancamentoPago } from '@/pages/LancamentoPago'
+import { LancamentoVendasDetalhe } from '@/pages/LancamentoVendasDetalhe'
 import { Login } from '@/pages/Login'
 import { Perpetuos } from '@/pages/Perpetuos'
 import { Placar } from '@/pages/Placar'
@@ -33,6 +34,7 @@ export default function App() {
         >
           <Route path="/" element={<Navigate to="/lancamentos" replace />} />
           <Route path="/lancamentos" element={<Lancamentos />} />
+          <Route path="/lancamentos/vendas/:id" element={<LancamentoVendasDetalhe />} />
           <Route path="/lancamentos/:id" element={<LancamentoDetalhe />} />
           <Route path="/lancamento-pago" element={<LancamentoPago />} />
           <Route path="/perpetuos" element={<Perpetuos />} />

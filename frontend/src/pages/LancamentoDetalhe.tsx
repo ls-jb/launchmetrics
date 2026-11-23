@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 
 import { BadgeStatus } from '@/components/shared/BadgeStatus'
 import { BarraCanal } from '@/components/shared/BarraCanal'
 import { BotaoAtualizar } from '@/components/shared/BotaoAtualizar'
+import { DashboardsRelacionados } from '@/components/shared/DashboardsRelacionados'
 import { EditavelInline } from '@/components/shared/EditavelInline'
+import { EtiquetaTipo, rotaDoLancamento } from '@/components/shared/EtiquetaTipo'
 import { GraficoVelocidade } from '@/components/shared/GraficoVelocidade'
 import { KPICard } from '@/components/shared/KPICard'
 import { Modal } from '@/components/shared/Modal'
@@ -85,6 +87,10 @@ export function LancamentoDetalhe() {
   }
   if (!lancamento) {
     return <Mensagem texto="Lançamento não encontrado." />
+  }
+  // Dash de vendas tem tela própria — esta aqui é a de leads.
+  if (lancamento.tipo === 'vendas') {
+    return <Navigate to={rotaDoLancamento(lancamento)} replace />
   }
 
   const webhookUrl = `${import.meta.env.VITE_API_URL}/api/webhooks/ghl/${lancamento.webhook_token}`
@@ -215,6 +221,7 @@ export function LancamentoDetalhe() {
             <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>
               {lancamento.nome}
             </h1>
+            <EtiquetaTipo tipo="leads" />
             <BadgeStatus status={lancamento.status} />
           </div>
           <EditorDatas
@@ -318,6 +325,8 @@ export function LancamentoDetalhe() {
           </button>
         </div>
       </div>
+
+      <DashboardsRelacionados lancamento={lancamento} />
 
       <div
         style={{
@@ -810,7 +819,7 @@ function DrillUtmContent({
 // ============================================================
 // Editor inline das datas (data_inicio / data_fim do lançamento)
 // ============================================================
-function EditorDatas({
+export function EditorDatas({
   inicio,
   fim,
   onSalvar,

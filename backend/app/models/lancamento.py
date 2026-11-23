@@ -4,7 +4,7 @@ from uuid import UUID as UUIDType, uuid4
 
 from typing import Any
 
-from sqlalchemy import Date, DateTime, Integer, Numeric, String, func
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -17,6 +17,22 @@ class Lancamento(Base):
 
     id: Mapped[UUIDType] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     nome: Mapped[str] = mapped_column(String, nullable=False)
+    tipo: Mapped[str] = mapped_column(
+        String, nullable=False, default="leads", server_default="leads"
+    )
+    """'leads' = dashboard de captação (canais, webhook GHL, CPL).
+    'vendas' = dashboard de vendas: investimento digitado + ofertas/produtos
+    vinculados em lancamentos_ofertas (receita, ROAS, ticket médio)."""
+    pasta_id: Mapped[UUIDType | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("launchmetrics.lancamentos_pastas.id", ondelete="SET NULL"),
+    )
+    """Pasta que junta os dashboards do mesmo lançamento (leads + vendas)."""
+    investimento_manual: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, default=0, server_default="0"
+    )
+    """Investimento digitado à mão — só usado no dashboard de vendas (no de
+    leads o investimento é a soma dos canais)."""
     status: Mapped[str] = mapped_column(String, nullable=False, default="pre_lancamento")
     data_inicio: Mapped[date | None] = mapped_column(Date)
     data_fim: Mapped[date | None] = mapped_column(Date)

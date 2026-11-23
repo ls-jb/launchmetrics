@@ -8,6 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.schemas._types import Money
 
 StatusLancamento = Literal["pre_lancamento", "captacao", "carrinho", "encerrado"]
+TipoLancamento = Literal["leads", "vendas"]
+"""'leads' = dashboard de captação. 'vendas' = dashboard de vendas."""
 
 
 # ============================================================
@@ -67,10 +69,15 @@ class LancamentoCreate(BaseModel):
     'captacao' por default; os demais (ROAS/receita) caíram fora."""
 
     nome: str = Field(..., min_length=1, max_length=200)
+    tipo: TipoLancamento = "leads"
+    pasta_id: UUID | None = None
     data_inicio: date | None = None
     data_fim: date | None = None
     meta_leads: int | None = Field(default=None, ge=0)
     teto_investimento: Money | None = Field(default=None, ge=0)
+    investimento_manual: Money | None = Field(default=None, ge=0)
+    """Só no dashboard de vendas. Pode ficar em branco e ser preenchido
+    depois, na tela do lançamento."""
 
 
 class MetaContaExtra(BaseModel):
@@ -97,6 +104,10 @@ class LancamentoUpdate(BaseModel):
     meta_filtro_nome: str | None = None
     meta_contas_extras: list[MetaContaExtra] | None = None
     sendflow_release_id: str | None = None
+    pasta_id: UUID | None = None
+    """Mover de pasta. null explícito tira o lançamento da pasta."""
+    investimento_manual: Decimal | None = Field(default=None, ge=0)
+    """Investimento do dashboard de vendas. null vira zero."""
 
 
 class LancamentoResponse(LancamentoBase):
@@ -105,6 +116,9 @@ class LancamentoResponse(LancamentoBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    tipo: TipoLancamento = "leads"
+    pasta_id: UUID | None = None
+    investimento_manual: Money = Decimal("0")
     webhook_token: str
     criado_em: datetime
     meta_ad_account_id: str | None = None
@@ -118,6 +132,10 @@ class LancamentoResponse(LancamentoBase):
     receita_total: Money = Decimal("0")
     cpl: Money = Decimal("0")
     roas: Money = Decimal("0")
+    total_vendas: int = 0
+    """Quantidade de vendas reais das ofertas/produtos vinculados (só no
+    dashboard de vendas; no de leads fica 0)."""
+    ticket_medio: Money = Decimal("0")
     canais: list[CanalResponse] = []
 
 

@@ -14,6 +14,7 @@ from app.api import (  # noqa: E402
     lancamentos,
     lancamentos_pagos,
     luzi,
+    pastas,
     perpetuos,
     placar,
     usuarios,
@@ -50,6 +51,7 @@ async def sem_cache_no_api(request, call_next):
 app.include_router(cron.router, prefix="/api")
 app.include_router(lancamentos.router, prefix="/api")
 app.include_router(lancamentos_pagos.router, prefix="/api")
+app.include_router(pastas.router, prefix="/api")
 app.include_router(perpetuos.router, prefix="/api")
 app.include_router(vendas.router, prefix="/api")
 app.include_router(webhooks.router, prefix="/api")
