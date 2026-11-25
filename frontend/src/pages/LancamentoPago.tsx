@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { BotaoAtualizar } from '@/components/shared/BotaoAtualizar'
 import { GraficoVendasCategoria } from '@/components/shared/GraficoVendasCategoria'
 import { Modal } from '@/components/shared/Modal'
+import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { extrairErro } from '@/lib/erro'
 import { formatBRL, formatNum } from '@/lib/tokens'
 import {
@@ -189,8 +190,11 @@ function DetalheLancamento({
   const [filtroInicio, setFiltroInicio] = useState<string>('')
   const [filtroFim, setFiltroFim] = useState<string>('')
 
+  // incluirMeta=false no auto-refresh: o investimento por dia chama a API
+  // da Meta ao vivo (lento e caro na Vercel) — só busca na carga inicial,
+  // ao trocar filtro, no botão Atualizar e após sincronizar.
   const carregar = useCallback(
-    async (silencioso = false) => {
+    async (silencioso = false, incluirMeta = true) => {
       if (!silencioso) setCarregando(true)
       else setAtualizando(true)
       try {
@@ -203,11 +207,13 @@ function DetalheLancamento({
         const [p, v, i] = await Promise.all([
           lancamentosPagosService.obter(lancamentoId, filtro),
           lancamentosPagosService.vendasPorDia(lancamentoId, filtro),
-          lancamentosPagosService.investimentoPorDia(lancamentoId, filtro).catch(() => []),
+          incluirMeta
+            ? lancamentosPagosService.investimentoPorDia(lancamentoId, filtro).catch(() => [])
+            : null,
         ])
         setPlacar(p)
         setVendasDia(v)
-        setInvestDia(i)
+        if (i !== null) setInvestDia(i)
       } catch (e) {
         if (!silencioso) setErro(extrairErro(e))
       } finally {
@@ -266,11 +272,9 @@ function DetalheLancamento({
     carregar(false)
   }, [carregar])
 
-  // auto-refresh a cada 30s pra ver vendas novas caindo
-  useEffect(() => {
-    const id = setInterval(() => carregar(true), 30_000)
-    return () => clearInterval(id)
-  }, [carregar])
+  // auto-refresh a cada 60s pra ver vendas novas caindo (sem Meta; pausa
+  // com aba escondida)
+  useAutoRefresh(() => carregar(true, false), 60_000)
 
   const removerLancamento = async () => {
     if (!placar) return

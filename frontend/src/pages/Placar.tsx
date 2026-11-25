@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { Modal } from '@/components/shared/Modal'
+import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { extrairErro } from '@/lib/erro'
 import { formatBRL, formatNum } from '@/lib/tokens'
 import { placarService } from '@/services/placarService'
@@ -58,11 +59,8 @@ export function Placar() {
   }, [carregar])
 
   // auto-refresh só faz sentido dentro de um lançamento aberto
-  useEffect(() => {
-    if (!lancId) return
-    const id = setInterval(() => carregar(true), 30_000)
-    return () => clearInterval(id)
-  }, [carregar, lancId])
+  // (60s, pausa com aba escondida)
+  useAutoRefresh(() => carregar(true), 60_000, !!lancId)
 
   const contagemMap = useMemo(() => {
     const m = new Map<string, number>()

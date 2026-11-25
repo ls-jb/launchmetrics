@@ -5,6 +5,7 @@ import { FiltroData } from '@/components/shared/FiltroData'
 import { GraficoReceitaDia } from '@/components/shared/GraficoReceitaDia'
 import { KPICard } from '@/components/shared/KPICard'
 import { Modal } from '@/components/shared/Modal'
+import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { extrairErro } from '@/lib/erro'
 import { formatBRL, formatBRLPreciso, formatNum } from '@/lib/tokens'
 import { vendasService, type FiltroVendas } from '@/services/vendasService'
@@ -101,11 +102,8 @@ export function Vendas() {
     carregar(false)
   }, [carregar, refreshKey])
 
-  // Auto-refresh: recarrega em background a cada 30s
-  useEffect(() => {
-    const id = setInterval(() => carregar(true), 30_000)
-    return () => clearInterval(id)
-  }, [carregar])
+  // Auto-refresh: recarrega em background a cada 60s (pausa com aba escondida)
+  useAutoRefresh(() => carregar(true), 60_000)
 
   const porDiaFormatado = useMemo(
     () =>

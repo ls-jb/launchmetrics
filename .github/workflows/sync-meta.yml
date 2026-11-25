@@ -1,0 +1,31 @@
+# Sincroniza o investimento Meta Ads a cada 30min (perpétuos + lançamentos
+# em andamento). O plano Vercel só permite cron diário, então o disparo
+# frequente fica aqui. O sync completo continua no cron diário da Vercel.
+#
+# Secrets necessários (Settings → Secrets and variables → Actions):
+#   BACKEND_URL  → URL do backend na Vercel, sem barra no final
+#   CRON_SECRET  → mesmo valor da env CRON_SECRET do backend
+name: Sync Meta Ads (30min)
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: sync-meta
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Chamar /api/cron/sync-meta-ativos
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl --fail-with-body --silent --show-error --max-time 90 \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${BACKEND_URL}/api/cron/sync-meta-ativos"

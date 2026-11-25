@@ -5,6 +5,8 @@ O Vercel manda GET com Authorization: Bearer ${CRON_SECRET} quando essa
 env está cadastrada no projeto. Validamos contra o env CRON_SECRET local.
 
 Schedule está em vercel.json — hoje só roda /api/cron/sync-meta às 3h BRT.
+O /api/cron/sync-meta-ativos roda a cada 30min via GitHub Actions
+(.github/workflows/sync-meta.yml), já que o plano Vercel só permite cron diário.
 """
 import logging
 import os
@@ -66,3 +68,20 @@ async def _limpar_cache_vturb(db: AsyncSession) -> int | None:
         logger.exception("Falha ao limpar o cache da VTurb")
         await db.rollback()
         return None
+
+
+@router.get("/sync-meta-ativos")
+async def sync_meta_ativos(
+    authorization: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Versão leve do sync pra rodar a cada 30min (GitHub Actions): só
+    perpétuos (hoje + ontem) e lançamentos com o período rolando. Os
+    encerrados ficam pro sync completo diário."""
+    _checar_secret(authorization)
+
+    perp = await perpetuo_service.sincronizar_meta_todos(db, dias_retroativos=1)
+    lp = await lancamento_pago_service.sincronizar_meta_todos(db, apenas_ativos=True)
+    lanc = await lancamento_service.sincronizar_meta_todos(db, apenas_ativos=True)
+
+    return {"perpetuos": perp, "lancamentos_pagos": lp, "lancamentos": lanc}

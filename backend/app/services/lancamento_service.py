@@ -2,8 +2,10 @@
 Lógica de negócio dos lançamentos. CRUD e cálculo das métricas (CPL, ROAS, etc.).
 Todos os cálculos ficam aqui — nunca no router e nunca no frontend.
 """
+from datetime import datetime, timedelta
 from decimal import Decimal
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import Date, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +26,7 @@ from app.services.lancamento_vendas_service import TotaisVendas
 ZERO = Decimal("0")
 STATUS_INICIAL = {"leads": "captacao", "vendas": "carrinho"}
 """Status com que o lançamento nasce, por tipo. Pode mudar depois via PATCH."""
+BR_TZ = ZoneInfo("America/Sao_Paulo")
 
 
 # ============================================================
@@ -341,15 +344,22 @@ async def sincronizar_meta(db: AsyncSession, lancamento_id: UUID) -> dict:
     }
 
 
-async def sincronizar_meta_todos(db: AsyncSession) -> dict:
+async def sincronizar_meta_todos(db: AsyncSession, apenas_ativos: bool = False) -> dict:
     """Roda sincronizar_meta() pra cada lançamento com Meta configurado
-    (principal OU extras). Usado pelo cron diário."""
+    (principal OU extras). Usado pelo cron diário. `apenas_ativos`
+    restringe aos que estão no período (±1 dia de folga) — pro cron de 30min."""
     stmt = select(Lancamento).where(
         or_(
             Lancamento.meta_ad_account_id.is_not(None),
             Lancamento.meta_contas_extras.is_not(None),
         )
     )
+    if apenas_ativos:
+        hoje = datetime.now(BR_TZ).date()
+        stmt = stmt.where(
+            Lancamento.data_inicio <= hoje + timedelta(days=1),
+            Lancamento.data_fim >= hoje - timedelta(days=1),
+        )
     lancs = list((await db.execute(stmt)).scalars().all())
     resultados = []
     for l in lancs:

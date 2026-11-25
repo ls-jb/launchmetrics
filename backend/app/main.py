@@ -8,6 +8,7 @@ if sys.platform == "win32":
 
 from fastapi import FastAPI  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.middleware.gzip import GZipMiddleware  # noqa: E402
 
 from app.api import (  # noqa: E402
     cron,
@@ -28,6 +29,10 @@ app = FastAPI(
     version="0.1.0",
     description="API interna para gestão de lançamentos digitais e vendas.",
 )
+
+# Comprime respostas JSON (≥1KB) — reduz o "Fast Origin Transfer" da
+# Vercel, que conta o tráfego da função pro edge sem compressão.
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 app.add_middleware(
     CORSMiddleware,

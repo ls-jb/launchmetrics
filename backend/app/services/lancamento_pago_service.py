@@ -783,10 +783,17 @@ async def sincronizar_meta_lancamento_pago(
     }
 
 
-async def sincronizar_meta_todos(db: AsyncSession) -> dict:
+async def sincronizar_meta_todos(db: AsyncSession, apenas_ativos: bool = False) -> dict:
     """Roda sincronizar_meta_lancamento_pago() pra cada lançamento pago
-    com Meta configurado. Usado pelo cron."""
+    com Meta configurado. Usado pelo cron. `apenas_ativos` restringe aos
+    que estão com o ingresso rolando (±1 dia de folga) — pro cron de 30min."""
     stmt = select(LancamentoPago).where(LancamentoPago.meta_ad_account_id.is_not(None))
+    if apenas_ativos:
+        hoje = datetime.now(BR_TZ).date()
+        stmt = stmt.where(
+            LancamentoPago.ingresso_inicio <= hoje + timedelta(days=1),
+            LancamentoPago.ingresso_fim >= hoje - timedelta(days=1),
+        )
     lancs = list((await db.execute(stmt)).scalars().all())
     resultados = []
     for lp in lancs:
