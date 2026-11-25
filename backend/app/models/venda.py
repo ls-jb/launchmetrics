@@ -59,6 +59,13 @@ class Venda(Base):
 
     # Valores
     valor: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    valor_bruto: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    """O que o cliente pagou (Hotmart full_price em BRL, com juros do
+    parcelamento). Nulo quando o payload não traz ou a moeda não é BRL."""
+    valor_liquido: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    """O que a Hotmart repassa ao produtor (commissions PRODUCER em BRL):
+    já sem taxa da Hotmart e comissão de afiliado. Bate com a "Receita
+    Líquida" da Hotmart. Nulo = sem o dado (dash usa estimativa)."""
     status: Mapped[str] = mapped_column(String, nullable=False, default="aprovada")
     """'aprovada' | 'pendente' | 'cancelada' | 'reembolsada'"""
 

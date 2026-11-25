@@ -1,7 +1,11 @@
 """Testes da extração do valor (em BRL) do payload da Hotmart."""
 from decimal import Decimal
 
-from app.services.hotmart_service import _extrair_valor
+from app.services.hotmart_service import (
+    _extrair_bruto,
+    _extrair_liquido,
+    _extrair_valor,
+)
 
 
 def test_compra_em_brl_usa_price():
@@ -40,3 +44,52 @@ def test_sem_price_cai_no_full_price():
 
 def test_payload_vazio_vira_zero():
     assert _extrair_valor({}) == Decimal("0")
+
+
+# ------------------------------------------------------------
+# Líquido (commissions PRODUCER) e bruto (full_price)
+# ------------------------------------------------------------
+def _comissao(source: str, valor: float, moeda: str = "BRL") -> dict:
+    return {"source": source, "value": valor, "currency_value": moeda}
+
+
+def test_liquido_e_a_comissao_do_produtor():
+    data = {"commissions": [_comissao("MARKETPLACE", 12.88), _comissao("PRODUCER", 284.12)]}
+    assert _extrair_liquido(data) == Decimal("284.12")
+
+
+def test_liquido_com_afiliado_ja_vem_sem_a_comissao_dele():
+    # Venda de R$ 308,47 com afiliado: Hotmart 13,34 + afiliado 88,54
+    data = {"commissions": [_comissao("MARKETPLACE", 13.34), _comissao("PRODUCER", 206.59)]}
+    assert _extrair_liquido(data) == Decimal("206.59")
+
+
+def test_liquido_em_outra_moeda_vira_none():
+    data = {"commissions": [_comissao("PRODUCER", 55.1, "USD")]}
+    assert _extrair_liquido(data) is None
+
+
+def test_liquido_sem_commissions_vira_none():
+    assert _extrair_liquido({}) is None
+    assert _extrair_liquido({"commissions": None}) is None
+    assert _extrair_liquido({"commissions": [_comissao("MARKETPLACE", 12.88)]}) is None
+
+
+def test_liquido_sem_moeda_assume_brl():
+    assert _extrair_liquido({"commissions": [{"source": "PRODUCER", "value": 97}]}) == Decimal("97")
+
+
+def test_bruto_e_o_full_price_com_juros():
+    purchase = {
+        "price": {"value": 308.47, "currency_value": "BRL"},
+        "full_price": {"value": 356.28, "currency_value": "BRL"},
+    }
+    assert _extrair_bruto(purchase) == Decimal("356.28")
+
+
+def test_bruto_em_outra_moeda_vira_none():
+    assert _extrair_bruto({"full_price": {"value": 54, "currency_value": "EUR"}}) is None
+
+
+def test_bruto_sem_full_price_vira_none():
+    assert _extrair_bruto({}) is None

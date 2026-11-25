@@ -118,6 +118,8 @@ def _extrair_campos(data: dict, evento: str) -> dict:
     tipo, recorrencia_seq, assinatura_id = _extrair_recorrencia(purchase, subscription)
     metodo = _extrair_metodo(purchase)
     valor = _extrair_valor(purchase)
+    valor_bruto = _extrair_bruto(purchase)
+    valor_liquido = _extrair_liquido(data)
     data_venda = _extrair_data(purchase)
 
     offer = purchase.get("offer") or {}
@@ -134,6 +136,8 @@ def _extrair_campos(data: dict, evento: str) -> dict:
         "assinatura_id": assinatura_id,
         "metodo_pagamento": metodo,
         "valor": valor,
+        "valor_bruto": valor_bruto,
+        "valor_liquido": valor_liquido,
         "status": STATUS_POR_EVENTO.get(evento, "pendente"),
         "comprador_nome": buyer.get("name"),
         "comprador_email": buyer.get("email"),
@@ -203,6 +207,48 @@ def _extrair_valor(purchase: dict) -> Decimal:
         return Decimal("0")
 
 
+def _eh_brl(moeda: Any) -> bool:
+    """Sem moeda informada = BRL (mesma regra de `_extrair_valor`)."""
+    return (str(moeda or "BRL")).upper() == "BRL"
+
+
+def _decimal_ou_none(valor: Any) -> Decimal | None:
+    if valor is None:
+        return None
+    try:
+        return Decimal(str(valor))
+    except Exception:
+        return None
+
+
+def _extrair_bruto(purchase: dict) -> Decimal | None:
+    """O que o cliente pagou (full_price, com juros do parcelamento).
+    Só em BRL — em outra moeda devolve None e o dash usa o valor da venda."""
+    full = purchase.get("full_price") or {}
+    if not isinstance(full, dict) or not _eh_brl(full.get("currency_value")):
+        return None
+    return _decimal_ou_none(full.get("value"))
+
+
+def _extrair_liquido(data: dict) -> Decimal | None:
+    """O que a Hotmart repassa ao produtor: soma das commissions com
+    source=PRODUCER em BRL. Já vem sem a taxa da Hotmart e sem comissão
+    de afiliado — bate com a "Receita Líquida" do relatório da Hotmart.
+    None quando o payload não traz (vendas antigas) ou vem em outra moeda."""
+    comissoes = data.get("commissions")
+    if not isinstance(comissoes, list):
+        return None
+    valores = [
+        _decimal_ou_none(c.get("value"))
+        for c in comissoes
+        if isinstance(c, dict)
+        and c.get("source") == "PRODUCER"
+        and _eh_brl(c.get("currency_value"))
+    ]
+    valores = [v for v in valores if v is not None]
+    return sum(valores, Decimal("0")) if valores else None
+
+
 def _extrair_data(purchase: dict) -> datetime:
     """Hotmart manda datas como timestamp em milissegundos."""
     for key in ("approved_date", "order_date", "creation_date"):
@@ -260,6 +306,10 @@ def _atualizar(venda: Venda, dados: dict[str, Any]) -> None:
     Atualiza só status, payload_bruto e campos que podem variar."""
     venda.status = dados["status"]
     venda.payload_bruto = dados["payload_bruto"]
+    # Líquido/bruto acompanham o payload mais recente que trouxer o dado
+    for campo in ("valor_bruto", "valor_liquido"):
+        if dados.get(campo) is not None:
+            setattr(venda, campo, dados[campo])
     # Outros campos só sobrescrevemos se estavam vazios (preserva valor original)
     if not venda.metodo_pagamento and dados.get("metodo_pagamento"):
         venda.metodo_pagamento = dados["metodo_pagamento"]
