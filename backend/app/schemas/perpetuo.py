@@ -14,7 +14,13 @@ from app.schemas.lancamento import MetaContaExtra
 # Categoria de oferta (heurística pelo nome — mesma do guru_service)
 # ============================================================
 Categoria = Literal[
-    "Principal", "Order Bump", "Upsell", "UpUpsell", "Downsell", "Outros"
+    "Principal",
+    "Order Bump",
+    "Upsell",
+    "UpUpsell",
+    "Downsell",
+    "Downsell 2",
+    "Outros",
 ]
 
 
@@ -131,13 +137,16 @@ class OfertaDetalhe(BaseModel):
     """Some da tela, mas continua somando nos totais."""
     quantidade: int
     receita: Money
-    receita_hotmart: Money = Decimal("0")  # type: ignore[assignment]
-    """Parcela da receita vinda de vendas com plataforma=Hotmart. Usada
-    pelo front pra calcular a taxa de 4% da Hotmart (que se aplica
-    só a essas vendas)."""
-    quantidade_hotmart: int = 0
-    """Qtd de vendas com plataforma=Hotmart. Usada pelo front pra taxa
-    fixa de R$1 por venda da Hotmart."""
+    """Receita pelo preço da oferta (override de ofertas_precos). Usada nos
+    cards de oferta e gráficos; os blocos do topo usam os campos abaixo."""
+    faturamento_liquido: Money = Decimal("0")  # type: ignore[assignment]
+    """O que a Hotmart repassa (commissions PRODUCER) — já sem taxa da
+    Hotmart e afiliado. Sem o dado real, estimativa 4% + R$ 1."""
+    faturamento_bruto: Money = Decimal("0")  # type: ignore[assignment]
+    """O que o cliente pagou (full_price, com juros do parcelamento)."""
+    valor_vendas: Money = Decimal("0")  # type: ignore[assignment]
+    """Preço pago pela oferta (sem juros). Base da Taxa Empresa e das
+    Taxas Hotmart (valor_vendas − líquido)."""
 
 
 class PontoVendaCategoria(BaseModel):
@@ -186,6 +195,43 @@ class AporteResponse(BaseModel):
     descricao: str | None = None
 
 
+class ResumoEtapa(BaseModel):
+    """Vendas de uma etapa do funil (Front, Upsell 1, Downsell 2...)."""
+
+    categoria: Categoria
+    quantidade: int
+    valor: Money
+    """Faturamento líquido da etapa."""
+
+
+class ResumoPerpetuo(BaseModel):
+    """Blocos do topo do perpétuo (estilo Ratoeira Ads). Calculado em
+    perpetuo_resumo_service.montar_resumo — ver as regras lá."""
+
+    faturamento_liquido: Money
+    faturamento_bruto: Money
+    taxas_hotmart: Money
+    """Informativo: já descontadas do líquido, não entram no custo."""
+    custo_anuncios: Money
+    taxa_meta: Money
+    taxa_empresa: Money
+    impostos_totais: Money
+    custo_total: Money
+    """Anúncios + impostos totais."""
+    resultado: Money
+    roas: Money | None = None
+    """Líquido ÷ (anúncios + Taxa Meta). None sem custo."""
+    cpa: Money | None = None
+    """(Anúncios + Taxa Meta) ÷ vendas front. None sem venda front."""
+    ticket_medio: Money | None = None
+    """Líquido ÷ vendas front."""
+    vendas_front: int
+    vendas_total: int
+    pct_taxa_meta: Money
+    pct_taxa_empresa: Money
+    por_categoria: list[ResumoEtapa] = []
+
+
 class PerpetuoCompleto(BaseModel):
     """Tudo que a tela de detalhe precisa, JÁ FILTRADO pelo período
     passado em inicio/fim (default = data_inicio..hoje)."""
@@ -206,3 +252,6 @@ class PerpetuoCompleto(BaseModel):
     investimento_total: Money = 0  # type: ignore[assignment]
     receita_total: Money = 0  # type: ignore[assignment]
     quantidade_total: int = 0
+
+    # blocos do topo (respeitam o filtro de categorias da tela)
+    resumo: ResumoPerpetuo | None = None

@@ -10,6 +10,11 @@ import {
   YAxis,
 } from 'recharts'
 
+import {
+  COR_CATEGORIA_PERPETUO as CORES,
+  ORDEM_CATEGORIAS_PERPETUO as CATEGORIAS_FIXAS,
+  ROTULO_CATEGORIA_PERPETUO as ROTULOS,
+} from '@/lib/categoriasPerpetuo'
 import { formatBRL, formatNum } from '@/lib/tokens'
 import type {
   CategoriaPerpetuo,
@@ -17,25 +22,7 @@ import type {
   PontoVendaCategoriaPerp,
 } from '@/types'
 
-// 1 cor por categoria + 1 cor pro investimento.
-const CORES: Record<CategoriaPerpetuo, string> = {
-  Principal: '#7C6AF7',
-  'Order Bump': '#F59E0B',
-  Upsell: '#60A5FA',
-  UpUpsell: '#06B6D4',
-  Downsell: '#EC4899',
-  Outros: '#6B7280',
-}
-
-const CATEGORIAS_FIXAS: CategoriaPerpetuo[] = [
-  'Principal',
-  'Order Bump',
-  'Upsell',
-  'UpUpsell',
-  'Downsell',
-  'Outros',
-]
-
+// 1 cor por categoria (lib/categoriasPerpetuo) + 1 cor pro investimento.
 const COR_INVESTIMENTO = '#3ECFB2'
 
 type LinhaPlot = Record<string, number | string>
@@ -165,7 +152,7 @@ export function GraficoPerpetuoDia({
                   display: 'inline-block',
                 }}
               />
-              {cat}
+              {ROTULOS[cat]}
             </label>
           )
         })}
@@ -265,7 +252,7 @@ export function GraficoPerpetuoDia({
                   strokeWidth={2}
                   dot={{ r: 2, fill: CORES[cat], strokeWidth: 0 }}
                   activeDot={{ r: 5, fill: CORES[cat], strokeWidth: 0 }}
-                  name={cat}
+                  name={ROTULOS[cat]}
                   connectNulls
                 />
               ) : null,

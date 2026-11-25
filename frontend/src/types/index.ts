@@ -344,6 +344,7 @@ export type CategoriaPerpetuo =
   | 'Upsell'
   | 'UpUpsell'
   | 'Downsell'
+  | 'Downsell 2'
   | 'Outros'
 
 export interface Perpetuo {
@@ -372,12 +373,45 @@ export interface PerpetuoOfertaDetalhe {
   /** Não roda mais: some da tela, mas continua somando nos totais. */
   oculta: boolean
   quantidade: number
+  /** Receita pelo preço da oferta (cards e gráficos). */
   receita: number
-  /** Parcela da receita vinda só de vendas plataforma=Hotmart. Usada
-   * pelo front pra aplicar a taxa de 4% (que só incide nessas). */
-  receita_hotmart: number
-  /** Qtd de vendas plataforma=Hotmart — pra taxa fixa de R$1 por venda. */
-  quantidade_hotmart: number
+  /** O que a Hotmart repassa (já sem taxa da Hotmart e afiliado). */
+  faturamento_liquido: number
+  /** O que o cliente pagou (com juros do parcelamento). */
+  faturamento_bruto: number
+  /** Preço pago pela oferta, sem juros. */
+  valor_vendas: number
+}
+
+/** Vendas de uma etapa do funil (Front, Upsell 1, Downsell 2...). */
+export interface ResumoEtapaPerpetuo {
+  categoria: CategoriaPerpetuo
+  quantidade: number
+  /** Faturamento líquido da etapa. */
+  valor: number
+}
+
+/** Blocos do topo do perpétuo — calculados no backend
+ * (perpetuo_resumo_service). */
+export interface ResumoPerpetuo {
+  faturamento_liquido: number
+  faturamento_bruto: number
+  /** Informativo: já descontadas do líquido, não entram no custo. */
+  taxas_hotmart: number
+  custo_anuncios: number
+  taxa_meta: number
+  taxa_empresa: number
+  impostos_totais: number
+  custo_total: number
+  resultado: number
+  roas: number | null
+  cpa: number | null
+  ticket_medio: number | null
+  vendas_front: number
+  vendas_total: number
+  pct_taxa_meta: number
+  pct_taxa_empresa: number
+  por_categoria: ResumoEtapaPerpetuo[]
 }
 
 /** Categoria da oferta cadastrada: se null, o backend deriva pelo nome
@@ -400,6 +434,8 @@ export interface PerpetuoCompleto {
   investimento_total: number
   receita_total: number
   quantidade_total: number
+  /** Blocos do topo (respeitam o filtro de categorias). */
+  resumo: ResumoPerpetuo | null
 }
 
 export interface PontoVendaCategoriaPerp {

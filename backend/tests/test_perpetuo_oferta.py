@@ -49,3 +49,18 @@ def test_detalhe_sem_campos_novos_vem_visivel_e_sem_funil():
         receita=Decimal("10"),
     )
     assert (d.funil, d.descricao, d.oculta) == (None, None, False)
+
+
+# ------------------------------------------------------------
+# Heurística de categoria pelo nome da oferta
+# ------------------------------------------------------------
+def test_heuristica_downsell_2():
+    from app.services.perpetuo_service import _categoria_da_oferta
+
+    assert _categoria_da_oferta("Downsell 2 - ARA") == "Downsell 2"
+    assert _categoria_da_oferta("ARA Downsell2") == "Downsell 2"
+    assert _categoria_da_oferta("Down 2 ARA") == "Downsell 2"
+    # Data no nome não pode virar Downsell 2
+    assert _categoria_da_oferta("Downsell ARA - 2026") == "Downsell"
+    assert _categoria_da_oferta("Downsell 2026") == "Downsell"
+    assert _categoria_da_oferta("UpUpsell ARA") == "UpUpsell"

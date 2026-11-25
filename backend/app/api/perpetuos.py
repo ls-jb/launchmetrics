@@ -58,10 +58,16 @@ async def obter(
     perpetuo_id: UUID,
     inicio: date | None = Query(default=None),
     fim: date | None = Query(default=None),
+    categorias: str | None = Query(
+        default=None,
+        description="Filtro 'Considerar' dos blocos, separado por vírgula "
+        "(ex.: Principal,Upsell). Vazio = todas.",
+    ),
     db: AsyncSession = Depends(get_db),
     _: dict = Depends(verify_token),
 ):
-    perp = await svc.obter(db, perpetuo_id, inicio, fim)
+    filtro = {c.strip() for c in categorias.split(",") if c.strip()} if categorias else None
+    perp = await svc.obter(db, perpetuo_id, inicio, fim, filtro)
     if not perp:
         raise HTTPException(status_code=404, detail="Perpétuo não encontrado.")
     return perp

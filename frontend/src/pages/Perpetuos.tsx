@@ -10,12 +10,18 @@ import {
   useState,
 } from 'react'
 
+import { BlocosResumoPerpetuo } from '@/components/shared/BlocosResumoPerpetuo'
 import { BotaoAtualizar } from '@/components/shared/BotaoAtualizar'
 import { FiltroData } from '@/components/shared/FiltroData'
 import { GraficoPerpetuoDia } from '@/components/shared/GraficoPerpetuoDia'
-import { KPICard } from '@/components/shared/KPICard'
 import { Modal } from '@/components/shared/Modal'
 import { SecaoVsl } from '@/components/shared/SecaoVsl'
+import { useAutoRefresh } from '@/hooks/useAutoRefresh'
+import {
+  COR_CATEGORIA_PERPETUO,
+  ORDEM_CATEGORIAS_PERPETUO,
+  ROTULO_CATEGORIA_PERPETUO,
+} from '@/lib/categoriasPerpetuo'
 import { extrairErro } from '@/lib/erro'
 import { formatBRL, formatNum } from '@/lib/tokens'
 import { luziService } from '@/services/luziService'
@@ -196,22 +202,14 @@ function DetalhePerpetuo({
   // Ofertas ocultas (não rodam mais) ficam fora da tela até clicar em "Mostrar".
   const [mostrarOcultas, setMostrarOcultas] = useState(false)
 
-  // Filtro de categoria pros KPIs. null = ainda não inicializado (a 1ª
-  // carga popula com todas as categorias existentes). Investimento fica
-  // sempre o total — só receita/qtd/ROAS refletem as marcadas.
+  // Filtro de categoria pros blocos do topo. null = todas (ainda não
+  // mexeram). O backend recalcula os blocos com as marcadas; custo de
+  // anúncios e Taxa Meta ficam sempre o total.
   const [categoriasKPI, setCategoriasKPI] = useState<Set<CategoriaPerpetuo> | null>(null)
+  // String estável pro useCallback (o Set muda de identidade a cada clique)
+  const filtroCategorias = categoriasKPI ? [...categoriasKPI].sort().join(',') : null
 
-  // Impostos aplicados no investimento (só afeta a visualização — não
-  // altera aportes gravados). Persistido por perpétuo no localStorage
-  // do navegador; cada usuário decide se quer ver com ou sem imposto.
-  const [modalImpostos, setModalImpostos] = useState(false)
-  const [impostos, setImpostos] = useState<ImpostosConfig>(() =>
-    carregarImpostos(perpetuoId),
-  )
-  const atualizarImpostos = (novo: ImpostosConfig) => {
-    setImpostos(novo)
-    salvarImpostos(perpetuoId, novo)
-  }
+  const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null)
 
   // Trocando o período rápido, uma resposta antiga pode chegar depois da
   // nova — só a requisição mais recente pode gravar no state.
@@ -223,9 +221,11 @@ function DetalhePerpetuo({
       const ehAtual = () => requisicao === ultimaRequisicaoRef.current
       if (!silencioso) setCarregando(true)
       else setAtualizando(true)
+      const categorias =
+        filtroCategorias === null ? undefined : filtroCategorias.split(',').filter(Boolean)
       try {
         const [c, v, i] = await Promise.all([
-          perpetuosService.obter(perpetuoId, inicio, fim),
+          perpetuosService.obter(perpetuoId, inicio, fim, categorias),
           perpetuosService.vendasPorDia(perpetuoId, inicio, fim),
           perpetuosService.investimentoPorDia(perpetuoId, inicio, fim),
         ])
@@ -233,6 +233,7 @@ function DetalhePerpetuo({
         setCompleto(c)
         setVendasDia(v)
         setInvestDia(i)
+        setAtualizadoEm(new Date())
       } catch (e) {
         if (!silencioso && ehAtual()) setErro(extrairErro(e))
       } finally {
@@ -242,12 +243,16 @@ function DetalhePerpetuo({
         }
       }
     },
-    [perpetuoId, inicio, fim],
+    [perpetuoId, inicio, fim, filtroCategorias],
   )
 
   useEffect(() => {
     carregar(false)
   }, [carregar])
+
+  // Vendas caem o dia todo e o gasto Meta sincroniza a cada 30 min:
+  // recarrega a cada 60s (pausa com a aba escondida).
+  useAutoRefresh(() => carregar(true), 60_000)
 
   // Luzi (assistente de IA) só aparece nos perpétuos habilitados no backend.
   const [luziHabilitada, setLuziHabilitada] = useState(false)
@@ -370,51 +375,14 @@ function DetalhePerpetuo({
   // Categorias que existem nas ofertas cadastradas — só essas viram
   // opção do filtro (não polui a UI com opções sem venda).
   const categoriasDisponiveis: CategoriaPerpetuo[] = (() => {
-    const ordem: CategoriaPerpetuo[] = [
-      'Principal',
-      'Order Bump',
-      'Upsell',
-      'UpUpsell',
-      'Downsell',
-      'Outros',
-    ]
     const set = new Set(completo.ofertas.map((o) => o.categoria))
-    return ordem.filter((c) => set.has(c))
+    return ORDEM_CATEGORIAS_PERPETUO.filter((c) => set.has(c))
   })()
 
   // Inicializa "todas marcadas" na 1ª renderização e mantém sincronizado
   // caso apareça uma categoria nova (nova oferta cadastrada).
   const catsAtivas = categoriasKPI ?? new Set(categoriasDisponiveis)
-
-  const investBruto = Number(completo.investimento_total)
-  // Investimento com imposto Meta aplicado (só visualização — não altera
-  // aportes gravados).
-  const multiplicadorInvest = impostos.metaAds12_5 ? 1.125 : 1
-  const invest = investBruto * multiplicadorInvest
-  // Receita/qtd só das categorias marcadas (bruto)
-  const ofertasAtivas = completo.ofertas.filter((o) =>
-    catsAtivas.has(o.categoria),
-  )
-  const receitaBruta = ofertasAtivas.reduce((s, o) => s + Number(o.receita), 0)
-  const receitaHotmart = ofertasAtivas.reduce(
-    (s, o) => s + Number(o.receita_hotmart),
-    0,
-  )
-  const qtdHotmart = ofertasAtivas.reduce(
-    (s, o) => s + (o.quantidade_hotmart ?? 0),
-    0,
-  )
-  const qtd = ofertasAtivas.reduce((s, o) => s + o.quantidade, 0)
-  // Aplica taxas que incidem no faturamento. Hotmart 4% + R$1 por venda
-  // só sobre vendas Hotmart; empresa 5,93% sobre faturamento total.
-  const taxaHotmart = impostos.hotmart
-    ? receitaHotmart * 0.04 + qtdHotmart * 1
-    : 0
-  const taxaEmpresa = impostos.empresa5_93 ? receitaBruta * 0.0593 : 0
-  const receita = receitaBruta - taxaHotmart - taxaEmpresa
-  const roas = invest > 0 ? receita / invest : 0
-  const algumImpostoAtivo =
-    impostos.metaAds12_5 || impostos.hotmart || impostos.empresa5_93
+  const ofertasAtivas = completo.ofertas.filter((o) => catsAtivas.has(o.categoria))
 
   const alternarCategoriaKPI = (cat: CategoriaPerpetuo) => {
     const base = categoriasKPI ?? new Set(categoriasDisponiveis)
@@ -460,19 +428,15 @@ function DetalhePerpetuo({
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {atualizadoEm && (
+            <span
+              style={{ alignSelf: 'center', fontSize: 12, color: 'var(--text-faint)' }}
+              title="A tela recarrega sozinha a cada minuto"
+            >
+              Atualizado às {format(atualizadoEm, 'HH:mm')}
+            </span>
+          )}
           <BotaoAtualizar onClick={() => carregar(true)} atualizando={atualizando} />
-          <button
-            onClick={() => setModalImpostos(true)}
-            style={{
-              ...botaoSecundario,
-              ...(algumImpostoAtivo
-                ? { borderColor: '#F59E0B', color: '#F59E0B' }
-                : {}),
-            }}
-            title="Aplicar impostos no cálculo do investimento (só afeta a visualização — não altera aportes)"
-          >
-            {algumImpostoAtivo ? '💰 Impostos ativos' : 'Impostos'}
-          </button>
           {isAdmin && (
             <>
               <button onClick={() => setModalAportes(true)} style={botaoSecundario}>
@@ -587,7 +551,7 @@ function DetalhePerpetuo({
                     letterSpacing: '0.06em',
                   }}
                 >
-                  {cat}
+                  {ROTULO_CATEGORIA_PERPETUO[cat]}
                 </span>
               </label>
             )
@@ -595,30 +559,9 @@ function DetalhePerpetuo({
         </div>
       )}
 
-      {/* 5 KPIs — Lucro = Faturamento - Investimento, verde se positivo,
-          vermelho se negativo (prejuízo) */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-          gap: 12,
-          marginBottom: '1.5rem',
-        }}
-      >
-        <KPICard label="Investimento" valor={formatBRL(invest)} cor="#F59E0B" />
-        <KPICard label="Faturamento" valor={formatBRL(receita)} cor="#3ECFB2" />
-        <KPICard
-          label="Lucro"
-          valor={formatBRL(receita - invest)}
-          cor={receita - invest >= 0 ? '#3ECFB2' : '#EF4444'}
-        />
-        <KPICard label="Vendas" valor={formatNum(qtd)} cor="var(--text)" />
-        <KPICard
-          label="ROAS"
-          valor={invest > 0 ? `${roas.toFixed(2)}x` : '—'}
-          cor={invest > 0 ? '#7C6AF7' : 'var(--text-dim)'}
-        />
-      </div>
+      {/* Blocos do topo (estilo Ratoeira) — tudo calculado no backend,
+          já respeitando o filtro de categorias acima */}
+      {completo.resumo && <BlocosResumoPerpetuo resumo={completo.resumo} />}
 
       {/* Lista de ofertas */}
       <h3 style={tituloSecao}>Ofertas</h3>
@@ -786,19 +729,6 @@ function DetalhePerpetuo({
         <DetalheDiaPerp ofertas={ofertasDoDia} erro={erroDia} />
       </Modal>
 
-      <Modal
-        aberto={modalImpostos}
-        titulo="Impostos"
-        onFechar={() => setModalImpostos(false)}
-        largura={480}
-      >
-        <FormImpostos
-          valor={impostos}
-          onChange={atualizarImpostos}
-          onFechar={() => setModalImpostos(false)}
-        />
-      </Modal>
-
       {luziHabilitada && (
         <Suspense fallback={null}>
           <LuziChat
@@ -832,17 +762,9 @@ function CardOferta({
   const [verExplicacao, setVerExplicacao] = useState(false)
   const cpv =
     detalhe.quantidade > 0 ? Number(detalhe.receita) / detalhe.quantidade : 0
-  const corCategoria: Record<string, string> = {
-    Principal: '#7C6AF7',
-    'Order Bump': '#F59E0B',
-    Upsell: '#60A5FA',
-    UpUpsell: '#06B6D4',
-    Downsell: '#EC4899',
-    Outros: '#6B7280',
-  }
   const [editandoCat, setEditandoCat] = useState(false)
   const [salvando, setSalvando] = useState(false)
-  const cor = corCategoria[detalhe.categoria] || '#6B7280'
+  const cor = COR_CATEGORIA_PERPETUO[detalhe.categoria] || '#6B7280'
 
   const escolher = async (nova: CategoriaPerpetuo) => {
     if (nova === detalhe.categoria) {
@@ -891,12 +813,11 @@ function CardOferta({
                 letterSpacing: '0.06em',
               }}
             >
-              <option value="Principal">Principal</option>
-              <option value="Order Bump">Order Bump</option>
-              <option value="Upsell">Upsell</option>
-              <option value="UpUpsell">UpUpsell</option>
-              <option value="Downsell">Downsell</option>
-              <option value="Outros">Outros</option>
+              {ORDEM_CATEGORIAS_PERPETUO.map((c) => (
+                <option key={c} value={c}>
+                  {ROTULO_CATEGORIA_PERPETUO[c]}
+                </option>
+              ))}
             </select>
           ) : (
             <button
@@ -918,7 +839,7 @@ function CardOferta({
                 flexShrink: 0,
               }}
             >
-              {detalhe.categoria}
+              {ROTULO_CATEGORIA_PERPETUO[detalhe.categoria] ?? detalhe.categoria}
             </button>
           )}
           {detalhe.produto && (
@@ -1006,14 +927,7 @@ function CardOferta({
 // ============================================================
 // Ofertas agrupadas por funil (ofertas que se ligam ficam juntas)
 // ============================================================
-const ORDEM_ETAPA: CategoriaPerpetuo[] = [
-  'Principal',
-  'Order Bump',
-  'Upsell',
-  'UpUpsell',
-  'Downsell',
-  'Outros',
-]
+const ORDEM_ETAPA = ORDEM_CATEGORIAS_PERPETUO
 
 interface GrupoFunil {
   /** null = ofertas sem funil ("Outras ofertas"). */
@@ -1231,8 +1145,8 @@ function CampoFunil({
         ))}
       </datalist>
       <p style={textoAjuda}>
-        Ofertas com o mesmo funil aparecem juntas, em ordem: Principal → Upsell →
-        UpUpsell → Downsell. Vazio = fica em “Outras ofertas”.
+        Ofertas com o mesmo funil aparecem juntas, em ordem: Front → Upsell 1 →
+        Upsell 2 → Downsell 1 → Downsell 2. Vazio = fica em “Outras ofertas”.
       </p>
     </div>
   )
@@ -1495,12 +1409,11 @@ function FormAdicionarOferta({
                         style={selectInline}
                       >
                         <option value="">Auto (pelo nome)</option>
-                        <option value="Principal">Principal</option>
-                        <option value="Order Bump">Order Bump</option>
-                        <option value="Upsell">Upsell</option>
-                        <option value="UpUpsell">UpUpsell</option>
-                        <option value="Downsell">Downsell</option>
-                        <option value="Outros">Outros</option>
+                        {ORDEM_CATEGORIAS_PERPETUO.map((c) => (
+                          <option key={c} value={c}>
+                            {ROTULO_CATEGORIA_PERPETUO[c]}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   )}
@@ -2179,172 +2092,10 @@ const textoMudo: React.CSSProperties = {
 // ============================================================
 // Drill-down: detalhes do dia clicado no gráfico do perpétuo
 // ============================================================
-const CAT_COR_PERP: Record<CategoriaPerpetuo, string> = {
-  Principal: '#7C6AF7',
-  'Order Bump': '#F59E0B',
-  Upsell: '#60A5FA',
-  UpUpsell: '#06B6D4',
-  Downsell: '#EC4899',
-  Outros: '#6B7280',
-}
+const CAT_COR_PERP = COR_CATEGORIA_PERPETUO
 
 function fmtDiaBR(dia: string): string {
   return dia.slice(8, 10) + '/' + dia.slice(5, 7) + '/' + dia.slice(0, 4)
-}
-
-// ============================================================
-// Impostos aplicados sobre o investimento (só visualização — não altera
-// aportes do banco). Persistido por perpétuo no localStorage. Adicionar
-// novos impostos no futuro = campo novo no type + linha nova no form.
-// ============================================================
-type ImpostosConfig = {
-  metaAds12_5: boolean
-  /** Hotmart: 4% da receita + R$1 por venda (só vendas Hotmart). */
-  hotmart: boolean
-  empresa5_93: boolean
-}
-
-const IMPOSTOS_DEFAULT: ImpostosConfig = {
-  metaAds12_5: true,
-  hotmart: false,
-  empresa5_93: false,
-}
-
-function chaveImpostos(perpetuoId: string): string {
-  return `perpetuo:${perpetuoId}:impostos`
-}
-
-function carregarImpostos(perpetuoId: string): ImpostosConfig {
-  try {
-    const raw = localStorage.getItem(chaveImpostos(perpetuoId))
-    if (!raw) return IMPOSTOS_DEFAULT
-    const parsed = JSON.parse(raw) as Partial<ImpostosConfig> & {
-      hotmart3_99?: boolean
-    }
-    // Chave antiga (taxa era 3,99%) — mantém a escolha de quem já usava
-    const hotmart = parsed.hotmart ?? parsed.hotmart3_99 ?? IMPOSTOS_DEFAULT.hotmart
-    // Merge com default pra sobreviver a upgrades futuros (chaves novas).
-    // Imposto Meta sempre começa ativo ao entrar — desativar vale só até
-    // sair da página.
-    return {
-      metaAds12_5: true,
-      hotmart,
-      empresa5_93: parsed.empresa5_93 ?? IMPOSTOS_DEFAULT.empresa5_93,
-    }
-  } catch {
-    return IMPOSTOS_DEFAULT
-  }
-}
-
-function salvarImpostos(perpetuoId: string, valor: ImpostosConfig): void {
-  try {
-    localStorage.setItem(chaveImpostos(perpetuoId), JSON.stringify(valor))
-  } catch {
-    // storage cheio ou bloqueado — ignora (config é preferência, não crítico)
-  }
-}
-
-function LinhaImposto({
-  titulo,
-  legenda,
-  marcado,
-  onChange,
-}: {
-  titulo: string
-  legenda: string
-  marcado: boolean
-  onChange: (v: boolean) => void
-}) {
-  return (
-    <label
-      style={{
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 10,
-        padding: 12,
-        background: 'var(--surface)',
-        border: '1px solid var(--border)',
-        borderRadius: 10,
-        cursor: 'pointer',
-      }}
-    >
-      <input
-        type="checkbox"
-        checked={marcado}
-        onChange={(e) => onChange(e.target.checked)}
-        style={{ marginTop: 2 }}
-      />
-      <div>
-        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
-          {titulo}
-        </p>
-        <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--text-faint)' }}>
-          {legenda}
-        </p>
-      </div>
-    </label>
-  )
-}
-
-function FormImpostos({
-  valor,
-  onChange,
-  onFechar,
-}: {
-  valor: ImpostosConfig
-  onChange: (v: ImpostosConfig) => void
-  onFechar: () => void
-}) {
-  return (
-    <div style={{ display: 'grid', gap: 14 }}>
-      <p style={{ margin: 0, fontSize: 12, color: 'var(--text-faint)' }}>
-        Aplica os impostos marcados sobre o <b>investimento</b> exibido no
-        dashboard. O ROAS e o Lucro recalculam automaticamente. Isso NÃO
-        altera os aportes gravados no banco — é só uma preferência de
-        visualização, salva neste navegador.
-      </p>
-
-      <LinhaImposto
-        titulo="12,5% de imposto da Meta"
-        legenda="Aplicado sobre o investimento (CIDE/PIS/COFINS de remessa)."
-        marcado={valor.metaAds12_5}
-        onChange={(v) => onChange({ ...valor, metaAds12_5: v })}
-      />
-
-      <LinhaImposto
-        titulo="4% + R$ 1 por venda de taxa da Hotmart"
-        legenda="Aplicada apenas sobre as vendas Hotmart (deduz do faturamento)."
-        marcado={valor.hotmart}
-        onChange={(v) => onChange({ ...valor, hotmart: v })}
-      />
-
-      <LinhaImposto
-        titulo="5,93% de imposto empresa"
-        legenda="Aplicado sobre o faturamento total (deduz do faturamento)."
-        marcado={valor.empresa5_93}
-        onChange={(v) => onChange({ ...valor, empresa5_93: v })}
-      />
-
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <button
-          type="button"
-          onClick={onFechar}
-          style={{
-            background: '#7C6AF7',
-            border: 'none',
-            color: '#fff',
-            padding: '10px 16px',
-            borderRadius: 8,
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          Fechar
-        </button>
-      </div>
-    </div>
-  )
 }
 
 function DetalheDiaPerp({
@@ -2431,7 +2182,7 @@ function DetalheDiaPerp({
                 }}
                 title={o.oferta_nome ?? undefined}
               >
-                {o.categoria}
+                {ROTULO_CATEGORIA_PERPETUO[o.categoria] ?? o.categoria}
                 {o.oferta_nome ? ` · ${o.oferta_nome}` : ''}
               </p>
             </div>

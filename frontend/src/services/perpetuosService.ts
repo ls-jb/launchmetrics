@@ -75,10 +75,19 @@ export const perpetuosService = {
   listar: () =>
     api.get<Perpetuo[]>('/api/perpetuos').then((r) => r.data),
 
-  obter: (id: string, inicio?: string, fim?: string) =>
-    api
-      .get<PerpetuoCompleto>(`/api/perpetuos/${id}`, paramsPeriodo(inicio, fim))
-      .then((r) => r.data),
+  /** `categorias` = filtro "Considerar" dos blocos do topo. undefined =
+   * todas; lista vazia = nenhuma (blocos zerados). */
+  obter: (id: string, inicio?: string, fim?: string, categorias?: string[]) => {
+    const { params } = paramsPeriodo(inicio, fim)
+    if (categorias) {
+      // Vírgula em vez de array: o axios mandaria "categorias[]=".
+      // "-" = nenhuma categoria marcada (não casa com nenhuma oferta).
+      params.categorias = categorias.join(',') || '-'
+    }
+    return api
+      .get<PerpetuoCompleto>(`/api/perpetuos/${id}`, { params })
+      .then((r) => r.data)
+  },
 
   criar: (dados: NovoPerpetuoPayload) =>
     api.post<Perpetuo>('/api/perpetuos', dados).then((r) => r.data),

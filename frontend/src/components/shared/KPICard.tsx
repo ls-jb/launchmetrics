@@ -4,9 +4,21 @@ interface KPICardProps {
   sub?: string
   progresso?: number
   cor?: string
+  /** Cor do número (default: texto normal). */
+  corValor?: string
+  /** Explicação da métrica, mostrada no (i) ao passar o mouse. */
+  dica?: string
 }
 
-export function KPICard({ label, valor, sub, progresso, cor = '#7C6AF7' }: KPICardProps) {
+export function KPICard({
+  label,
+  valor,
+  sub,
+  progresso,
+  cor = '#7C6AF7',
+  corValor = 'var(--text)',
+  dica,
+}: KPICardProps) {
   return (
     <div
       style={{
@@ -16,18 +28,50 @@ export function KPICard({ label, valor, sub, progresso, cor = '#7C6AF7' }: KPICa
         padding: '1rem 1.25rem',
       }}
     >
-      <p
+      <div
         style={{
-          fontSize: 11,
-          color: 'var(--text-faint)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: 8,
           margin: '0 0 6px',
-          textTransform: 'uppercase',
-          letterSpacing: '0.08em',
         }}
       >
-        {label}
-      </p>
-      <p style={{ fontSize: 22, fontWeight: 700, margin: '0 0 4px', color: 'var(--text)' }}>
+        <p
+          style={{
+            fontSize: 11,
+            color: 'var(--text-faint)',
+            margin: 0,
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+          }}
+        >
+          {label}
+        </p>
+        {dica && (
+          <span
+            title={dica}
+            aria-label={dica}
+            style={{
+              flexShrink: 0,
+              width: 16,
+              height: 16,
+              borderRadius: 99,
+              border: '1px solid var(--border-strong)',
+              color: 'var(--text-faint)',
+              fontSize: 10,
+              fontWeight: 700,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'help',
+            }}
+          >
+            i
+          </span>
+        )}
+      </div>
+      <p style={{ fontSize: 22, fontWeight: 700, margin: '0 0 4px', color: corValor }}>
         {valor}
       </p>
       {sub && <p style={{ fontSize: 12, color: 'var(--text-faint)', margin: 0 }}>{sub}</p>}

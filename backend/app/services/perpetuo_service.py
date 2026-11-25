@@ -7,6 +7,7 @@ aportes diários. As métricas usam a MESMA regra de venda real do dashboard
 seq<=1 + status aprovada), aplicada à janela [inicio, fim] em BRT — onde
 inicio default é perpetuo.data_inicio e fim default é hoje.
 """
+import re
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
@@ -38,13 +39,19 @@ from app.schemas.perpetuo import (
     PontoVendaCategoria,
 )
 from app.services import meta_ads_service
+from app.services.perpetuo_resumo_service import (
+    TAXA_HOTMART_FIXA,
+    TAXA_HOTMART_PCT,
+    montar_resumo,
+)
 
 
 # ============================================================
 # Heurística de categoria (mesma do guru_service, pra consistência)
 # ============================================================
 def _categoria_da_oferta(oferta_nome: str | None) -> str:
-    """Mapeia nome da oferta pra Principal/Order Bump/Upsell/UpUpsell/Downsell/Outros."""
+    """Mapeia nome da oferta pra Principal/Order Bump/Upsell/UpUpsell/
+    Downsell/Downsell 2/Outros."""
     nome = (oferta_nome or "").lower()
     if "order bump" in nome or "orderbump" in nome:
         return "Order Bump"
@@ -53,6 +60,10 @@ def _categoria_da_oferta(oferta_nome: str | None) -> str:
         return "UpUpsell"
     if "upsell" in nome:
         return "Upsell"
+    # Downsell 2 antes do Downsell, pelo mesmo motivo. \b depois do 2 evita
+    # pegar datas ("Downsell 2026").
+    if "downdownsell" in nome or re.search(r"\bdown(sell)?\s*2\b", nome):
+        return "Downsell 2"
     if "downsell" in nome:
         return "Downsell"
     if "principal" in nome:
@@ -251,7 +262,10 @@ async def obter(
     perpetuo_id: UUID,
     inicio: date | None = None,
     fim: date | None = None,
+    categorias: set[str] | None = None,
 ) -> PerpetuoCompleto | None:
+    """`categorias` = filtro "Considerar" da tela; só afeta o `resumo`
+    (blocos do topo). None = todas."""
     perp = await db.get(Perpetuo, perpetuo_id)
     if not perp:
         return None
@@ -261,42 +275,17 @@ async def obter(
     inicio_efetivo = inicio or perp.data_inicio
     fim_efetivo = fim or date.today()
 
-    ofertas_cadastradas = list(
-        (
-            await db.execute(
-                select(PerpetuoOferta)
-                .where(PerpetuoOferta.perpetuo_id == perpetuo_id)
-                .order_by(PerpetuoOferta.criado_em)
-            )
-        )
-        .scalars()
-        .all()
-    )
-
+    ofertas_cadastradas = await _ofertas_do_perpetuo(db, perpetuo_id)
     detalhes = await _ofertas_com_metricas(
         db, ofertas_cadastradas, inicio_efetivo, fim_efetivo
     )
+    aportes = await _aportes_do_perpetuo(db, perpetuo_id)
 
-    aportes_rows = list(
-        (
-            await db.execute(
-                select(PerpetuoAporte)
-                .where(PerpetuoAporte.perpetuo_id == perpetuo_id)
-                .order_by(PerpetuoAporte.dia)
-            )
-        )
-        .scalars()
-        .all()
-    )
-    aportes = [AporteResponse.model_validate(a) for a in aportes_rows]
-
-    # KPIs no período (investimento = aportes só dentro da janela)
+    # Investimento = aportes só dentro da janela
     investimento_total = sum(
         (Decimal(a.valor) for a in aportes if inicio_efetivo <= a.dia <= fim_efetivo),
         Decimal("0"),
     )
-    receita_total = sum((d.receita for d in detalhes), Decimal("0"))
-    quantidade_total = sum(d.quantidade for d in detalhes)
 
     return PerpetuoCompleto(
         perpetuo=PerpetuoResponse.model_validate(perp),
@@ -305,9 +294,74 @@ async def obter(
         ofertas=detalhes,
         aportes=aportes,
         investimento_total=investimento_total,
-        receita_total=receita_total,
-        quantidade_total=quantidade_total,
+        receita_total=sum((d.receita for d in detalhes), Decimal("0")),
+        quantidade_total=sum(d.quantidade for d in detalhes),
+        resumo=montar_resumo(detalhes, investimento_total, categorias),
     )
+
+
+async def _ofertas_do_perpetuo(
+    db: AsyncSession, perpetuo_id: UUID
+) -> list[PerpetuoOferta]:
+    stmt = (
+        select(PerpetuoOferta)
+        .where(PerpetuoOferta.perpetuo_id == perpetuo_id)
+        .order_by(PerpetuoOferta.criado_em)
+    )
+    return list((await db.execute(stmt)).scalars().all())
+
+
+async def _aportes_do_perpetuo(
+    db: AsyncSession, perpetuo_id: UUID
+) -> list[AporteResponse]:
+    """Todos os aportes (a UI gerencia a lista inteira, sem filtro)."""
+    stmt = (
+        select(PerpetuoAporte)
+        .where(PerpetuoAporte.perpetuo_id == perpetuo_id)
+        .order_by(PerpetuoAporte.dia)
+    )
+    rows = (await db.execute(stmt)).scalars().all()
+    return [AporteResponse.model_validate(a) for a in rows]
+
+
+_METRICAS_VAZIAS: dict[str, Any] = {
+    "quantidade": 0,
+    "receita": Decimal("0"),
+    "faturamento_liquido": Decimal("0"),
+    "faturamento_bruto": Decimal("0"),
+    "valor_vendas": Decimal("0"),
+}
+
+
+async def _metricas_por_oferta(
+    db: AsyncSession, codigos: list[str], inicio: date, fim: date
+) -> dict[str, dict[str, Any]]:
+    """Qtd, receita (preço fixo) e valores reais (líquido/bruto/valor da
+    venda) por oferta_codigo, numa query só."""
+    inicio_dt, fim_dt = _range_utc(inicio, fim)
+    sub = _vendas_efetivas_subquery(codigos, inicio_dt, fim_dt)
+
+    def soma(coluna):
+        return func.coalesce(func.sum(coluna), 0)
+
+    stmt = select(
+        sub.c.oferta_codigo,
+        func.count().label("qtd"),
+        soma(sub.c.v).label("receita"),
+        soma(sub.c.liquido).label("liquido"),
+        soma(sub.c.bruto).label("bruto"),
+        soma(sub.c.valor_venda).label("valor_venda"),
+    ).group_by(sub.c.oferta_codigo)
+    return {
+        r.oferta_codigo: {
+            "quantidade": int(r.qtd),
+            "receita": Decimal(r.receita),
+            "faturamento_liquido": Decimal(r.liquido),
+            "faturamento_bruto": Decimal(r.bruto),
+            "valor_vendas": Decimal(r.valor_venda),
+        }
+        for r in (await db.execute(stmt)).all()
+    }
 
 
 async def _ofertas_com_metricas(
@@ -316,68 +370,28 @@ async def _ofertas_com_metricas(
     inicio: date,
     fim: date,
 ) -> list[OfertaDetalhe]:
-    """Pra cada oferta cadastrada: qtd + receita no período + categoria
+    """Pra cada oferta cadastrada: métricas no período + categoria
     heurística. Vendas batem pelo oferta_codigo exato."""
     if not ofertas:
         return []
     codigos = [o.oferta_codigo for o in ofertas]
-    inicio_dt, fim_dt = _range_utc(inicio, fim)
-    sub = _vendas_efetivas_subquery(codigos, inicio_dt, fim_dt)
-
-    # Recupera qtd, receita e receita/qtd Hotmart (só vendas plataforma=Hotmart)
-    # de uma vez — pra taxa da Hotmart (4% + R$1/venda) no client sem query extra.
-    eh_hotmart = sub.c.plataforma == "Hotmart"
-    rows = (
-        await db.execute(
-            select(
-                sub.c.oferta_codigo,
-                func.count().label("qtd"),
-                func.coalesce(func.sum(sub.c.v), 0).label("receita"),
-                func.coalesce(
-                    func.sum(case((eh_hotmart, sub.c.v), else_=0)),
-                    0,
-                ).label("receita_hotmart"),
-                func.coalesce(
-                    func.sum(case((eh_hotmart, 1), else_=0)),
-                    0,
-                ).label("qtd_hotmart"),
-            ).group_by(sub.c.oferta_codigo)
-        )
-    ).all()
-
-    metricas: dict[str, tuple[int, Decimal, Decimal, int]] = {
-        r.oferta_codigo: (
-            int(r.qtd),
-            Decimal(r.receita),
-            Decimal(r.receita_hotmart),
-            int(r.qtd_hotmart),
-        )
-        for r in rows
-    }
-
+    metricas = await _metricas_por_oferta(db, codigos, inicio, fim)
     produto_por_codigo = await _produto_por_codigo(db, codigos)
 
-    detalhes: list[OfertaDetalhe] = []
-    for o in ofertas:
-        qtd, receita, receita_hotmart, qtd_hotmart = metricas.get(
-            o.oferta_codigo, (0, Decimal("0"), Decimal("0"), 0)
+    detalhes = [
+        OfertaDetalhe(
+            id=o.id,
+            oferta_codigo=o.oferta_codigo,
+            oferta_nome=o.oferta_nome,
+            produto=produto_por_codigo.get(o.oferta_codigo),
+            categoria=_categoria_efetiva(o),  # type: ignore[arg-type]
+            funil=o.funil,
+            descricao=o.descricao,
+            oculta=bool(o.oculta),
+            **metricas.get(o.oferta_codigo, _METRICAS_VAZIAS),
         )
-        detalhes.append(
-            OfertaDetalhe(
-                id=o.id,
-                oferta_codigo=o.oferta_codigo,
-                oferta_nome=o.oferta_nome,
-                produto=produto_por_codigo.get(o.oferta_codigo),
-                categoria=_categoria_efetiva(o),  # type: ignore[arg-type]
-                funil=o.funil,
-                descricao=o.descricao,
-                oculta=bool(o.oculta),
-                quantidade=qtd,
-                receita=receita,
-                receita_hotmart=receita_hotmart,
-                quantidade_hotmart=qtd_hotmart,
-            )
-        )
+        for o in ofertas
+    ]
     # Receita desc; sem venda vai pro fim
     detalhes.sort(key=lambda d: (-d.receita, -d.quantidade, d.oferta_nome or ""))
     return detalhes
@@ -618,6 +632,9 @@ def _vendas_efetivas_subquery(codigos: list[str], inicio_dt, fim_dt):
         select(
             base.c.oferta_codigo,
             base.c.v,
+            base.c.liquido,
+            base.c.valor_venda,
+            base.c.bruto,
             base.c.data_venda,
             base.c.plataforma,
         )
@@ -646,11 +663,40 @@ def vendas_efetivas_detalhadas_subquery(codigos: list[str], inicio_dt, fim_dt):
     )
 
 
+def _colunas_valores_reais(valor_efetivo):
+    """Valores da venda pros blocos do topo (ver perpetuo_resumo_service).
+
+    Com o líquido real gravado (webhook Hotmart com commissions): usa o que
+    a Hotmart mandou — líquido = PRODUCER, valor = preço pago, bruto =
+    full_price. Sem ele (vendas antigas, outra moeda, outras plataformas):
+    cai no valor efetivo (preço fixo da oferta) e estima a taxa da Hotmart."""
+    tem_real = Venda.valor_liquido.is_not(None)
+    liquido = case(
+        (tem_real, Venda.valor_liquido),
+        (
+            Venda.plataforma == "Hotmart",
+            func.round(valor_efetivo * (1 - TAXA_HOTMART_PCT) - TAXA_HOTMART_FIXA, 2),
+        ),
+        else_=valor_efetivo,
+    )
+    valor_venda = case((tem_real, Venda.valor), else_=valor_efetivo)
+    bruto = case(
+        (tem_real, func.coalesce(Venda.valor_bruto, Venda.valor)),
+        else_=valor_efetivo,
+    )
+    return [
+        liquido.label("liquido"),
+        valor_venda.label("valor_venda"),
+        bruto.label("bruto"),
+    ]
+
+
 def _base_vendas_dedup(codigos: list[str], detalhado: bool = False):
     """Vendas aprovadas (1ª recorrência) das ofertas, com valor efetivo
     (override de ofertas_precos) e `rn` = posição da compra dentro do
     par (email, oferta) — rn=1 é a venda efetiva."""
-    valor_efetivo = func.coalesce(OfertaPreco.valor, Venda.valor).label("v")
+    valor_efetivo_expr = func.coalesce(OfertaPreco.valor, Venda.valor)
+    valor_efetivo = valor_efetivo_expr.label("v")
     dedup_key = case(
         (Venda.forcar_no_dash.is_(True), cast(Venda.id, String)),
         (
@@ -670,6 +716,7 @@ def _base_vendas_dedup(codigos: list[str], detalhado: bool = False):
     colunas = [
         Venda.oferta_codigo.label("oferta_codigo"),
         valor_efetivo,
+        *_colunas_valores_reais(valor_efetivo_expr),
         Venda.data_venda.label("data_venda"),
         Venda.plataforma.label("plataforma"),
         rn,
