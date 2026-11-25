@@ -381,6 +381,8 @@ export interface PerpetuoOfertaDetalhe {
   faturamento_bruto: number
   /** Preço pago pela oferta, sem juros. */
   valor_vendas: number
+  /** Preço cadastrado da oferta (ofertas_precos). null = não cadastrado. */
+  preco_oferta: number | null
 }
 
 /** Vendas de uma etapa do funil (Front, Upsell 1, Downsell 2...). */

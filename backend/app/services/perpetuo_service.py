@@ -377,6 +377,7 @@ async def _ofertas_com_metricas(
     codigos = [o.oferta_codigo for o in ofertas]
     metricas = await _metricas_por_oferta(db, codigos, inicio, fim)
     produto_por_codigo = await _produto_por_codigo(db, codigos)
+    preco_por_codigo = await _preco_por_codigo(db, codigos)
 
     detalhes = [
         OfertaDetalhe(
@@ -388,6 +389,7 @@ async def _ofertas_com_metricas(
             funil=o.funil,
             descricao=o.descricao,
             oculta=bool(o.oculta),
+            preco_oferta=preco_por_codigo.get(o.oferta_codigo),
             **metricas.get(o.oferta_codigo, _METRICAS_VAZIAS),
         )
         for o in ofertas
@@ -395,6 +397,21 @@ async def _ofertas_com_metricas(
     # Receita desc; sem venda vai pro fim
     detalhes.sort(key=lambda d: (-d.receita, -d.quantidade, d.oferta_nome or ""))
     return detalhes
+
+
+async def _preco_por_codigo(
+    db: AsyncSession, codigos: list[str]
+) -> dict[str, Decimal]:
+    """Preço cadastrado (ofertas_precos) de cada oferta — o "ticket" que
+    aparece no (?) das etapas do funil."""
+    if not codigos:
+        return {}
+    rows = await db.execute(
+        select(OfertaPreco.oferta_codigo, OfertaPreco.valor).where(
+            OfertaPreco.oferta_codigo.in_(codigos)
+        )
+    )
+    return {codigo: Decimal(valor) for codigo, valor in rows.all()}
 
 
 async def _produto_por_codigo(

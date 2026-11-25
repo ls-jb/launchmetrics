@@ -1,10 +1,17 @@
+import { useState } from 'react'
+
 import { KPICard } from '@/components/shared/KPICard'
+import { Modal } from '@/components/shared/Modal'
 import {
   COR_CATEGORIA_PERPETUO,
   ROTULO_CATEGORIA_PERPETUO,
 } from '@/lib/categoriasPerpetuo'
 import { formatBRLPreciso, formatNum } from '@/lib/tokens'
-import type { ResumoPerpetuo } from '@/types'
+import type {
+  CategoriaPerpetuo,
+  PerpetuoOfertaDetalhe,
+  ResumoPerpetuo,
+} from '@/types'
 
 const VERDE = '#3ECFB2'
 const VERMELHO = '#EF4444'
@@ -24,12 +31,19 @@ function brlOuTraco(valor: number | null): string {
  * Blocos do topo do perpétuo. Todos os números vêm prontos do backend
  * (perpetuo_resumo_service) — aqui só formata e explica no (i).
  */
-export function BlocosResumoPerpetuo({ resumo }: { resumo: ResumoPerpetuo }) {
+export function BlocosResumoPerpetuo({
+  resumo,
+  ofertas,
+}: {
+  resumo: ResumoPerpetuo
+  /** Ofertas cadastradas — alimentam o (?) de cada etapa do funil. */
+  ofertas: PerpetuoOfertaDetalhe[]
+}) {
   return (
     <div style={{ display: 'grid', gap: 12, marginBottom: '1.5rem' }}>
       <BlocosPrincipais resumo={resumo} />
       <BlocosCustos resumo={resumo} />
-      <BlocosEtapas resumo={resumo} />
+      <BlocosEtapas resumo={resumo} ofertas={ofertas} />
     </div>
   )
 }
@@ -115,8 +129,16 @@ function BlocosCustos({ resumo }: { resumo: ResumoPerpetuo }) {
 }
 
 /** Uma linha com a qtd de vendas por etapa e outra com o valor líquido,
- * alinhadas (mesmo nº de colunas). */
-function BlocosEtapas({ resumo }: { resumo: ResumoPerpetuo }) {
+ * alinhadas (mesmo nº de colunas). O (?) de cada etapa abre as ofertas
+ * dela, pra deixar claro o que é Upsell 1, Downsell 2 etc. */
+function BlocosEtapas({
+  resumo,
+  ofertas,
+}: {
+  resumo: ResumoPerpetuo
+  ofertas: PerpetuoOfertaDetalhe[]
+}) {
+  const [etapaAberta, setEtapaAberta] = useState<CategoriaPerpetuo | null>(null)
   if (resumo.por_categoria.length === 0) return null
   const colunas = {
     gridTemplateColumns: `repeat(auto-fit, minmax(150px, 1fr))`,
@@ -130,9 +152,21 @@ function BlocosEtapas({ resumo }: { resumo: ResumoPerpetuo }) {
             label={`Vendas ${ROTULO_CATEGORIA_PERPETUO[e.categoria]}`}
             valor={formatNum(e.quantidade)}
             corValor={COR_CATEGORIA_PERPETUO[e.categoria]}
+            onAjuda={() => setEtapaAberta(e.categoria)}
+            tituloAjuda="Ver produto e ofertas dessa etapa"
           />
         ))}
       </div>
+      <Modal
+        aberto={etapaAberta !== null}
+        titulo={etapaAberta ? `${ROTULO_CATEGORIA_PERPETUO[etapaAberta]} — ofertas` : ''}
+        onFechar={() => setEtapaAberta(null)}
+        largura={560}
+      >
+        {etapaAberta && (
+          <OfertasDaEtapa ofertas={ofertas.filter((o) => o.categoria === etapaAberta)} />
+        )}
+      </Modal>
       <div className="grid gap-3" style={colunas}>
         {resumo.por_categoria.map((e) => (
           <KPICard
@@ -144,5 +178,80 @@ function BlocosEtapas({ resumo }: { resumo: ResumoPerpetuo }) {
         ))}
       </div>
     </>
+  )
+}
+
+/** Ticket da oferta: preço cadastrado; sem ele, a média paga no período. */
+function ticketDaOferta(o: PerpetuoOfertaDetalhe): string {
+  if (o.preco_oferta !== null && o.preco_oferta !== undefined) {
+    return formatBRLPreciso(o.preco_oferta)
+  }
+  if (o.quantidade > 0) {
+    return `${formatBRLPreciso(o.valor_vendas / o.quantidade)} (média)`
+  }
+  return '—'
+}
+
+/** Conteúdo do pop-up do (?): ofertas da etapa agrupadas por produto. */
+function OfertasDaEtapa({ ofertas }: { ofertas: PerpetuoOfertaDetalhe[] }) {
+  if (ofertas.length === 0) {
+    return <p style={{ margin: 0, fontSize: 13, color: 'var(--text-faint)' }}>Nenhuma oferta nessa etapa.</p>
+  }
+  const porProduto = new Map<string, PerpetuoOfertaDetalhe[]>()
+  for (const o of ofertas) {
+    const produto = o.produto ?? 'Produto sem venda ainda'
+    porProduto.set(produto, [...(porProduto.get(produto) ?? []), o])
+  }
+  return (
+    <div style={{ display: 'grid', gap: 14 }}>
+      {[...porProduto.entries()].map(([produto, lista]) => (
+        <div key={produto}>
+          <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
+            {produto}
+          </p>
+          <div style={{ display: 'grid', gap: 6 }}>
+            {lista.map((o) => (
+              <LinhaOferta key={o.id} oferta={o} />
+            ))}
+          </div>
+        </div>
+      ))}
+      <p style={{ margin: 0, fontSize: 11, color: 'var(--text-faint)' }}>
+        Ticket = preço cadastrado da oferta (ou a média paga no período, quando não há preço
+        cadastrado). Vendas = no período filtrado.
+      </p>
+    </div>
+  )
+}
+
+function LinhaOferta({ oferta: o }: { oferta: PerpetuoOfertaDetalhe }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 12,
+        padding: '8px 12px',
+        background: 'var(--surface-2)',
+        border: '1px solid var(--border)',
+        borderRadius: 8,
+        opacity: o.oculta ? 0.6 : 1,
+      }}
+    >
+      <div style={{ minWidth: 0 }}>
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--text)' }}>
+          {o.oferta_nome ?? o.oferta_codigo}
+          {o.oculta ? ' (oculta)' : ''}
+        </p>
+        <p style={{ margin: 0, fontSize: 11, color: 'var(--text-faint)' }}>
+          cód: {o.oferta_codigo} · {formatNum(o.quantidade)}{' '}
+          {o.quantidade === 1 ? 'venda' : 'vendas'}
+        </p>
+      </div>
+      <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'var(--text)', whiteSpace: 'nowrap' }}>
+        {ticketDaOferta(o)}
+      </p>
+    </div>
   )
 }

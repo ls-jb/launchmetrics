@@ -561,7 +561,9 @@ function DetalhePerpetuo({
 
       {/* Blocos do topo (estilo Ratoeira) — tudo calculado no backend,
           já respeitando o filtro de categorias acima */}
-      {completo.resumo && <BlocosResumoPerpetuo resumo={completo.resumo} />}
+      {completo.resumo && (
+        <BlocosResumoPerpetuo resumo={completo.resumo} ofertas={completo.ofertas} />
+      )}
 
       {/* Lista de ofertas */}
       <h3 style={tituloSecao}>Ofertas</h3>

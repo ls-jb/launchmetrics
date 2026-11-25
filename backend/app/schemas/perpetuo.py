@@ -147,6 +147,8 @@ class OfertaDetalhe(BaseModel):
     valor_vendas: Money = Decimal("0")  # type: ignore[assignment]
     """Preço pago pela oferta (sem juros). Base da Taxa Empresa e das
     Taxas Hotmart (valor_vendas − líquido)."""
+    preco_oferta: Money | None = None
+    """Preço cadastrado da oferta (ofertas_precos). None = não cadastrado."""
 
 
 class PontoVendaCategoria(BaseModel):

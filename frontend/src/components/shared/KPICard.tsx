@@ -8,6 +8,11 @@ interface KPICardProps {
   corValor?: string
   /** Explicação da métrica, mostrada no (i) ao passar o mouse. */
   dica?: string
+  /** Mostra um botão (?) que chama esta função ao clicar (ex.: abrir
+   * um pop-up com detalhes). */
+  onAjuda?: () => void
+  /** Texto do botão (?) ao passar o mouse. */
+  tituloAjuda?: string
 }
 
 export function KPICard({
@@ -18,6 +23,8 @@ export function KPICard({
   cor = '#7C6AF7',
   corValor = 'var(--text)',
   dica,
+  onAjuda,
+  tituloAjuda,
 }: KPICardProps) {
   return (
     <div
@@ -69,6 +76,32 @@ export function KPICard({
           >
             i
           </span>
+        )}
+        {onAjuda && (
+          <button
+            type="button"
+            onClick={onAjuda}
+            title={tituloAjuda}
+            aria-label={tituloAjuda ?? 'Ver detalhes'}
+            style={{
+              flexShrink: 0,
+              width: 18,
+              height: 18,
+              borderRadius: 99,
+              border: '1px solid var(--border-strong)',
+              background: 'transparent',
+              color: 'var(--text-muted)',
+              fontSize: 11,
+              fontWeight: 700,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              padding: 0,
+            }}
+          >
+            ?
+          </button>
         )}
       </div>
       <p style={{ fontSize: 22, fontWeight: 700, margin: '0 0 4px', color: corValor }}>
