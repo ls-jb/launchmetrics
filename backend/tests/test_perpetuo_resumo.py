@@ -93,3 +93,17 @@ def test_perpetuo_sem_ofertas():
     assert r.faturamento_liquido == Decimal("0")
     assert r.resultado == Decimal("-562.50")  # 500 + 12,5%
     assert r.por_categoria == []
+
+
+def test_parte_internacional_separada_pra_bater_com_a_hotmart():
+    # 25/11: 1 venda em dólar (R$ 303,40 convertido) dentro de R$ 11.496,70.
+    # O total em reais da Hotmart (R$ 11.193,30) = líquido − parte internacional.
+    front = _oferta("Principal", 36, "9828.34", "10000.00", "10500.00")
+    front.quantidade_internacional = 1
+    front.liquido_internacional = Decimal("303.40")
+    upsell = _oferta("Upsell", 3, "1668.36", "1743.00", "1900.00")
+    r = montar_resumo([front, upsell], Decimal("5000"))
+    assert r.faturamento_liquido == Decimal("11496.70")
+    assert r.vendas_internacionais == 1
+    assert r.liquido_internacional == Decimal("303.40")
+    assert r.faturamento_liquido - r.liquido_internacional == Decimal("11193.30")

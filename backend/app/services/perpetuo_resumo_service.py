@@ -112,6 +112,8 @@ def montar_resumo(
         ticket_medio=_dividir(liquido, vendas_front),
         vendas_front=vendas_front,
         vendas_total=sum(o.quantidade for o in ativas),
+        vendas_internacionais=sum(o.quantidade_internacional for o in ativas),
+        liquido_internacional=_somar(ativas, "liquido_internacional"),
         pct_taxa_meta=TAXA_META,
         pct_taxa_empresa=TAXA_EMPRESA,
         por_categoria=_por_categoria(ativas),

@@ -27,6 +27,16 @@ function brlOuTraco(valor: number | null): string {
   return valor === null ? '—' : formatBRLPreciso(valor)
 }
 
+/** Linha de apoio do Faturamento Líquido quando há venda em dólar/euro:
+ * deixa à vista o número que bate com o total em reais da Hotmart. */
+function subInternacional(resumo: ResumoPerpetuo): string | undefined {
+  const qtd = resumo.vendas_internacionais ?? 0
+  if (qtd === 0) return undefined
+  const emReais = resumo.faturamento_liquido - resumo.liquido_internacional
+  const vendas = qtd === 1 ? '1 venda internacional' : `${formatNum(qtd)} vendas internacionais`
+  return `Inclui ${formatBRLPreciso(resumo.liquido_internacional)} de ${vendas} · Hotmart em reais: ${formatBRLPreciso(emReais)}`
+}
+
 /**
  * Blocos do topo do perpétuo. Todos os números vêm prontos do backend
  * (perpetuo_resumo_service) — aqui só formata e explica no (i).
@@ -78,7 +88,8 @@ function BlocosPrincipais({ resumo }: { resumo: ResumoPerpetuo }) {
         label="Faturamento Líquido"
         valor={formatBRLPreciso(resumo.faturamento_liquido)}
         corValor={VERDE}
-        dica="O que a Hotmart repassa: já sem a taxa da Hotmart e sem comissão de afiliado. Bate com a Receita Líquida da Hotmart. Reembolsos não entram."
+        sub={subInternacional(resumo)}
+        dica="O que a Hotmart repassa: já sem a taxa da Hotmart e sem comissão de afiliado. Bate com a Receita Líquida da Hotmart. Vendas em dólar/euro entram convertidas pra reais pelo câmbio da própria Hotmart (no relatório dela ficam fora do total em reais). Reembolsos não entram."
       />
     </div>
   )

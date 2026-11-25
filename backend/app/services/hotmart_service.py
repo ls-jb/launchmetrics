@@ -118,7 +118,7 @@ def _extrair_campos(data: dict, evento: str) -> dict:
     tipo, recorrencia_seq, assinatura_id = _extrair_recorrencia(purchase, subscription)
     metodo = _extrair_metodo(purchase)
     valor = _extrair_valor(purchase)
-    valor_bruto = _extrair_bruto(purchase)
+    valor_bruto = _extrair_bruto(purchase, data)
     valor_liquido = _extrair_liquido(data)
     data_venda = _extrair_data(purchase)
 
@@ -221,30 +221,63 @@ def _decimal_ou_none(valor: Any) -> Decimal | None:
         return None
 
 
-def _extrair_bruto(purchase: dict) -> Decimal | None:
-    """O que o cliente pagou (full_price, com juros do parcelamento).
-    Só em BRL — em outra moeda devolve None e o dash usa o valor da venda."""
+def _comissoes_produtor(data: dict) -> list[dict]:
+    comissoes = data.get("commissions")
+    if not isinstance(comissoes, list):
+        return []
+    return [
+        c for c in comissoes if isinstance(c, dict) and c.get("source") == "PRODUCER"
+    ]
+
+
+def _conversao_brl(comissao: dict) -> dict:
+    """Bloco `currency_conversion` da comissão quando a Hotmart converteu
+    pra BRL (venda internacional); {} se não houver."""
+    conv = comissao.get("currency_conversion")
+    if isinstance(conv, dict) and _eh_brl(conv.get("converted_to_currency") or "X"):
+        return conv
+    return {}
+
+
+def _liquido_em_brl(comissao: dict) -> Decimal | None:
+    """Comissão em BRL, ou o valor que a própria Hotmart converteu pra BRL
+    (venda em dólar/euro). None se não der pra saber em reais."""
+    if _eh_brl(comissao.get("currency_value")):
+        return _decimal_ou_none(comissao.get("value"))
+    return _decimal_ou_none(_conversao_brl(comissao).get("converted_value"))
+
+
+def _taxa_conversao(data: dict, moeda: Any) -> Decimal | None:
+    """Câmbio que a Hotmart usou pra converter a comissão da `moeda` em BRL."""
+    for c in _comissoes_produtor(data):
+        if str(c.get("currency_value") or "").upper() == str(moeda or "").upper():
+            taxa = _decimal_ou_none(_conversao_brl(c).get("conversion_rate"))
+            if taxa:
+                return taxa
+    return None
+
+
+def _extrair_bruto(purchase: dict, data: dict | None = None) -> Decimal | None:
+    """O que o cliente pagou (full_price, com juros do parcelamento), em BRL.
+    Compra em outra moeda: converte pelo câmbio que a Hotmart usou na
+    comissão. Sem câmbio → None (o dash usa o valor da venda)."""
     full = purchase.get("full_price") or {}
-    if not isinstance(full, dict) or not _eh_brl(full.get("currency_value")):
+    if not isinstance(full, dict):
         return None
-    return _decimal_ou_none(full.get("value"))
+    valor = _decimal_ou_none(full.get("value"))
+    if valor is None or _eh_brl(full.get("currency_value")):
+        return valor
+    taxa = _taxa_conversao(data or {}, full.get("currency_value"))
+    return (valor * taxa).quantize(Decimal("0.01")) if taxa else None
 
 
 def _extrair_liquido(data: dict) -> Decimal | None:
     """O que a Hotmart repassa ao produtor: soma das commissions com
-    source=PRODUCER em BRL. Já vem sem a taxa da Hotmart e sem comissão
+    source=PRODUCER, em BRL. Já vem sem a taxa da Hotmart e sem comissão
     de afiliado — bate com a "Receita Líquida" do relatório da Hotmart.
-    None quando o payload não traz (vendas antigas) ou vem em outra moeda."""
-    comissoes = data.get("commissions")
-    if not isinstance(comissoes, list):
-        return None
-    valores = [
-        _decimal_ou_none(c.get("value"))
-        for c in comissoes
-        if isinstance(c, dict)
-        and c.get("source") == "PRODUCER"
-        and _eh_brl(c.get("currency_value"))
-    ]
+    Venda internacional: usa o valor que a Hotmart converteu pra BRL.
+    None quando o payload não traz (vendas antigas)."""
+    valores = [_liquido_em_brl(c) for c in _comissoes_produtor(data)]
     valores = [v for v in valores if v is not None]
     return sum(valores, Decimal("0")) if valores else None
 

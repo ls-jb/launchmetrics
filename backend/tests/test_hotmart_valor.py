@@ -93,3 +93,40 @@ def test_bruto_em_outra_moeda_vira_none():
 
 def test_bruto_sem_full_price_vira_none():
     assert _extrair_bruto({}) is None
+
+
+# ------------------------------------------------------------
+# Venda internacional: Hotmart manda a conversão pra BRL na comissão
+# (venda real de 25/11: US$ 54, líquido US$ 51,34 → R$ 303,40)
+# ------------------------------------------------------------
+def _dados_venda_dolar() -> dict:
+    return {
+        "commissions": [
+            {"value": 2.66, "source": "MARKETPLACE", "currency_value": "USD"},
+            {
+                "value": 51.34,
+                "source": "PRODUCER",
+                "currency_value": "USD",
+                "currency_conversion": {
+                    "conversion_rate": 5.909599,
+                    "converted_value": 303.4,
+                    "converted_to_currency": "BRL",
+                },
+            },
+        ]
+    }
+
+
+def test_liquido_em_dolar_usa_a_conversao_da_hotmart():
+    assert _extrair_liquido(_dados_venda_dolar()) == Decimal("303.4")
+
+
+def test_bruto_em_dolar_converte_pelo_cambio_da_hotmart():
+    purchase = {"full_price": {"value": 57.43, "currency_value": "USD"}}
+    # 57,43 × 5,909599 = 339,388... → 339,39
+    assert _extrair_bruto(purchase, _dados_venda_dolar()) == Decimal("339.39")
+
+
+def test_bruto_em_dolar_sem_cambio_vira_none():
+    purchase = {"full_price": {"value": 57.43, "currency_value": "USD"}}
+    assert _extrair_bruto(purchase, {}) is None

@@ -383,6 +383,9 @@ export interface PerpetuoOfertaDetalhe {
   valor_vendas: number
   /** Preço cadastrado da oferta (ofertas_precos). null = não cadastrado. */
   preco_oferta: number | null
+  /** Vendas pagas em outra moeda e o líquido delas (já em BRL). */
+  quantidade_internacional: number
+  liquido_internacional: number
 }
 
 /** Vendas de uma etapa do funil (Front, Upsell 1, Downsell 2...). */
@@ -411,6 +414,11 @@ export interface ResumoPerpetuo {
   ticket_medio: number | null
   vendas_front: number
   vendas_total: number
+  /** Vendas pagas em dólar/euro dentro do Faturamento Líquido. */
+  vendas_internacionais: number
+  /** Parte do líquido que veio delas (já em BRL). Hotmart em reais =
+   * faturamento_liquido − liquido_internacional. */
+  liquido_internacional: number
   pct_taxa_meta: number
   pct_taxa_empresa: number
   por_categoria: ResumoEtapaPerpetuo[]

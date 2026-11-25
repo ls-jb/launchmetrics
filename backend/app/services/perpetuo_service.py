@@ -330,14 +330,16 @@ _METRICAS_VAZIAS: dict[str, Any] = {
     "faturamento_liquido": Decimal("0"),
     "faturamento_bruto": Decimal("0"),
     "valor_vendas": Decimal("0"),
+    "quantidade_internacional": 0,
+    "liquido_internacional": Decimal("0"),
 }
 
 
 async def _metricas_por_oferta(
     db: AsyncSession, codigos: list[str], inicio: date, fim: date
 ) -> dict[str, dict[str, Any]]:
-    """Qtd, receita (preço fixo) e valores reais (líquido/bruto/valor da
-    venda) por oferta_codigo, numa query só."""
+    """Qtd, receita (preço fixo), valores reais (líquido/bruto/valor da
+    venda) e a parte internacional por oferta_codigo, numa query só."""
     inicio_dt, fim_dt = _range_utc(inicio, fim)
     sub = _vendas_efetivas_subquery(codigos, inicio_dt, fim_dt)
 
@@ -351,6 +353,8 @@ async def _metricas_por_oferta(
         soma(sub.c.liquido).label("liquido"),
         soma(sub.c.bruto).label("bruto"),
         soma(sub.c.valor_venda).label("valor_venda"),
+        soma(sub.c.internacional).label("qtd_int"),
+        soma(sub.c.liquido * sub.c.internacional).label("liquido_int"),
     ).group_by(sub.c.oferta_codigo)
     return {
         r.oferta_codigo: {
@@ -359,6 +363,8 @@ async def _metricas_por_oferta(
             "faturamento_liquido": Decimal(r.liquido),
             "faturamento_bruto": Decimal(r.bruto),
             "valor_vendas": Decimal(r.valor_venda),
+            "quantidade_internacional": int(r.qtd_int),
+            "liquido_internacional": Decimal(r.liquido_int),
         }
         for r in (await db.execute(stmt)).all()
     }
@@ -652,6 +658,7 @@ def _vendas_efetivas_subquery(codigos: list[str], inicio_dt, fim_dt):
             base.c.liquido,
             base.c.valor_venda,
             base.c.bruto,
+            base.c.internacional,
             base.c.data_venda,
             base.c.plataforma,
         )
@@ -701,10 +708,17 @@ def _colunas_valores_reais(valor_efetivo):
         (tem_real, func.coalesce(Venda.valor_bruto, Venda.valor)),
         else_=valor_efetivo,
     )
+    # Paga em dólar/euro: a Hotmart não soma no total em reais do relatório
+    moeda = Venda.payload_bruto["data"]["purchase"]["price"]["currency_value"].astext
+    internacional = case(
+        (and_(Venda.plataforma == "Hotmart", func.upper(func.coalesce(moeda, "BRL")) != "BRL"), 1),
+        else_=0,
+    )
     return [
         liquido.label("liquido"),
         valor_venda.label("valor_venda"),
         bruto.label("bruto"),
+        internacional.label("internacional"),
     ]
 
 

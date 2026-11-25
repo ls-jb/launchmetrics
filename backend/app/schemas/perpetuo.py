@@ -149,6 +149,10 @@ class OfertaDetalhe(BaseModel):
     Taxas Hotmart (valor_vendas − líquido)."""
     preco_oferta: Money | None = None
     """Preço cadastrado da oferta (ofertas_precos). None = não cadastrado."""
+    quantidade_internacional: int = 0
+    """Vendas pagas em outra moeda (a Hotmart não soma no total em reais)."""
+    liquido_internacional: Money = Decimal("0")  # type: ignore[assignment]
+    """Líquido dessas vendas, já convertido pra BRL pela Hotmart."""
 
 
 class PontoVendaCategoria(BaseModel):
@@ -229,6 +233,11 @@ class ResumoPerpetuo(BaseModel):
     """Líquido ÷ vendas front."""
     vendas_front: int
     vendas_total: int
+    vendas_internacionais: int = 0
+    """Vendas pagas em dólar/euro dentro do Faturamento Líquido."""
+    liquido_internacional: Money = Decimal("0")  # type: ignore[assignment]
+    """Parte do Faturamento Líquido que veio dessas vendas (em BRL). O
+    total em reais do relatório da Hotmart = líquido − essa parte."""
     pct_taxa_meta: Money
     pct_taxa_empresa: Money
     por_categoria: list[ResumoEtapa] = []
