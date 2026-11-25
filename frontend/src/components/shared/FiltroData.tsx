@@ -7,12 +7,17 @@ interface FiltroDataProps {
   fimInicial?: string
 }
 
-const ATALHOS = [
-  { label: 'Hoje', dias: 0 },
-  { label: '7 dias', dias: 6 },
-  { label: '30 dias', dias: 29 },
-  { label: '90 dias', dias: 89 },
+/** `dias` = quantos dias atrás começa; `ateDias` = quantos dias atrás
+ * termina (0 = hoje). "Ontem" começa e termina ontem. */
+const ATALHOS: { label: string; dias: number; ateDias: number }[] = [
+  { label: 'Hoje', dias: 0, ateDias: 0 },
+  { label: 'Ontem', dias: 1, ateDias: 1 },
+  { label: '7 dias', dias: 6, ateDias: 0 },
+  { label: '30 dias', dias: 29, ateDias: 0 },
+  { label: '90 dias', dias: 89, ateDias: 0 },
 ]
+
+const diasAtras = (dias: number) => format(subDays(new Date(), dias), 'yyyy-MM-dd')
 
 // Regex de YYYY-MM-DD completo. Datas parciais do input (ex: enquanto o
 // usuário digita "2026-06") devolvem string vazia e não são commitadas.
@@ -165,7 +170,7 @@ export function FiltroData({ onChange, inicioInicial, fimInicial }: FiltroDataPr
         {ATALHOS.map((a) => (
           <button
             key={a.label}
-            onClick={() => aplicar(format(subDays(new Date(), a.dias), 'yyyy-MM-dd'), hoje)}
+            onClick={() => aplicar(diasAtras(a.dias), diasAtras(a.ateDias))}
             style={{
               background: 'var(--border)',
               border: '1px solid var(--border-strong)',
